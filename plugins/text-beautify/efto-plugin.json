@@ -1,0 +1,15 @@
+{
+  "name": "text-beautify",
+  "version": "0.1.0",
+  "description": "文本美化：把 JSON / XML / SQL / JS 原文本整理成规范缩进的多行格式，左侧贴原文、右侧看结果",
+  "main": "main.js",
+  "index": "index.html",
+  "logo": "logo.png",
+  "author": { "name": "efto" },
+  "cmds": [
+    { "type": "input", "label": "文本美化", "cmd": "文本美化" },
+    { "type": "input", "label": "format", "cmd": "format" },
+    { "type": "input", "label": "格式化", "cmd": "格式化" },
+    { "type": "input", "label": "beautify", "cmd": "beautify" }
+  ]
+}

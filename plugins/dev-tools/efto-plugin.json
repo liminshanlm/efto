@@ -1,0 +1,559 @@
+{
+  "name": "dev-tools",
+  "version": "2.3.0",
+  "description": "Ctool 程序开发常用工具：哈希、加解密、编解码、时间日期、二维码、JSON、正则、文本比对、单位换算等 46 个工具",
+  "main": "main.js",
+  "index": "index.html",
+  "logo": "logo.png",
+  "author": {
+    "name": "baiy (Ctool)；efto 适配"
+  },
+  "homepage": "https://github.com/baiy/Ctool",
+  "cmds": [
+    {
+      "type": "input",
+      "label": "Ctool 程序开发常用工具",
+      "cmd": "Ctool"
+    },
+    {
+      "type": "input",
+      "label": "哈希 · hash",
+      "cmd": "hash"
+    },
+    {
+      "type": "input",
+      "label": "AES · aes",
+      "cmd": "aes"
+    },
+    {
+      "type": "input",
+      "label": "DES · des",
+      "cmd": "des"
+    },
+    {
+      "type": "input",
+      "label": "Triple DES · tripleDes",
+      "cmd": "tripleDes"
+    },
+    {
+      "type": "input",
+      "label": "RC4 · rc4",
+      "cmd": "rc4"
+    },
+    {
+      "type": "input",
+      "label": "Rabbit · rabbit",
+      "cmd": "rabbit"
+    },
+    {
+      "type": "input",
+      "label": "SM2 · sm2",
+      "cmd": "sm2"
+    },
+    {
+      "type": "input",
+      "label": "SM4 · sm4",
+      "cmd": "sm4"
+    },
+    {
+      "type": "input",
+      "label": "RSA · rsa",
+      "cmd": "rsa"
+    },
+    {
+      "type": "input",
+      "label": "签名/验签 · sign",
+      "cmd": "sign"
+    },
+    {
+      "type": "input",
+      "label": "Base64 · base64",
+      "cmd": "base64"
+    },
+    {
+      "type": "input",
+      "label": "JSON工具 · json",
+      "cmd": "json"
+    },
+    {
+      "type": "input",
+      "label": "URL编码 · url",
+      "cmd": "url"
+    },
+    {
+      "type": "input",
+      "label": "二维码 · qrCode",
+      "cmd": "qrCode"
+    },
+    {
+      "type": "input",
+      "label": "条形码 · barcode",
+      "cmd": "barcode"
+    },
+    {
+      "type": "input",
+      "label": "汉字转拼音 · pinyin",
+      "cmd": "pinyin"
+    },
+    {
+      "type": "input",
+      "label": "IP地址查询 · ip",
+      "cmd": "ip"
+    },
+    {
+      "type": "input",
+      "label": "代码 · code",
+      "cmd": "code"
+    },
+    {
+      "type": "input",
+      "label": "Unicode · unicode",
+      "cmd": "unicode"
+    },
+    {
+      "type": "input",
+      "label": "进制转换 · radix",
+      "cmd": "radix"
+    },
+    {
+      "type": "input",
+      "label": "正则表达式 · regex",
+      "cmd": "regex"
+    },
+    {
+      "type": "input",
+      "label": "随机字符生成 · randomString",
+      "cmd": "randomString"
+    },
+    {
+      "type": "input",
+      "label": "序列化 · serialize",
+      "cmd": "serialize"
+    },
+    {
+      "type": "input",
+      "label": "文本比对 · diffs",
+      "cmd": "diffs"
+    },
+    {
+      "type": "input",
+      "label": "Crontab · crontab",
+      "cmd": "crontab"
+    },
+    {
+      "type": "input",
+      "label": "Websocket · websocket",
+      "cmd": "websocket"
+    },
+    {
+      "type": "input",
+      "label": "单位换算 · unit",
+      "cmd": "unit"
+    },
+    {
+      "type": "input",
+      "label": "时间日期 · time",
+      "cmd": "time"
+    },
+    {
+      "type": "input",
+      "label": "UUID生成 · uuid",
+      "cmd": "uuid"
+    },
+    {
+      "type": "input",
+      "label": "ASCII · ascii",
+      "cmd": "ascii"
+    },
+    {
+      "type": "input",
+      "label": "变量名 · variableConversion",
+      "cmd": "variableConversion"
+    },
+    {
+      "type": "input",
+      "label": "JWT解码 · jwt",
+      "cmd": "jwt"
+    },
+    {
+      "type": "input",
+      "label": "Hex/String · hexString",
+      "cmd": "hexString"
+    },
+    {
+      "type": "input",
+      "label": "文本处理 · text",
+      "cmd": "text"
+    },
+    {
+      "type": "input",
+      "label": "Html编码 · html",
+      "cmd": "html"
+    },
+    {
+      "type": "input",
+      "label": "原码/反码/补码 · binary",
+      "cmd": "binary"
+    },
+    {
+      "type": "input",
+      "label": "ARM/HEX · arm",
+      "cmd": "arm"
+    },
+    {
+      "type": "input",
+      "label": "Bcrypt · bcrypt",
+      "cmd": "bcrypt"
+    },
+    {
+      "type": "input",
+      "label": "IP网络计算器 · ipcalc",
+      "cmd": "ipcalc"
+    },
+    {
+      "type": "input",
+      "label": "SQL参数填充 · sqlFillParameter",
+      "cmd": "sqlFillParameter"
+    },
+    {
+      "type": "input",
+      "label": "Http请求代码 · httpSnippet",
+      "cmd": "httpSnippet"
+    },
+    {
+      "type": "input",
+      "label": "BCC/CRC/LRC · dataValidation",
+      "cmd": "dataValidation"
+    },
+    {
+      "type": "input",
+      "label": "颜色 · color",
+      "cmd": "color"
+    },
+    {
+      "type": "input",
+      "label": "HMAC · hmac",
+      "cmd": "hmac"
+    },
+    {
+      "type": "input",
+      "label": "GZIP · gzip",
+      "cmd": "gzip"
+    },
+    {
+      "type": "input",
+      "label": "Url解析 · urlParse",
+      "cmd": "urlParse"
+    },
+    {
+      "type": "input",
+      "label": "AES 加密 · aes-encrypt",
+      "cmd": "aes-encrypt"
+    },
+    {
+      "type": "input",
+      "label": "AES 解密 · aes-decrypt",
+      "cmd": "aes-decrypt"
+    },
+    {
+      "type": "input",
+      "label": "DES 加密 · des-encrypt",
+      "cmd": "des-encrypt"
+    },
+    {
+      "type": "input",
+      "label": "DES 解密 · des-decrypt",
+      "cmd": "des-decrypt"
+    },
+    {
+      "type": "input",
+      "label": "Triple DES 加密 · tripleDes-encrypt",
+      "cmd": "tripleDes-encrypt"
+    },
+    {
+      "type": "input",
+      "label": "Triple DES 解密 · tripleDes-decrypt",
+      "cmd": "tripleDes-decrypt"
+    },
+    {
+      "type": "input",
+      "label": "RC4 加密 · rc4-encrypt",
+      "cmd": "rc4-encrypt"
+    },
+    {
+      "type": "input",
+      "label": "RC4 解密 · rc4-decrypt",
+      "cmd": "rc4-decrypt"
+    },
+    {
+      "type": "input",
+      "label": "Rabbit 加密 · rabbit-encrypt",
+      "cmd": "rabbit-encrypt"
+    },
+    {
+      "type": "input",
+      "label": "Rabbit 解密 · rabbit-decrypt",
+      "cmd": "rabbit-decrypt"
+    },
+    {
+      "type": "input",
+      "label": "SM2 加密 · sm2-encrypt",
+      "cmd": "sm2-encrypt"
+    },
+    {
+      "type": "input",
+      "label": "SM2 解密 · sm2-decrypt",
+      "cmd": "sm2-decrypt"
+    },
+    {
+      "type": "input",
+      "label": "SM2 签名 · sm2-sign",
+      "cmd": "sm2-sign"
+    },
+    {
+      "type": "input",
+      "label": "SM2 验签 · sm2-verify",
+      "cmd": "sm2-verify"
+    },
+    {
+      "type": "input",
+      "label": "SM4 加密 · sm4-encrypt",
+      "cmd": "sm4-encrypt"
+    },
+    {
+      "type": "input",
+      "label": "SM4 解密 · sm4-decrypt",
+      "cmd": "sm4-decrypt"
+    },
+    {
+      "type": "input",
+      "label": "RSA 加密 · rsa-encrypt",
+      "cmd": "rsa-encrypt"
+    },
+    {
+      "type": "input",
+      "label": "RSA 解密 · rsa-decrypt",
+      "cmd": "rsa-decrypt"
+    },
+    {
+      "type": "input",
+      "label": "Base64 编码 · base64-encoder",
+      "cmd": "base64-encoder"
+    },
+    {
+      "type": "input",
+      "label": "Base64 解码 · base64-decoder",
+      "cmd": "base64-decoder"
+    },
+    {
+      "type": "input",
+      "label": "URL编码 编码 · url-encoder",
+      "cmd": "url-encoder"
+    },
+    {
+      "type": "input",
+      "label": "URL编码 解码 · url-decoder",
+      "cmd": "url-decoder"
+    },
+    {
+      "type": "input",
+      "label": "二维码 生成 · qrCode-generate",
+      "cmd": "qrCode-generate"
+    },
+    {
+      "type": "input",
+      "label": "二维码 解析 · qrCode-parse",
+      "cmd": "qrCode-parse"
+    },
+    {
+      "type": "input",
+      "label": "代码 格式化 · code-code",
+      "cmd": "code-code"
+    },
+    {
+      "type": "input",
+      "label": "代码 运行 · code-run",
+      "cmd": "code-run"
+    },
+    {
+      "type": "input",
+      "label": "Unicode 编码 · unicode-encoder",
+      "cmd": "unicode-encoder"
+    },
+    {
+      "type": "input",
+      "label": "Unicode 解码 · unicode-decoder",
+      "cmd": "unicode-decoder"
+    },
+    {
+      "type": "input",
+      "label": "时间日期 时间戳 · time-timestamp",
+      "cmd": "time-timestamp"
+    },
+    {
+      "type": "input",
+      "label": "时间日期 时区 · time-timezone",
+      "cmd": "time-timezone"
+    },
+    {
+      "type": "input",
+      "label": "时间日期 计算器 · time-calculator",
+      "cmd": "time-calculator"
+    },
+    {
+      "type": "input",
+      "label": "Hex/String String => Hex · hexString-stringToHex",
+      "cmd": "hexString-stringToHex"
+    },
+    {
+      "type": "input",
+      "label": "Hex/String Hex => String · hexString-hexToString",
+      "cmd": "hexString-hexToString"
+    },
+    {
+      "type": "input",
+      "label": "ARM/HEX ARM to HEX · arm-armToHex",
+      "cmd": "arm-armToHex"
+    },
+    {
+      "type": "input",
+      "label": "ARM/HEX HEX to ARM · arm-hexToArm",
+      "cmd": "arm-hexToArm"
+    },
+    {
+      "type": "input",
+      "label": "IP网络计算器 IPv4 · ipcalc-ipv4",
+      "cmd": "ipcalc-ipv4"
+    },
+    {
+      "type": "input",
+      "label": "IP网络计算器 IPv6 · ipcalc-ipv6",
+      "cmd": "ipcalc-ipv6"
+    },
+    {
+      "type": "input",
+      "label": "BCC/CRC/LRC BCC · dataValidation-bcc",
+      "cmd": "dataValidation-bcc"
+    },
+    {
+      "type": "input",
+      "label": "BCC/CRC/LRC CRC · dataValidation-crc",
+      "cmd": "dataValidation-crc"
+    },
+    {
+      "type": "input",
+      "label": "BCC/CRC/LRC LRC · dataValidation-lrc",
+      "cmd": "dataValidation-lrc"
+    },
+    {
+      "type": "input",
+      "label": "GZIP 编码/压缩 · gzip-encoder",
+      "cmd": "gzip-encoder"
+    },
+    {
+      "type": "input",
+      "label": "GZIP 解码/解压 · gzip-decoder",
+      "cmd": "gzip-decoder"
+    },
+    {
+      "type": "input",
+      "label": "哈希 · md5",
+      "cmd": "md5"
+    },
+    {
+      "type": "input",
+      "label": "哈希 · sha1",
+      "cmd": "sha1"
+    },
+    {
+      "type": "input",
+      "label": "哈希 · sha256",
+      "cmd": "sha256"
+    },
+    {
+      "type": "input",
+      "label": "哈希 · sha512",
+      "cmd": "sha512"
+    },
+    {
+      "type": "input",
+      "label": "哈希 · sm3",
+      "cmd": "sm3"
+    },
+    {
+      "type": "input",
+      "label": "时间日期 · 时间戳",
+      "cmd": "时间戳"
+    },
+    {
+      "type": "input",
+      "label": "时间日期 · 时区",
+      "cmd": "时区"
+    },
+    {
+      "type": "input",
+      "label": "进制转换 · 进制转换",
+      "cmd": "进制转换"
+    },
+    {
+      "type": "input",
+      "label": "文本比对 · 文本比对",
+      "cmd": "文本比对"
+    },
+    {
+      "type": "input",
+      "label": "单位换算 · 单位换算",
+      "cmd": "单位换算"
+    },
+    {
+      "type": "input",
+      "label": "正则表达式 · 正则表达式",
+      "cmd": "正则表达式"
+    },
+    {
+      "type": "input",
+      "label": "汉字转拼音 · 汉字转拼音",
+      "cmd": "汉字转拼音"
+    },
+    {
+      "type": "input",
+      "label": "二维码 · 二维码",
+      "cmd": "二维码"
+    },
+    {
+      "type": "input",
+      "label": "条形码 · 条形码",
+      "cmd": "条形码"
+    },
+    {
+      "type": "input",
+      "label": "变量名 · 变量名",
+      "cmd": "变量名"
+    },
+    {
+      "type": "input",
+      "label": "AES · 加密",
+      "cmd": "加密"
+    },
+    {
+      "type": "input",
+      "label": "AES · 解密",
+      "cmd": "解密"
+    },
+    {
+      "type": "input",
+      "label": "SM2 · 签名",
+      "cmd": "签名"
+    },
+    {
+      "type": "input",
+      "label": "SM2 · 验签",
+      "cmd": "验签"
+    },
+    {
+      "type": "input",
+      "label": "颜色 · 颜色",
+      "cmd": "颜色"
+    }
+  ]
+}

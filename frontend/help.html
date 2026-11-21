@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="window.help">efto 帮助</title>
+    <script src="theme.js"></script>
+    <script src="i18n.js"></script>
+    <link rel="stylesheet" href="help.css" />
+  </head>
+  <body>
+    <header class="head">
+      <div class="brand">efto</div>
+      <h1 id="doc-title" data-i18n="help.title">使用帮助</h1>
+      <input id="filter" class="filter" type="search" placeholder="按章节标题筛选…" data-i18n-placeholder="help.filter" autocomplete="off" />
+      <button id="close" class="close" title="关闭 (Esc)" data-i18n="help.close" data-i18n-title="help.closeTitle">关闭</button>
+    </header>
+    <div class="body">
+      <nav id="toc" class="toc" aria-label="目录" data-i18n-aria-label="help.toc"></nav>
+      <main id="doc" class="doc">
+        <p class="loading" data-i18n="help.loading">正在载入帮助…</p>
+      </main>
+    </div>
+    <script src="help.js"></script>
+  </body>
+</html>

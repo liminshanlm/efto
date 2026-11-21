@@ -1,0 +1,29 @@
+# 构建产物
+/target/
+**/*.rs.bk
+
+# 验证脚本的临时输出
+/target/verify-tmp/
+
+# 本地覆盖（个人机器差异：镜像、插件目录等）
+.env.local
+.cargo/config.local.toml
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+
+# 插件开发时常见的本地产物（示例插件的编译产物不入库）
+plugins/*/dist/
+plugins/*/node_modules/
+
+# 本地打包/运行产物（安装包、临时打包文件、运行日志、IDE 与截图缓存）
+/dist/
+/*.exe
+/*.zip
+/*.log
+/.tmp/
+/.screenshots/
+/.trae/
+/.trae-html-share-packages/

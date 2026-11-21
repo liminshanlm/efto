@@ -1,0 +1,16 @@
+{
+  "name": "hosts",
+  "version": "0.1.0",
+  "description": "编辑 Windows hosts：查看、新增、修改、删除、启用/禁用映射；保存前自动备份，写入时请求管理员权限（UAC）",
+  "main": "main.js",
+  "index": "index.html",
+  "logo": "logo.png",
+  "author": { "name": "efto" },
+  "cmds": [
+    {
+      "type": "input",
+      "label": "修改 hosts",
+      "cmd": "hosts"
+    }
+  ]
+}

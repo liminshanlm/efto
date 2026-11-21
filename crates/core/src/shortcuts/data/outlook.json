@@ -1,0 +1,40 @@
+{
+  "app": {
+    "exe": ["outlook.exe"],
+    "name": "Microsoft Outlook"
+  },
+  "groups": [
+    {
+      "name": "邮件",
+      "items": [
+        { "keys": "Ctrl+Shift+M", "action": "新建邮件" },
+        { "keys": "Ctrl+R", "action": "回复" },
+        { "keys": "Ctrl+Shift+R", "action": "全部回复" },
+        { "keys": "Ctrl+F", "action": "转发" },
+        { "keys": "Ctrl+Enter", "action": "发送" },
+        { "keys": "Ctrl+S", "action": "保存草稿" },
+        { "keys": "F9", "action": "发送 / 接收" }
+      ]
+    },
+    {
+      "name": "日程与任务",
+      "items": [
+        { "keys": "Ctrl+Shift+A", "action": "新建约会" },
+        { "keys": "Ctrl+Shift+Q", "action": "新建会议请求" },
+        { "keys": "Ctrl+Shift+K", "action": "新建任务" },
+        { "keys": "Ctrl+Shift+U", "action": "新建联系人" }
+      ]
+    },
+    {
+      "name": "导航",
+      "items": [
+        { "keys": "Ctrl+1", "action": "切换到邮件" },
+        { "keys": "Ctrl+2", "action": "切换到日历" },
+        { "keys": "Ctrl+3", "action": "切换到联系人" },
+        { "keys": "Ctrl+4", "action": "切换到任务" },
+        { "keys": "Ctrl+E", "action": "搜索当前视图" },
+        { "keys": "Ctrl+Shift+I", "action": "切换到收件箱" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>文件共享</title>
+  <link rel="stylesheet" href="style.css" />
+  <script>
+    (function () {
+      function applyTheme() {
+        document.documentElement.dataset.theme = efto.isDarkMode() ? 'dark' : 'light';
+      }
+      try {
+        applyTheme();
+      } catch (e) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+      // 宿主切换主题时会改窗口的 prefers-color-scheme，跟着重画一次
+      try {
+        var mq = window.matchMedia('(prefers-color-scheme: dark)');
+        if (mq.addEventListener) mq.addEventListener('change', applyTheme);
+        else if (mq.addListener) mq.addListener(applyTheme);
+      } catch (e) { /* 没有 matchMedia 时只保留首帧主题 */ }
+    })();
+  </script>
+</head>
+
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>efto</span>
+      </div>
+      <span class="divider" aria-hidden="true"></span>
+      <span class="plugin-name">文件共享</span>
+      <div class="top-actions">
+        <span id="status" class="status" data-state="off"><i aria-hidden="true"></i><span id="statusText">未在分享</span></span>
+        <button id="toggle" class="btn" type="button">开始分享</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="card hero" aria-labelledby="heroTitle">
+        <div class="hero-main">
+          <h1 class="hero-title" id="heroTitle">局域网只读分享</h1>
+          <p id="statusHint" class="hero-sub">添加文件后，同网段设备即可在浏览器中访问。</p>
+
+          <div id="linkRow" class="link-row" hidden>
+            <div class="url-box">
+              <span class="url-label">分享地址</span>
+              <span id="shareUrl" class="link-url"></span>
+            </div>
+            <div class="hero-actions">
+              <button id="copyUrl" class="btn primary" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+                  stroke-linejoin="round" aria-hidden="true">
+                  <rect x="9" y="9" width="11" height="11" rx="2" />
+                  <path d="M5 15V5a2 2 0 0 1 2-2h8" />
+                </svg>
+                复制链接
+              </button>
+              <button id="toggleV6" class="btn" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+                  stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 8h13l-3-3" />
+                  <path d="M20 16H7l3 3" />
+                </svg>
+                <span id="v6Label">切换ipv6</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="hero-glyph" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"
+            stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18" />
+            <path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18" />
+          </svg>
+        </div>
+      </section>
+
+      <div id="error" class="banner" role="alert" hidden></div>
+
+      <section class="card list-card" aria-labelledby="listTitle">
+        <div class="list-head">
+          <div class="list-title" id="listTitle">
+            分享列表
+            <span id="itemCount" class="count">0</span>
+          </div>
+          <button id="clear" class="btn ghost" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 6h18" />
+              <path d="M8 6V4h8v2" />
+              <path d="m6 6 1 14h10l1-14" />
+            </svg>
+            清空列表
+          </button>
+        </div>
+
+        <div id="drop" class="drop" role="button" tabindex="0" aria-label="选择要分享的文件或文件夹">
+          <div class="drop-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <path d="M12 11v5" />
+              <path d="M9.5 13.5h5" />
+            </svg>
+          </div>
+          <div class="drop-text">拖拽文件或文件夹到此处</div>
+          <div class="drop-sub">或 <span id="pick" class="pick">选择文件</span>，文件夹会作为目录分享</div>
+        </div>
+
+        <p id="emptyHint" class="empty-hint">还没有共享内容，先添加一个文件或文件夹。</p>
+        <ul id="items" class="items"></ul>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+  </div>
+
+  <script src="ui.js"></script>
+</body>
+
+</html>

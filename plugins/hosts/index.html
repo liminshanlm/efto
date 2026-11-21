@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>hosts 修改</title>
+  <link rel="stylesheet" href="style.css" />
+  <script>
+    (function () {
+      function applyTheme() {
+        document.documentElement.dataset.theme = efto.isDarkMode() ? 'dark' : 'light';
+      }
+      try {
+        applyTheme();
+      } catch (e) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+      // 宿主切换主题时会改窗口的 prefers-color-scheme，跟着重画一次
+      try {
+        var mq = window.matchMedia('(prefers-color-scheme: dark)');
+        if (mq.addEventListener) mq.addEventListener('change', applyTheme);
+        else if (mq.addListener) mq.addListener(applyTheme);
+      } catch (e) { /* 没有 matchMedia 时只保留首帧主题 */ }
+    })();
+  </script>
+</head>
+
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>efto</span>
+      </div>
+      <span class="divider" aria-hidden="true"></span>
+      <span class="plugin-name">hosts</span>
+      <span id="dot" class="dot" title="有未保存的修改" aria-hidden="true"></span>
+      <div class="top-actions">
+        <span id="enc" class="tag" title="保存时沿用读取到的编码">UTF-8</span>
+        <button id="reload" class="btn" type="button">重新加载</button>
+        <button id="save" class="btn primary" type="button">保存</button>
+      </div>
+    </header>
+
+    <div class="pathbar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+        stroke-linejoin="round" aria-hidden="true">
+        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+        <path d="M14 3v5h5" />
+      </svg>
+      <span id="path" class="path"></span>
+    </div>
+
+    <div id="banner" class="banner" role="alert" hidden></div>
+
+    <main class="main">
+      <div class="toolbar">
+        <nav class="tabs" role="tablist" aria-label="编辑方式">
+          <button id="tab-list" class="tab on" type="button" data-tab="list" role="tab" aria-selected="true">条目</button>
+          <button id="tab-raw" class="tab" type="button" data-tab="raw" role="tab" aria-selected="false">原文</button>
+        </nav>
+        <span class="hint">保存会弹一次 UAC；勾选框表示启用，取消勾选会写成注释；原有注释与空行保留在「原文」</span>
+      </div>
+
+      <section id="view-list" class="view">
+        <div class="card add-card">
+          <div class="add-title">添加映射</div>
+          <div class="add-grid">
+            <label class="field">
+              <span>IP 地址</span>
+              <input id="new-ip" placeholder="127.0.0.1" spellcheck="false" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span>主机名</span>
+              <input id="new-names" placeholder="example.com example.local" spellcheck="false" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span>备注（可选）</span>
+              <input id="new-comment" placeholder="备注" spellcheck="false" autocomplete="off" />
+            </label>
+            <button id="add" class="btn primary add-btn" type="button">添加</button>
+          </div>
+        </div>
+
+        <div class="card list-card">
+          <div class="row-head" aria-hidden="true">
+            <span></span>
+            <span>IP 地址</span>
+            <span>主机名</span>
+            <span>备注</span>
+            <span></span>
+          </div>
+          <ul id="rows" class="rows"></ul>
+          <p id="empty" class="empty">还没有映射条目。上面填 IP 与主机名后点「添加」。</p>
+        </div>
+      </section>
+
+      <section id="view-raw" class="view" hidden>
+        <div class="card raw-card">
+          <textarea id="raw" spellcheck="false" aria-label="hosts 原文"></textarea>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span>保存前会把当前文件备份为 hosts.efto.bak（与 hosts 同目录）。</span>
+      <span id="status" class="status"></span>
+    </footer>
+  </div>
+
+  <script src="ui.js"></script>
+</body>
+
+</html>

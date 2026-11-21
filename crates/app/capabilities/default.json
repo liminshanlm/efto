@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-capability",
+  "description": "搜索窗口与插件 UI 窗口。自定义命令不走 ACL 校验，这里只需要事件通信权限。",
+  "windows": ["*"],
+  "permissions": ["core:default"]
+}

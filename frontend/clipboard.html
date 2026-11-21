@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>efto 剪贴板</title>
+    <script src="theme.js"></script>
+    <link rel="stylesheet" href="clipboard.css" />
+  </head>
+  <body>
+    <header class="head">
+      <input id="q" class="search" placeholder="搜索剪贴板历史" spellcheck="false" autocomplete="off" />
+      <span class="count" id="count">—</span>
+      <button class="btn ghost" id="clear">清空</button>
+    </header>
+    <main class="body">
+      <ul class="list" id="list"></ul>
+      <div class="empty" id="empty">还没有记录。复制文本、图片或文件后回到这里。</div>
+    </main>
+    <footer class="foot">
+      <span>↑↓ 选择 · Enter 复制 · Ctrl+Enter 粘贴到前台 · P 置顶 · Delete 删除 · Esc 关闭</span>
+      <span id="status">就绪</span>
+    </footer>
+    <script src="clipboard.js"></script>
+  </body>
+</html>

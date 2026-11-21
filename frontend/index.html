@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>efto</title>
+    <script src="theme.js"></script>
+    <script src="i18n.js"></script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="bar">
+        <div class="logo" aria-hidden="true"></div>
+        <input
+          id="q"
+          class="input"
+          type="text"
+          placeholder="搜索应用、插件、路径或 URL…"
+          data-i18n-placeholder="main.placeholder"
+          spellcheck="false"
+          autocomplete="off"
+          autofocus
+        />
+        <div class="spacer"></div>
+        <button
+          id="btn-settings"
+          class="ghost"
+          title="设置 (Alt+P)"
+          data-i18n="main.settings"
+          data-i18n-title="main.settings.title"
+        >设置</button>
+      </header>
+
+      <main class="body">
+        <ul id="results" class="results" role="listbox" aria-label="搜索结果" data-i18n-aria-label="main.results"></ul>
+        <div id="empty" class="empty">
+          <div class="empty-title" data-i18n="main.empty.title">输入以搜索</div>
+          <div class="empty-hint" data-i18n-html="main.empty.hint">
+            支持应用名、中文名与拼音首字母（如 <code>wx</code> 命中微信）、
+            文件路径、URL，以及插件关键字。
+          </div>
+        </div>
+      </main>
+
+      <footer class="foot">
+        <span id="status" class="status" data-i18n="main.status.preparing">准备中…</span>
+        <span class="keys" data-i18n-html="main.footer.keys">
+          <kbd>↑</kbd><kbd>↓</kbd> 选择 · <kbd>Shift</kbd> 预览 · <kbd>Enter</kbd> 执行 · <kbd>双击</kbd> 打开应用 · <kbd>Esc</kbd> 隐藏
+        </span>
+      </footer>
+    </div>
+    <div id="toast" class="toast" hidden></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

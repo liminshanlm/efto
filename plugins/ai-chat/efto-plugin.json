@@ -1,0 +1,11 @@
+{
+  "name": "ai-chat",
+  "version": "0.1.0",
+  "description": "AI 对话：多会话、流式输出、Markdown、图片输入，使用 设置 → 模型 里的模型",
+  "main": "main.js",
+  "index": "index.html",
+  "author": { "name": "efto" },
+  "cmds": [
+    { "type": "input", "label": "AI 对话", "cmd": "ai" }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "translate",
+  "version": "0.1.0",
+  "description": "翻译：调用 设置 → 模型 里的默认模型（OpenAI 兼容接口）翻译输入文本，自动中英互译",
+  "main": "main.js",
+  "logo": "logo.png",
+  "author": { "name": "efto" },
+  "cmds": [
+    { "type": "input", "label": "翻译", "cmd": "翻译" },
+    { "type": "input", "label": "fy", "cmd": "fy" },
+    { "type": "input", "label": "translate", "cmd": "translate" }
+  ]
+}

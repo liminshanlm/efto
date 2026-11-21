@@ -1,0 +1,1086 @@
+// efto 设置窗口。无打包器，IPC 直接走 Tauri 注入的 __TAURI_INTERNALS__。
+(function () {
+  'use strict';
+
+  var I = window.__TAURI_INTERNALS__;
+
+  function invoke(cmd, payload) {
+    if (!I || typeof I.invoke !== 'function') {
+      return Promise.reject(new Error('Tauri IPC 未就绪'));
+    }
+    return I.invoke(cmd, payload || {});
+  }
+
+  function $(id) { return document.getElementById(id); }
+
+  // i18n.js 缺失时退化为"用中文兜底"，设置页仍可操作
+  var i18n = window.eftoI18n || {
+    t: function (k, fb) { return fb != null ? fb : k; },
+    tf: function (k, vars, fb) { return fb != null ? fb : k; },
+    ready: Promise.resolve(null)
+  };
+  function T(key, fallback) { return i18n.t(key, fallback); }
+  function TF(key, vars, fallback) { return i18n.tf(key, vars, fallback); }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  var toastTimer = null;
+  function toast(text, isError) {
+    var el = $('toast');
+    el.textContent = text;
+    el.hidden = false;
+    el.className = 'toast' + (isError ? ' error' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.hidden = true; }, 2600);
+  }
+
+  // ---------- 导航 ----------
+  document.querySelectorAll('.nav-item').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.nav-item').forEach(function (b) {
+        b.classList.toggle('active', b === btn);
+      });
+      var page = btn.dataset.page;
+      document.querySelectorAll('.page').forEach(function (p) {
+        p.hidden = p.id !== 'page-' + page;
+      });
+      document.querySelector('.main').scrollTop = 0;
+      if (page === 'plugins') loadPlugins();
+      if (page === 'runtime') loadRuntime();
+      if (page === 'snippets') loadSnippets();
+    });
+  });
+
+  /// 主窗口的"片段"内置动作会发 `settings:page`，直接切到对应页。
+  function listen(name, handler) {
+    if (!I || !I.transformCallback) return;
+    var cb = I.transformCallback(function (ev) {
+      handler(ev && ev.payload);
+    }, false);
+    invoke('plugin:event|listen', {
+      event: name,
+      target: { kind: 'Any' },
+      handler: cb
+    });
+  }
+
+  listen('settings:page', function (page) {
+    if (typeof page !== 'string') return;
+    var btn = document.querySelector('.nav-item[data-page="' + page + '"]');
+    if (btn) btn.click();
+  });
+
+  // ---------- 常规设置 ----------
+  var indexDirs = [];
+  var savedExtraDirs = '[]';
+  var BUILTIN_TOOLS = {
+    screenshot: true,
+    clipboard: true,
+    lock_screen: true,
+    tile_windows: true,
+    shortcut_guide: true,
+    snippets: true,
+    file_buffer: true
+  };
+  var BUILTIN_ORDER = [
+    'screenshot',
+    'clipboard',
+    'lock_screen',
+    'tile_windows',
+    'shortcut_guide',
+    'snippets',
+    'file_buffer'
+  ];
+  // 上一次读到的完整工具列表：保存时据此保留 app:/plugin: 条目与用户顺序
+  var savedTools = [];
+
+  function paintTheme(mode) {
+    document.querySelectorAll('#themeSeg .seg-item').forEach(function (btn) {
+      var on = btn.dataset.theme === mode;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  }
+
+  function paintCommandMode(mode) {
+    document.querySelectorAll('#commandModeSeg .seg-item').forEach(function (btn) {
+      var on = btn.dataset.mode === mode;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  }
+
+  function commandModeValue() {
+    var btn = document.querySelector('#commandModeSeg .seg-item.active');
+    return btn ? btn.dataset.mode : 'inline';
+  }
+
+  // 主题即时生效：先重画当前窗口，再落盘（后端会把其它窗口的原生标题栏一起切过来）
+  function chooseTheme(mode) {
+    if (window.eftoTheme) window.eftoTheme.set(mode);
+    paintTheme(mode);
+    invoke('set_settings', { patch: { theme: mode } }).catch(function (e) {
+      toast(T('settings.toast.saveThemeFailed', '保存主题失败：') + e, true);
+    });
+  }
+
+  function renderSettings(s) {
+    paintTheme(s.theme || 'system');
+    $('languageSelect').value = s.language || 'auto';
+    $('hotkey').value = s.hotkey || '';
+    $('maxResults').value = s.max_results;
+    $('refreshInterval').value = s.refresh_interval_secs;
+    $('hideOnBlur').checked = !!s.hide_on_blur;
+    $('alwaysOnTop').checked = !!s.always_on_top;
+    $('enableRegistry').checked = !!s.enable_registry;
+    $('enableDirScan').checked = !!s.enable_dir_scan;
+    $('enableBookmarks').checked = !!s.enable_bookmarks;
+    indexDirs = (s.extra_dirs || []).slice();
+    savedExtraDirs = JSON.stringify(indexDirs);
+    renderIndexDirs();
+    var tools = s.tools || [];
+    savedTools = tools.slice();
+    $('toolScreenshot').checked = tools.indexOf('screenshot') >= 0;
+    $('toolClipboard').checked = tools.indexOf('clipboard') >= 0;
+    $('toolLockScreen').checked = tools.indexOf('lock_screen') >= 0;
+    $('toolTileWindows').checked = tools.indexOf('tile_windows') >= 0;
+    $('toolShortcutGuide').checked = tools.indexOf('shortcut_guide') >= 0;
+    $('toolSnippets').checked = tools.indexOf('snippets') >= 0;
+    $('toolFileBuffer').checked = tools.indexOf('file_buffer') >= 0;
+    $('uaEnabled').checked = s.universal_actions_enabled !== false;
+    $('uaHotkey').value = s.universal_actions_hotkey || 'Ctrl+Alt+Space';
+    engines = (s.web_searches || []).slice();
+    renderEngines();
+    renderEngineSelect(s.web_search_engine || '');
+    $('webSearchFallback').checked = s.web_search_fallback !== false;
+    var hotkeys = s.tool_hotkeys || {};
+    $('hkScreenshot').value = hotkeys.screenshot || '';
+    $('hkClipboard').value = hotkeys.clipboard || '';
+    $('hkLockScreen').value = hotkeys.lock_screen || '';
+    $('hkTileWindows').value = hotkeys.tile_windows || '';
+    $('hkShortcutGuide').value = hotkeys.shortcut_guide || '';
+    $('hkSnippets').value = hotkeys.snippets || '';
+    $('hkFileBuffer').value = hotkeys.file_buffer || '';
+    $('nodePath').value = s.node_path || '';
+    $('pythonPath').value = s.python_path || '';
+    $('commandEnabled').checked = s.command_enabled !== false;
+    $('commandPrefix').value = s.command_prefix || '>';
+    $('commandShell').value = s.command_shell || 'powershell';
+    $('commandShellPath').value = s.command_shell_path || '';
+    $('commandWslDistro').value = s.command_wsl_distro || '';
+    $('commandCustomArgs').value = s.command_custom_args || '';
+    $('commandTimeout').value = s.command_timeout_secs || 10;
+    paintCommandMode(s.command_run_mode || 'inline');
+    renderModels(s);
+  }
+
+  function dirKey(p) {
+    return String(p || '').replace(/[\\/]+$/, '').toLowerCase();
+  }
+
+  function renderIndexDirs() {
+    var box = $('indexDirList');
+    if (!indexDirs.length) {
+      box.innerHTML = '';
+      return;
+    }
+    box.innerHTML = indexDirs.map(function (d, i) {
+      return '<div class="dir-item">' +
+        '<span class="dir-path mono" title="' + esc(d) + '">' + esc(d) + '</span>' +
+        '<button class="btn ghost dir-remove" data-i="' + i + '">' + esc(T('settings.index.removeDir', '移除')) + '</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  function addIndexDir() {
+    invoke('pick_index_dir')
+      .then(function (path) {
+        if (!path) return;
+        var key = dirKey(path);
+        var dup = indexDirs.some(function (d) { return dirKey(d) === key; });
+        if (dup) {
+          toast(T('settings.toast.dirExists', '该目录已在列表里'));
+          return;
+        }
+        indexDirs.push(path);
+        renderIndexDirs();
+      })
+      .catch(function (e) { toast(T('settings.toast.pickFailed', '打开选择框失败：') + e, true); });
+  }
+
+  function loadSettings() {
+    invoke('get_settings')
+      .then(renderSettings)
+      .catch(function (e) { toast(T('settings.toast.loadFailed', '读取设置失败：') + e, true); });
+  }
+
+  function saveSettings() {
+    var hint = $('saveHint');
+    var dirsChanged = JSON.stringify(indexDirs) !== savedExtraDirs;
+    var checks = {
+      screenshot: $('toolScreenshot').checked,
+      clipboard: $('toolClipboard').checked,
+      lock_screen: $('toolLockScreen').checked,
+      tile_windows: $('toolTileWindows').checked,
+      shortcut_guide: $('toolShortcutGuide').checked,
+      snippets: $('toolSnippets').checked,
+      file_buffer: $('toolFileBuffer').checked
+    };
+    hint.className = 'hint';
+    hint.textContent = T('settings.common.saving', '保存中…');
+    // 工具顺序即面板顺序与 Alt+编号：自选条目（app:/plugin:）原样保留，
+    // 内置工具按勾选状态取舍；重新读一次设置，避免覆盖主面板刚添加的条目。
+    invoke('get_settings')
+      .then(function (cur) {
+        var fresh = (cur && cur.tools) || savedTools;
+        var tools = [];
+        fresh.forEach(function (t) {
+          if (BUILTIN_TOOLS[t]) {
+            if (checks[t]) tools.push(t);
+          } else {
+            tools.push(t);
+          }
+        });
+        BUILTIN_ORDER.forEach(function (t) {
+          if (checks[t] && tools.indexOf(t) < 0) tools.push(t);
+        });
+        var patch = {
+          hotkey: $('hotkey').value.trim(),
+          max_results: Number($('maxResults').value) || 12,
+          refresh_interval_secs: Number($('refreshInterval').value) || 0,
+          hide_on_blur: $('hideOnBlur').checked,
+          always_on_top: $('alwaysOnTop').checked,
+          enable_registry: $('enableRegistry').checked,
+          enable_dir_scan: $('enableDirScan').checked,
+          enable_bookmarks: $('enableBookmarks').checked,
+          extra_dirs: indexDirs,
+          tools: tools,
+          command_enabled: $('commandEnabled').checked,
+          command_prefix: $('commandPrefix').value.trim(),
+          command_shell: $('commandShell').value,
+          command_shell_path: $('commandShellPath').value.trim(),
+          command_wsl_distro: $('commandWslDistro').value.trim(),
+          command_custom_args: $('commandCustomArgs').value.trim(),
+          command_timeout_secs: Number($('commandTimeout').value) || 10,
+          command_run_mode: commandModeValue(),
+          universal_actions_enabled: $('uaEnabled').checked,
+          universal_actions_hotkey: $('uaHotkey').value.trim()
+        };
+        return invoke('set_settings', { patch: patch });
+      })
+      .then(function () {
+        hint.className = 'hint ok';
+        if (!dirsChanged) {
+          hint.textContent = T('settings.common.saved', '已保存');
+          setTimeout(function () { hint.textContent = ''; }, 2200);
+          return;
+        }
+        savedExtraDirs = JSON.stringify(indexDirs);
+        hint.textContent = T('settings.index.savedReindexing', '已保存，正在重建索引…');
+        return invoke('refresh_index').then(function () {
+          hint.textContent = T('settings.index.savedReindexed', '已保存，索引已重建');
+          setTimeout(function () { hint.textContent = ''; }, 2200);
+          loadIndex();
+        });
+      })
+      .catch(function (e) {
+        hint.className = 'hint error';
+        hint.textContent = T('settings.common.saveFailed', '保存失败：') + e;
+      });
+  }
+
+  // ---------- 索引 ----------
+  function loadIndex() {
+    invoke('index_status')
+      .then(function (st) {
+        var r = st.report || {};
+        $('indexCount').textContent = TF('settings.index.counts', {
+          apps: st.apps || 0,
+          plugins: st.plugins || 0
+        }, (st.apps || 0) + ' 应用 / ' + (st.plugins || 0) + ' 插件');
+        $('indexMeta').textContent = r.elapsed_ms
+          ? TF('settings.index.lastElapsed', { ms: r.elapsed_ms }, '上次重建耗时 ' + r.elapsed_ms + ' ms')
+          : T('settings.index.never', '尚未重建');
+        $('indexSources').textContent = TF('settings.index.sources', {
+          start: r.start_menu || 0,
+          desktop: r.desktop || 0,
+          registry: r.registry || 0,
+          dir: r.dir_scan || 0,
+          system: r.system || 0,
+          dup: r.dropped_duplicates || 0
+        }, '开始菜单 ' + (r.start_menu || 0) + ' · 桌面 ' + (r.desktop || 0) +
+          ' · 注册表 ' + (r.registry || 0) + ' · 目录 ' + (r.dir_scan || 0) +
+          ' · 系统 ' + (r.system || 0) + ' · 去重 ' + (r.dropped_duplicates || 0));
+      })
+      .catch(function (e) { toast(T('settings.index.loadFailed', '读取索引状态失败：') + e, true); });
+  }
+
+  function reindex() {
+    var btn = $('reindex');
+    btn.disabled = true;
+    btn.textContent = T('settings.index.rebuilding', '重建中…');
+    invoke('refresh_index')
+      .then(function (r) {
+        toast((r && r.merged != null)
+          ? TF('settings.index.rebuilt', { n: r.merged }, '索引已重建：' + r.merged + ' 条')
+          : T('settings.index.rebuiltDone', '完成'));
+        loadIndex();
+        loadPlugins();
+      })
+      .catch(function (e) { toast(T('settings.index.rebuildFailed', '重建失败：') + e, true); })
+      .then(function () {
+        btn.disabled = false;
+        btn.textContent = T('settings.index.reindex', '重建索引');
+      });
+  }
+
+  // ---------- Everything ----------
+  function loadEverything() {
+    invoke('everything_status')
+      .then(renderEverything)
+      .catch(function (e) { toast(T('settings.everything.checkFailed', '检测 Everything 失败：') + e, true); });
+  }
+
+  function renderEverything(st) {
+    var pill = $('esPill');
+    var btn = $('installEs');
+    pill.className = 'pill';
+    if (st.state === 'ready') {
+      pill.classList.add('ok');
+      pill.textContent = T('settings.everything.ready', '就绪');
+      btn.textContent = T('settings.everything.reinstall', '重新安装 es.exe');
+    } else if (st.state === 'mismatch') {
+      pill.classList.add('danger');
+      pill.textContent = T('settings.everything.mismatch', '校验失败');
+      btn.textContent = T('settings.everything.redownload', '重新下载 es.exe');
+    } else {
+      pill.classList.add('warn');
+      pill.textContent = T('settings.everything.notReady', '未就绪');
+      btn.textContent = T('settings.everything.install', '下载并安装 es.exe');
+    }
+    $('esMessage').textContent = st.message;
+    $('esPath').textContent = st.es_path || T('settings.everything.notFound', '未找到');
+    $('everythingInstalled').textContent = st.everything_installed
+      ? T('settings.everything.installed', '已安装 Everything')
+      : T('settings.everything.notInstalled', '未检测到 Everything 本体');
+    btn.disabled = false;
+  }
+
+  function installEs() {
+    var btn = $('installEs');
+    btn.disabled = true;
+    btn.textContent = T('settings.everything.downloading', '下载中…');
+    invoke('install_es')
+      .then(function (path) {
+        toast(T('settings.everything.installedToast', 'es.exe 已安装：') + path);
+        loadEverything();
+      })
+      .catch(function (e) {
+        toast(T('settings.everything.installFailed', '安装 es.exe 失败：') + e, true);
+        loadEverything();
+      });
+  }
+
+  // ---------- 插件 ----------
+  function loadPlugins() {
+    invoke('list_plugins')
+      .then(renderPlugins)
+      .catch(function (e) { toast(T('settings.plugins.loadFailed', '读取插件列表失败：') + e, true); });
+  }
+
+  function renderPlugins(rows) {
+    rows = rows || [];
+    $('pluginCount').textContent = TF('settings.plugin.count', { n: rows.length }, '插件（' + rows.length + '）');
+    var box = $('pluginList');
+    if (!rows.length) {
+      box.innerHTML = '<div class="empty-state">' + esc(T('settings.plugins.empty', '还没有插件。导入插件目录或 .zip 包开始使用。')) + '</div>';
+      return;
+    }
+    box.innerHTML = rows.map(function (p) {
+      var badges = [];
+      if (!p.enabled) badges.push('<span class="pill">' + esc(T('settings.plugins.disabled', '已停用')) + '</span>');
+      else if (p.running) badges.push('<span class="pill ok">' + esc(T('settings.plugins.running', '运行中')) + '</span>');
+      if (!p.has_backend && !p.has_ui) badges.push('<span class="pill danger">' + esc(T('settings.plugins.broken', '不可执行')) + '</span>');
+      var entry = (p.has_backend ? 'main' : '') +
+        (p.has_backend && p.has_ui ? ' + ' : '') +
+        (p.has_ui ? 'UI' : '');
+      var cmdRows = (p.cmds || []).map(function (c) {
+        return '<div class="plugin-cmd">' +
+          '<span class="plugin-cmd-name" title="' + esc(c.label) + '">' + esc(c.cmd) + '</span>' +
+          '<input class="plugin-cmd-alias" data-plugin="' + esc(p.id) + '"' +
+          ' data-cmd="' + esc(c.cmd) + '" value="' + esc(c.alias || '') + '"' +
+          ' placeholder="' + esc(T('settings.plugins.cmdAliasPlaceholder', '自定义触发词（可选）')) + '" spellcheck="false" />' +
+          '</div>';
+      }).join('');
+      var cmdBlock = cmdRows
+        ? '<details class="plugin-cmds"><summary>' + esc(TF('settings.plugins.cmds', { n: p.cmds.length }, '触发词（' + p.cmds.length + '）')) + '</summary>' +
+          cmdRows + '</details>'
+        : '';
+      var problems = (p.problems || [])
+        .map(function (x) { return '<div class="plugin-problem">' + esc(x) + '</div>'; })
+        .join('');
+      var toggle = '<button class="btn ghost plugin-toggle" data-plugin-toggle="' + esc(p.id) +
+        '" data-next="' + (p.enabled ? '0' : '1') + '">' +
+        esc(p.enabled ? T('settings.plugins.disable', '停用') : T('settings.plugins.enable', '启用')) +
+        '</button>';
+      return '<div class="plugin-item' + (p.enabled ? '' : ' is-off') + '">' +
+        '<div class="plugin-avatar">' +
+        esc((p.name || '?').charAt(0)) + '</div>' +
+        '<div class="plugin-main">' +
+        '<div class="plugin-name">' + esc(p.name) +
+        '<span class="plugin-version">' + esc(p.version || '') + '</span>' + badges.join('') +
+        '</div>' +
+        (p.description ? '<div class="plugin-desc">' + esc(p.description) + '</div>' : '') +
+        '<div class="plugin-meta">' + esc(T('settings.plugins.entry', '入口')) + ' ' + esc(entry || '—') + '</div>' +
+        cmdBlock +
+        problems +
+        '</div>' + toggle + '</div>';
+    }).join('');
+  }
+
+  function importPlugin() {
+    var input = $('importPath');
+    var hint = $('importHint');
+    var path = input.value.trim();
+    if (!path) {
+      hint.className = 'hint error';
+      hint.textContent = T('settings.plugins.importEmptyPath', '请填写插件目录或 .zip 文件路径');
+      return;
+    }
+    var btn = $('importBtn');
+    btn.disabled = true;
+    btn.textContent = T('settings.plugins.importing', '导入中…');
+    hint.className = 'hint';
+    hint.textContent = T('settings.plugins.copying', '正在复制并校验清单…');
+    invoke('import_plugin', { path: path })
+      .then(function (r) {
+        var list = r.imported || [];
+        var names = list.map(function (p) { return p.name; });
+        hint.className = 'hint ok';
+        if (list.length === 1) {
+          hint.textContent = TF('settings.plugins.imported', { name: list[0].name, version: list[0].version }, '已导入 ' + list[0].name + '（' + list[0].version + '）');
+        } else {
+          hint.textContent = TF('settings.plugins.importedMany', { n: list.length, names: names.join('、') }, '已导入 ' + list.length + ' 个插件：' + names.join('、'));
+        }
+        input.value = '';
+        var problems = [];
+        list.forEach(function (p) {
+          (p.problems || []).forEach(function (x) { problems.push(p.name + '：' + x); });
+        });
+        if (problems.length) {
+          hint.textContent += T('settings.plugins.importProblems', '；清单提示：') + problems.join('；');
+        }
+        if (r.failed && r.failed.length) {
+          var skipped = r.failed.map(function (f) { return f.plugin + '（' + f.reason + '）'; });
+          hint.textContent += T('settings.plugins.importSkipped', '；未导入：') + skipped.join('；');
+        }
+        loadPlugins();
+        loadIndex();
+      })
+      .catch(function (e) {
+        hint.className = 'hint error';
+        hint.textContent = T('settings.plugins.importFailed', '导入失败：') + e;
+      })
+      .then(function () {
+        btn.disabled = false;
+        btn.textContent = T('settings.import.button', '导入');
+      });
+  }
+
+  function pickPluginSource(kind) {
+    var hint = $('importHint');
+    invoke('pick_plugin_source', { kind: kind })
+      .then(function (path) {
+        if (!path) return;
+        $('importPath').value = path;
+        hint.className = 'hint';
+        hint.textContent = T('settings.plugins.selected', '已选择：') + path;
+      })
+      .catch(function (e) { toast(T('settings.toast.pickFailed', '打开选择框失败：') + e, true); });
+  }
+
+  function openPluginDir() {
+    invoke('open_plugin_dir').then(function (msg) {
+      if (msg) toast(msg);
+    }).catch(function (e) { toast(T('settings.plugins.openFailed', '打开插件目录失败：') + e, true); });
+  }
+
+  // ---------- 运行时 ----------
+  function paintRuntime(kind, st) {
+    st = st || {};
+    var pill = $(kind + 'Pill');
+    var desc = $(kind + 'Status');
+    if (!st.configured) {
+      pill.className = 'pill';
+      pill.textContent = T('settings.runtime.notConfigured', '未配置');
+      desc.className = 'desc mono';
+      desc.textContent = T('settings.runtime.notDetected', '未检测');
+      return;
+    }
+    if (st.ok) {
+      pill.className = 'pill ok';
+      pill.textContent = T('settings.runtime.available', '可用');
+      desc.className = 'desc mono';
+      desc.textContent = st.version || T('settings.runtime.checkPassed', '检测通过');
+    } else {
+      pill.className = 'pill danger';
+      pill.textContent = T('settings.runtime.unavailable', '不可用');
+      desc.className = 'desc mono';
+      desc.textContent = st.error || T('settings.runtime.checkFailed', '检测失败');
+    }
+  }
+
+  function loadRuntime() {
+    invoke('runtime_status')
+      .then(function (st) {
+        paintRuntime('node', st.node);
+        paintRuntime('python', st.python);
+      })
+      .catch(function (e) { toast(T('settings.runtime.loadFailed', '读取运行时状态失败：') + e, true); });
+  }
+
+  function checkRuntime(kind) {
+    var path = $(kind + 'Path').value.trim();
+    if (!path) {
+      paintRuntime(kind, { configured: false });
+      return;
+    }
+    var desc = $(kind + 'Status');
+    desc.className = 'desc mono';
+    desc.textContent = T('settings.runtime.checking', '检测中…');
+    invoke('runtime_check', { runtime: kind, path: path })
+      .then(function (st) { paintRuntime(kind, st); })
+      .catch(function (e) {
+        paintRuntime(kind, { configured: true, ok: false, error: String(e) });
+      });
+  }
+
+  function saveRuntime() {
+    var hint = $('runtimeHint');
+    hint.className = 'hint';
+    hint.textContent = T('settings.common.saving', '保存中…');
+    invoke('set_settings', {
+      patch: {
+        node_path: $('nodePath').value.trim(),
+        python_path: $('pythonPath').value.trim()
+      }
+    })
+      .then(function () {
+        hint.className = 'hint ok';
+        hint.textContent = T('settings.common.saved', '已保存');
+        setTimeout(function () { hint.textContent = ''; }, 2200);
+        loadRuntime();
+      })
+      .catch(function (e) {
+        hint.className = 'hint error';
+        hint.textContent = T('settings.common.saveFailed', '保存失败：') + e;
+      });
+  }
+
+  // ---------- 模型 ----------
+  var modelSeq = 0;
+
+  function newModelId() {
+    modelSeq++;
+    return 'model-' + Date.now().toString(36) + '-' + modelSeq;
+  }
+
+  // 从 DOM 读回当前表单：默认模型用单选按钮表示，只有保存时才落盘。
+  function collectModels() {
+    var rows = document.querySelectorAll('#modelList .model-item');
+    var list = [];
+    var def = '';
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var m = {
+        id: row.dataset.id,
+        name: row.querySelector('.model-name').value.trim(),
+        base_url: row.querySelector('.model-base').value.trim(),
+        api_key: row.querySelector('.model-key').value,
+        model: row.querySelector('.model-model').value.trim()
+      };
+      // 刚点“添加”还没填的空行：静默忽略，避免强迫用户删掉它才能保存
+      if (!m.name && !m.base_url && !m.api_key && !m.model) continue;
+      list.push(m);
+      if (row.querySelector('.model-default').checked) def = m.id;
+    }
+    return { models: list, default_model: def };
+  }
+
+  function renderModels(s) {
+    s = s || {};
+    var list = s.models || [];
+    var def = s.default_model || '';
+    var box = $('modelList');
+    if (!list.length) {
+      box.innerHTML = '<div class="empty-state">' + esc(T('settings.models.empty', '还没有模型。点下方“添加”配置一个 OpenAI 兼容接口。')) + '</div>';
+      return;
+    }
+    box.innerHTML = list.map(function (m) {
+      var checked = m.id === def ? ' checked' : '';
+      return '<div class="model-item" data-id="' + esc(m.id) + '">' +
+        '<div class="model-head">' +
+        '<input class="text-input model-name" placeholder="' + esc(T('settings.models.name.placeholder', '名称，例如 DeepSeek')) + '" value="' + esc(m.name) + '" spellcheck="false" />' +
+        '<label class="model-default-label"><input type="radio" class="model-default" name="defaultModel"' + checked + ' />' + esc(T('settings.models.default', '默认')) + '</label>' +
+        '<span class="model-status"></span>' +
+        '<button class="btn model-test">' + esc(T('settings.models.test', '测试')) + '</button>' +
+        '<button class="btn ghost model-remove">' + esc(T('settings.models.remove', '删除')) + '</button>' +
+        '</div>' +
+        '<div class="model-fields">' +
+        '<label class="field"><span>Base URL</span><input class="text-input model-base" placeholder="' + esc(T('settings.models.url.placeholder', 'https://api.openai.com/v1')) + '" value="' + esc(m.base_url) + '" spellcheck="false" /></label>' +
+        '<label class="field"><span>' + esc(T('settings.models.model.label', '模型')) + '</span><input class="text-input model-model" placeholder="gpt-4o-mini" value="' + esc(m.model) + '" spellcheck="false" /></label>' +
+        '<label class="field"><span>API Key</span><input class="text-input model-key" type="password" placeholder="' + esc(T('settings.models.key.placeholder', '本地服务可留空')) + '" value="' + esc(m.api_key) + '" spellcheck="false" /></label>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  function addModel() {
+    var state = collectModels();
+    state.models.push({ id: newModelId(), name: '', base_url: '', api_key: '', model: '' });
+    renderModels(state);
+  }
+
+  function removeModel(btn) {
+    var row = btn.closest('.model-item');
+    if (!row) return;
+    var state = collectModels();
+    state.models = state.models.filter(function (m) { return m.id !== row.dataset.id; });
+    renderModels(state);
+  }
+
+  function testModel(btn) {
+    var row = btn.closest('.model-item');
+    if (!row) return;
+    var status = row.querySelector('.model-status');
+    var cfg = {
+      id: row.dataset.id,
+      name: row.querySelector('.model-name').value.trim() || T('settings.models.unnamed', '未命名'),
+      base_url: row.querySelector('.model-base').value.trim(),
+      api_key: row.querySelector('.model-key').value.trim(),
+      model: row.querySelector('.model-model').value.trim()
+    };
+    if (!cfg.base_url || !cfg.model) {
+      status.className = 'model-status error';
+      status.textContent = T('settings.models.missing', '缺少 Base URL 或模型名');
+      return;
+    }
+    btn.disabled = true;
+    status.className = 'model-status';
+    status.textContent = T('settings.models.testing', '测试中…');
+    invoke('model_check', { model: cfg })
+      .then(function (r) {
+        status.className = 'model-status ok';
+        status.textContent = TF('settings.models.available', { ms: r.latency_ms || 0 }, '可用 · ' + (r.latency_ms || 0) + ' ms');
+      })
+      .catch(function (e) {
+        status.className = 'model-status error';
+        status.textContent = String(e);
+      })
+      .then(function () { btn.disabled = false; });
+  }
+
+  function saveModels() {
+    var state = collectModels();
+    if (state.models.length && !state.default_model) state.default_model = state.models[0].id;
+    var hint = $('modelsHint');
+    hint.className = 'hint';
+    hint.textContent = T('settings.common.saving', '保存中…');
+    invoke('set_settings', { patch: { models: state.models, default_model: state.default_model } })
+      .then(function () {
+        hint.className = 'hint ok';
+        hint.textContent = T('settings.common.saved', '已保存');
+        setTimeout(function () { hint.textContent = ''; }, 2200);
+        // 后端会补齐空 id / 纠正默认模型，重新读一次让界面与磁盘一致
+        loadSettings();
+      })
+      .catch(function (e) {
+        hint.className = 'hint error';
+        hint.textContent = T('settings.common.saveFailed', '保存失败：') + e;
+      });
+  }
+
+  // ---------- 绑定 ----------
+  $('save').addEventListener('click', saveSettings);
+  $('addIndexDir').addEventListener('click', addIndexDir);
+  $('indexDirList').addEventListener('click', function (e) {
+    var btn = e.target.closest('.dir-remove');
+    if (!btn) return;
+    indexDirs.splice(Number(btn.dataset.i), 1);
+    renderIndexDirs();
+  });
+  $('reindex').addEventListener('click', reindex);
+  $('recheckEs').addEventListener('click', loadEverything);
+  $('installEs').addEventListener('click', installEs);
+  $('downloadEverything').addEventListener('click', function () {
+    invoke('everything_status').then(function (st) {
+      return invoke('open_url', { url: st.download_everything_url });
+    }).catch(function (e) { toast(T('settings.toast.openDownloadFailed', '打开下载页失败：') + e, true); });
+  });
+  $('importBtn').addEventListener('click', importPlugin);
+  $('pickFileBtn').addEventListener('click', function () { pickPluginSource('file'); });
+  $('pickDirBtn').addEventListener('click', function () { pickPluginSource('dir'); });
+  $('importPath').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') importPlugin();
+  });
+  $('openPluginDir').addEventListener('click', openPluginDir);
+  $('reloadPlugins').addEventListener('click', function () {
+    loadPlugins();
+    loadIndex();
+  });
+  // 启用 / 停用：停用后不再加载，立即从搜索结果消失
+  $('pluginList').addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-plugin-toggle]');
+    if (!btn) return;
+    var enabling = btn.getAttribute('data-next') === '1';
+    btn.disabled = true;
+    invoke('set_plugin_enabled', { plugin: btn.getAttribute('data-plugin-toggle'), enabled: enabling })
+      .then(function (rows) {
+        renderPlugins(rows);
+        toast(enabling ? T('settings.toast.pluginEnabled', '已启用') : T('settings.toast.pluginDisabled', '已停用'));
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        toast(T('settings.toast.pluginToggleFailed', '切换插件状态失败：') + err, true);
+      });
+  });
+  // 改完失焦即保存：空值表示恢复清单里的原触发词
+  $('pluginList').addEventListener('change', function (e) {
+    var el = e.target;
+    if (!el || !el.classList.contains('plugin-cmd-alias')) return;
+    var alias = el.value.trim();
+    invoke('set_plugin_cmd_alias', {
+      plugin: el.dataset.plugin,
+      cmd: el.dataset.cmd,
+      alias: alias
+    })
+      .then(function (saved) {
+        el.value = saved || '';
+        toast(saved ? T('settings.toast.aliasSaved', '已保存触发词：') + saved : T('settings.toast.aliasReset', '已恢复原触发词'));
+      })
+      .catch(function (err) {
+        toast(String(err), true);
+      });
+  });
+  $('checkNode').addEventListener('click', function () { checkRuntime('node'); });
+  $('checkPython').addEventListener('click', function () { checkRuntime('python'); });
+  $('nodePath').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') checkRuntime('node');
+  });
+  $('pythonPath').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') checkRuntime('python');
+  });
+  $('saveRuntime').addEventListener('click', saveRuntime);
+  $('addModel').addEventListener('click', addModel);
+  $('saveModels').addEventListener('click', saveModels);
+  $('modelList').addEventListener('click', function (e) {
+    var t = e.target;
+    if (t.classList.contains('model-remove')) removeModel(t);
+    else if (t.classList.contains('model-test')) testModel(t);
+  });
+
+  $('themeSeg').addEventListener('click', function (e) {
+    var btn = e.target.closest('.seg-item');
+    if (!btn) return;
+    chooseTheme(btn.dataset.theme);
+  });
+
+  $('commandModeSeg').addEventListener('click', function (e) {
+    var btn = e.target.closest('.seg-item');
+    if (!btn) return;
+    paintCommandMode(btn.dataset.mode);
+  });
+
+  // 检测命令分组：用表单里尚未保存的值真跑一条 echo，通过后给出 Shell 实际路径
+  $('checkCommand').addEventListener('click', function () {
+    var btn = $('checkCommand');
+    btn.disabled = true;
+    invoke('command_check', {
+      shell: $('commandShell').value,
+      path: $('commandShellPath').value.trim(),
+      distro: $('commandWslDistro').value.trim(),
+      custom_args: $('commandCustomArgs').value.trim()
+    })
+      .then(function (r) {
+        toast(T('settings.command.checkPassed', '检测通过：') + ((r && (r.sample || r.path)) || $('commandShell').value));
+      })
+      .catch(function (e) {
+        toast(T('settings.command.checkFailed', '检测失败：') + e, true);
+      })
+      .then(function () { btn.disabled = false; });
+  });
+
+  // “检索收藏夹”即时生效：勾选/取消立刻写回，不需要再滚到底部点“保存”。
+  $('enableBookmarks').addEventListener('change', function () {
+    var on = $('enableBookmarks').checked;
+    invoke('set_settings', { patch: { enable_bookmarks: on } })
+      .then(function () { toast(on ? T('settings.bookmarks.on', '已开启收藏夹检索') : T('settings.bookmarks.off', '已关闭收藏夹检索')); })
+      .catch(function (e) { toast(T('settings.common.saveFailed', '保存失败：') + e, true); });
+  });
+
+  // 语言切换：后端会重建托盘/窗口标题并广播给其它窗口；本窗口直接重载，重新加载词典
+  $('languageSelect').addEventListener('change', function () {
+    var lang = $('languageSelect').value;
+    invoke('set_settings', { patch: { language: lang } })
+      .then(function () { location.reload(); })
+      .catch(function (e) { toast(T('settings.common.saveFailed', '保存失败：') + e, true); });
+  });
+
+  // ---------- 片段 ----------
+  var snippets = [];
+  var engines = [];
+
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function renderSnippets() {
+    var box = $('snippetList');
+    if (!snippets.length) {
+      box.innerHTML = '<div class="snippet-empty">' +
+        escHtml(T('settings.snippets.empty', '还没有片段。点下方“添加”创建第一条。')) + '</div>';
+      return;
+    }
+    box.innerHTML = snippets.map(function (s, i) {
+      return '<div class="snippet-row" data-i="' + i + '">' +
+        '<div class="snippet-head">' +
+        '<input class="text-input tiny" data-k="keyword" spellcheck="false" value="' + escHtml(s.keyword) + '" placeholder="' + escHtml(T('settings.snippets.keyword', '关键词')) + '" />' +
+        '<input class="text-input" data-k="title" value="' + escHtml(s.title) + '" placeholder="' + escHtml(T('settings.snippets.title', '标题（可选）')) + '" />' +
+        '<button class="btn ghost snippet-remove" data-i="' + i + '">' + escHtml(T('settings.snippets.remove', '移除')) + '</button>' +
+        '</div>' +
+        '<textarea class="text-input snippet-body" data-k="body" rows="3" placeholder="' + escHtml(T('settings.snippets.body', '展开后的正文')) + '">' + escHtml(s.body) + '</textarea>' +
+        '</div>';
+    }).join('');
+  }
+
+  function loadSnippets() {
+    invoke('snippets_list')
+      .then(function (list) {
+        snippets = list || [];
+        renderSnippets();
+      })
+      .catch(function (e) {
+        $('snippetsHint').textContent = String(e);
+      });
+  }
+
+  function saveSnippets() {
+    var hint = $('snippetsHint');
+    hint.className = 'hint';
+    hint.textContent = T('settings.common.saving', '保存中…');
+    invoke('snippets_save', { items: snippets })
+      .then(function (n) {
+        hint.className = 'hint ok';
+        hint.textContent = TF('settings.snippets.saved', { n: n }, '已保存 ' + n + ' 条片段');
+        setTimeout(function () { hint.textContent = ''; }, 2200);
+        loadSnippets();
+      })
+      .catch(function (e) {
+        hint.className = 'hint error';
+        hint.textContent = T('settings.common.saveFailed', '保存失败：') + e;
+      });
+  }
+
+  $('addSnippet').addEventListener('click', function () {
+    snippets.push({ id: '', keyword: '', title: '', body: '' });
+    renderSnippets();
+    var rows = $('snippetList').querySelectorAll('.snippet-row');
+    var last = rows[rows.length - 1];
+    if (last) last.querySelector('input[data-k="keyword"]').focus();
+  });
+
+  $('snippetList').addEventListener('input', function (e) {
+    var row = e.target.closest('.snippet-row');
+    var key = e.target.dataset.k;
+    if (!row || !key) return;
+    var item = snippets[Number(row.dataset.i)];
+    if (item) item[key] = e.target.value;
+  });
+
+  $('snippetList').addEventListener('click', function (e) {
+    var btn = e.target.closest('.snippet-remove');
+    if (!btn) return;
+    snippets.splice(Number(btn.dataset.i), 1);
+    renderSnippets();
+  });
+
+  $('saveSnippets').addEventListener('click', saveSnippets);
+
+  // ---------- 网页搜索 ----------
+  function renderEngineSelect(active) {
+    var box = $('webSearchEngine');
+    if (!engines.length) {
+      box.innerHTML = '<option value="">' + escHtml(T('settings.search.engine.empty', '没有可用的搜索引擎')) + '</option>';
+      return;
+    }
+    box.innerHTML = engines.map(function (e) {
+      return '<option value="' + escHtml(e.keyword) + '">' +
+        escHtml(e.name) + '（' + escHtml(e.keyword) + '）</option>';
+    }).join('');
+    box.value = active || engines[0].keyword;
+  }
+
+  function renderEngines() {
+    var box = $('engineList');
+    if (!engines.length) {
+      box.innerHTML = '<div class="snippet-empty">' +
+        escHtml(T('settings.search.empty', '还没有搜索引擎，点下方“添加”创建。')) + '</div>';
+      return;
+    }
+    box.innerHTML = engines.map(function (e, i) {
+      return '<div class="snippet-row" data-i="' + i + '">' +
+        '<div class="snippet-head">' +
+        '<input class="text-input tiny" data-k="keyword" spellcheck="false" value="' + escHtml(e.keyword) + '" placeholder="' + escHtml(T('settings.search.keyword', '触发词')) + '" />' +
+        '<input class="text-input" data-k="name" value="' + escHtml(e.name) + '" placeholder="' + escHtml(T('settings.search.name', '名称')) + '" />' +
+        '<button class="btn ghost snippet-remove" data-i="' + i + '">' + escHtml(T('settings.snippets.remove', '移除')) + '</button>' +
+        '</div>' +
+        '<input class="text-input engine-url" data-k="url" spellcheck="false" value="' + escHtml(e.url) + '" placeholder="https://example.com/search?q={q}" />' +
+        '</div>';
+    }).join('');
+  }
+
+  function saveSearch() {
+    var hint = $('searchHint');
+    hint.className = 'hint';
+    hint.textContent = T('settings.common.saving', '保存中…');
+    invoke('set_settings', {
+      patch: {
+        web_searches: engines,
+        web_search_fallback: $('webSearchFallback').checked,
+        web_search_engine: $('webSearchEngine').value
+      }
+    })
+      .then(function () { return invoke('get_settings'); })
+      .then(function (s) {
+        engines = (s.web_searches || []).slice();
+        renderEngines();
+        renderEngineSelect(s.web_search_engine || '');
+        hint.className = 'hint ok';
+        hint.textContent = T('settings.search.saved', '已保存（无效项已忽略）');
+        setTimeout(function () { hint.textContent = ''; }, 2200);
+      })
+      .catch(function (e) {
+        hint.className = 'hint error';
+        hint.textContent = T('settings.common.saveFailed', '保存失败：') + e;
+      });
+  }
+
+  $('addEngine').addEventListener('click', function () {
+    engines.push({ keyword: '', name: '', url: '' });
+    renderEngines();
+    var rows = $('engineList').querySelectorAll('.snippet-row');
+    var last = rows[rows.length - 1];
+    if (last) last.querySelector('input[data-k="keyword"]').focus();
+  });
+
+  $('engineList').addEventListener('input', function (e) {
+    var row = e.target.closest('.snippet-row');
+    var key = e.target.dataset.k;
+    if (!row || !key) return;
+    var item = engines[Number(row.dataset.i)];
+    if (item) item[key] = e.target.value;
+  });
+
+  $('engineList').addEventListener('click', function (e) {
+    var btn = e.target.closest('.snippet-remove');
+    if (!btn) return;
+    engines.splice(Number(btn.dataset.i), 1);
+    renderEngines();
+    renderEngineSelect('');
+  });
+
+  $('saveSearch').addEventListener('click', saveSearch);
+
+  // ---------- 单项热键 ----------
+  var HOTKEY_TOOLS = [
+    ['screenshot', 'hkScreenshot'],
+    ['clipboard', 'hkClipboard'],
+    ['lock_screen', 'hkLockScreen'],
+    ['tile_windows', 'hkTileWindows'],
+    ['shortcut_guide', 'hkShortcutGuide'],
+    ['snippets', 'hkSnippets'],
+    ['file_buffer', 'hkFileBuffer']
+  ];
+
+  // 把 KeyboardEvent 转成 Tauri global-shortcut 的写法（Ctrl+Alt+1、Alt+Space）。
+  // e.code 本身就是 global-hotkey 认的键名，只有字母/数字要剥掉 Key/Digit 前缀；
+  // 单按修饰键不产出结果，避免录成 "Ctrl+ControlLeft"。
+  function accelFromEvent(e) {
+    var code = e.code || '';
+    if (/^(Control|Alt|Shift|Meta|OS)(Left|Right)$/.test(code)) return '';
+    var key = '';
+    if (/^Key[A-Z]$/.test(code)) key = code.slice(3);
+    else if (/^Digit[0-9]$/.test(code)) key = code.slice(5);
+    else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code) || code === 'Space' ||
+      code === 'Enter' || code === 'Tab' || code === 'Backspace' ||
+      code === 'Delete' || code === 'Escape' || /^Arrow(Up|Down|Left|Right)$/.test(code)) key = code;
+    if (!key) return '';
+    var mods = [];
+    if (e.ctrlKey) mods.push('Ctrl');
+    if (e.altKey) mods.push('Alt');
+    if (e.shiftKey) mods.push('Shift');
+    if (e.metaKey) mods.push('Super');
+    // 裸字母/数字当全局热键会吞掉正常输入，必须带修饰键；功能键例外。
+    if (!mods.length && !/^F\d+$/.test(key)) return '';
+    return mods.concat(key).join('+');
+  }
+
+  function bindHotkeyCapture(id) {
+    var el = $(id);
+    if (!el) return;
+    el.addEventListener('keydown', function (e) {
+      // Tab / Shift+Tab 留给浏览器切焦点，其余按键一律吞掉，避免往框里敲字符
+      if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) return;
+      e.preventDefault();
+      if ((e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Escape') &&
+        !e.ctrlKey && !e.altKey && !e.metaKey) {
+        el.value = '';
+        return;
+      }
+      var accel = accelFromEvent(e);
+      if (accel) el.value = accel;
+    });
+  }
+
+  HOTKEY_TOOLS.forEach(function (pair) { bindHotkeyCapture(pair[1]); });
+
+  function saveHotkeys() {
+    var hint = $('hotkeysHint');
+    var map = {};
+    HOTKEY_TOOLS.forEach(function (pair) {
+      var v = $(pair[1]).value.trim();
+      if (v) map[pair[0]] = v;
+    });
+    hint.className = 'hint';
+    hint.textContent = T('settings.common.saving', '保存中…');
+    invoke('set_settings', { patch: { tool_hotkeys: map } })
+      .then(function () {
+        hint.className = 'hint ok';
+        hint.textContent = T('settings.hotkeys.saved', '已保存；重复或无效的键位会被忽略');
+        setTimeout(function () { hint.textContent = ''; }, 2600);
+      })
+      .catch(function (e) {
+        hint.className = 'hint error';
+        hint.textContent = T('settings.common.saveFailed', '保存失败：') + e;
+      });
+  }
+
+  $('saveHotkeys').addEventListener('click', saveHotkeys);
+
+  // 词典加载完再读设置，避免动态文案先渲染成中文
+  i18n.ready.then(function () {
+    loadSettings();
+    loadIndex();
+    loadEverything();
+    loadPlugins();
+  });
+})();

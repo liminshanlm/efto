@@ -1,0 +1,11 @@
+{
+  "name": "api-manager",
+  "version": "0.1.0",
+  "description": "API 管理与测试：集合、环境变量、历史、导入导出；支持 UI 与命令/CLI",
+  "main": "main.js",
+  "index": "index.html",
+  "author": { "name": "efto" },
+  "cmds": [
+    { "type": "input", "label": "API 管理 · api", "cmd": "api" }
+  ]
+}

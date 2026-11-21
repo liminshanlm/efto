@@ -1,0 +1,84 @@
+[package]
+name = "efto-app"
+version.workspace = true
+edition.workspace = true
+description = "efto 桌面主程序：全局热键、托盘、搜索窗口、插件宿主与能力实现。"
+
+[lib]
+name = "efto_app"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+# 包名是 efto-app（cargo -p 用它），但对外可执行文件叫 efto.exe。
+# 不改的话产物会是 efto-app.exe；scripts/verify.ps1 与文档里的示例都按 efto.exe 写。
+[[bin]]
+name = "efto"
+path = "src/main.rs"
+
+[dependencies]
+efto-core.workspace = true
+efto-jsrt.workspace = true
+
+tauri = { version = "2", features = ["tray-icon", "image-png", "protocol-asset"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-notification = "2"
+
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+crossbeam-channel.workspace = true
+parking_lot.workspace = true
+once_cell.workspace = true
+url = "2"
+percent-encoding = "2"
+arboard = "3"
+dirs.workspace = true
+chrono.workspace = true
+# 截图裁剪与 PNG 编码；jpeg 仅用于插件里的本地图片预览（缩略图）
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+base64 = "0.22"
+# 插件 UI 的原生文件选择框（rfd 在 Windows 上只依赖 windows-sys，不引入额外 C 库）
+rfd = { version = "0.17", default-features = false }
+
+# 只在"控制台归本进程独有"时隐藏它（避免桌面上盖一个黑色控制台窗口）
+[target.'cfg(windows)'.dependencies]
+# Win32_Globalization：把子进程输出按控制台代码页转 UTF-16（es.exe 输出 GBK，不是 UTF-8）
+# Win32_Graphics_Gdi：截图（BitBlt / GetDIBits）+ 读取文件图标
+# Win32_System_Shutdown：LockWorkStation
+# Win32_UI_Shell：SHGetFileInfoW 取系统为文件分配的图标
+# Win32_Storage_FileSystem：SHGetFileInfoW 的签名依赖它，缺了符号不会被导出
+windows-sys = { version = "0.59", features = [
+    "Win32_System_Console",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    # 平铺窗口：DwmGetWindowAttribute(DWMWA_CLOAKED) 过滤其他虚拟桌面/隐藏窗口
+    "Win32_Graphics_Dwm",
+    "Win32_System_Shutdown",
+    "Win32_UI_Shell",
+    "Win32_Storage_FileSystem",
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_System_Registry",
+    # 预览文本时把非 UTF-8 内容按系统 ANSI 代码页（GBK）解码
+    "Win32_Globalization",
+    # 剪贴板文件列表（CF_HDROP）与全局键盘模拟（通用动作 / 粘贴到前台）
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+    "Win32_UI_Input_KeyboardAndMouse",
+    # 系统命令：睡眠（SetSuspendState）与关机特权（SeShutdownPrivilege）
+    "Win32_System_Power",
+    "Win32_Security",
+] }
+
+
+# HTTP 能力（AI）。Windows 上走系统 schannel，不引入 ring/aws-lc，避免额外 C 依赖。
+ureq = { version = "2", default-features = false, features = ["native-tls", "json", "gzip"] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,43 @@
+{
+  "app": {
+    "exe": ["trae cn.exe", "trae.exe"],
+    "name": "Trae"
+  },
+  "groups": [
+    {
+      "name": "文本编辑",
+      "items": [
+        { "keys": "Ctrl+Enter", "action": "新建一行进行编辑" },
+        { "keys": "Ctrl+C", "action": "复制一行（无需选中）" },
+        { "keys": "Ctrl+X", "action": "剪切一行（无需选中）" },
+        { "keys": "Ctrl+V", "action": "粘贴一行" },
+        { "keys": "Ctrl+L", "action": "选中一行（或下一行）" },
+        { "keys": "Ctrl+Z", "action": "撤销操作" },
+        { "keys": "Ctrl+Shift+Z", "action": "重做操作" },
+        { "keys": "Ctrl+/", "action": "注释当前行" },
+        { "keys": "Ctrl+F", "action": "调出搜索框" },
+        { "keys": "Enter", "action": "搜索下一个" },
+        { "keys": "Shift+Enter", "action": "搜索上一个" },
+        { "keys": "F2", "action": "重命名符号" },
+        { "keys": "Ctrl+F12", "action": "跳转到定义" },
+        { "keys": "Ctrl+Space", "action": "触发代码自动补全" }
+      ]
+    },
+    {
+      "name": "全局设置",
+      "items": [
+        { "keys": "Ctrl+Shift+P", "action": "打开命令面板" },
+        { "keys": "Ctrl+P", "action": "打开文件导航器" },
+        { "keys": "Ctrl+Shift+F", "action": "打开全局搜索" },
+        { "keys": "Ctrl+,", "action": "打开设置" }
+      ]
+    },
+    {
+      "name": "AI 对话",
+      "items": [
+        { "keys": "Ctrl+U", "action": "打开侧边 AI 对话框" },
+        { "keys": "Ctrl+I", "action": "打开内嵌 AI 对话框" }
+      ]
+    }
+  ]
+}

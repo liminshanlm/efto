@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>efto 预览</title>
+    <script src="theme.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="preview.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="bar">
+        <div class="pv-meta">
+          <div id="pv-title" class="pv-title">预览</div>
+          <div id="pv-sub" class="pv-sub"></div>
+        </div>
+        <span id="pv-kind" class="badge"></span>
+        <div class="pv-actions">
+          <button id="pv-open" class="ghost" type="button">打开</button>
+          <button id="pv-close" class="ghost" type="button">关闭</button>
+        </div>
+      </header>
+
+      <main class="pv-body">
+        <iframe id="pv-frame" class="pv-frame" title="网页预览" hidden></iframe>
+        <dl id="pv-meta" class="pv-meta" hidden></dl>
+        <pre id="pv-text" class="pv-text" hidden></pre>
+        <div id="pv-media" class="pv-media" hidden>
+          <img id="pv-img" alt="" hidden />
+          <video id="pv-video" controls autoplay muted loop hidden></video>
+          <div id="pv-error" class="pv-error" hidden>加载失败</div>
+        </div>
+      </main>
+
+      <footer class="foot">
+        <span id="pv-note" class="status"></span>
+        <span class="keys"><kbd>Shift</kbd> 预览选中项</span>
+      </footer>
+    </div>
+    <script src="preview.js"></script>
+  </body>
+</html>

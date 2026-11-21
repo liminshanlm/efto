@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>文本美化</title>
+  <link rel="stylesheet" href="style.css" />
+  <script>
+    (function () {
+      function applyTheme() {
+        document.documentElement.dataset.theme = efto.isDarkMode() ? 'dark' : 'light';
+      }
+      try {
+        applyTheme();
+      } catch (e) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+      // 宿主切换主题时会改窗口的 prefers-color-scheme，跟着重画一次
+      try {
+        var mq = window.matchMedia('(prefers-color-scheme: dark)');
+        if (mq.addEventListener) mq.addEventListener('change', applyTheme);
+        else if (mq.addListener) mq.addListener(applyTheme);
+      } catch (e) { /* 没有 matchMedia 时只保留首帧主题 */ }
+    })();
+  </script>
+</head>
+
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>efto</span>
+      </div>
+      <span class="divider" aria-hidden="true"></span>
+      <span class="plugin-name">文本美化</span>
+      <div class="top-actions">
+        <button id="beautify" class="btn primary" type="button">美化</button>
+        <button id="copy" class="btn" type="button">复制结果</button>
+        <button id="paste" class="btn ghost" type="button">粘贴原文</button>
+        <button id="clear" class="btn ghost" type="button">清空</button>
+      </div>
+    </header>
+
+    <div class="controls">
+      <div id="types" class="seg" role="tablist" aria-label="文本类型">
+        <button class="seg-item on" data-type="json" type="button" role="tab">JSON</button>
+        <button class="seg-item" data-type="xml" type="button" role="tab">XML</button>
+        <button class="seg-item" data-type="sql" type="button" role="tab">SQL</button>
+        <button class="seg-item" data-type="js" type="button" role="tab">JS</button>
+      </div>
+
+      <label class="indent-field">
+        <span>缩进</span>
+        <select id="indent">
+          <option value="  " selected>2 空格</option>
+          <option value="    ">4 空格</option>
+          <option value="tab">制表符</option>
+        </select>
+      </label>
+
+      <span class="controls-sep" aria-hidden="true"></span>
+      <div id="opts" class="opts"></div>
+    </div>
+
+    <div id="banner" class="banner" role="alert" hidden></div>
+
+    <main class="panes">
+      <section class="card pane">
+        <div class="pane-head">
+          <span class="pane-title">原文</span>
+          <span id="srcMeta" class="meta"></span>
+        </div>
+        <textarea id="src" class="editor" spellcheck="false" wrap="off"
+          placeholder="在这里粘贴或输入原文"></textarea>
+      </section>
+
+      <section class="card pane">
+        <div class="pane-head">
+          <span class="pane-title">美化后</span>
+          <span id="outMeta" class="meta"></span>
+        </div>
+        <textarea id="out" class="editor readonly" spellcheck="false" wrap="off" readonly
+          placeholder="点「美化」或按 Ctrl+Enter，在这里查看结果"></textarea>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span id="status" class="status">就绪</span>
+      <span id="hint" class="hint"></span>
+      <span class="keys">Ctrl+Enter 美化</span>
+    </footer>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+  </div>
+
+  <script src="lib/fmt-json.js"></script>
+  <script src="lib/fmt-xml.js"></script>
+  <script src="lib/fmt-sql.js"></script>
+  <script src="lib/fmt-js.js"></script>
+  <script src="ui.js"></script>
+</body>
+
+</html>

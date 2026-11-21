@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API 管理</title>
+  <link rel="stylesheet" href="style.css">
+  <script>
+    (function () {
+      var dark = false;
+      try { dark = !!(window.efto && window.efto.isDarkMode && window.efto.isDarkMode()); } catch (e) {}
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    })();
+  </script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-logo">⇄</span>
+        <div>
+          <strong>API 管理</strong>
+          <small>efto plugin</small>
+        </div>
+      </div>
+
+      <div class="side-actions">
+        <button id="btn-new-request" class="primary">＋ 新请求</button>
+        <button id="btn-new-collection" class="ghost">＋ 新集合</button>
+        <button id="btn-save-current" class="ghost">保存</button>
+      </div>
+
+      <div class="side-tabs">
+        <button data-side="collections" class="active">集合</button>
+        <button data-side="history">历史</button>
+      </div>
+
+      <div id="side-list" class="side-list"></div>
+
+      <div class="side-foot">
+        <span class="dot"></span>
+        <span>HTTP 由本机 Node 运行时执行</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="url-row">
+          <select id="method" class="method-select">
+            <option>GET</option>
+            <option>POST</option>
+            <option>PUT</option>
+            <option>PATCH</option>
+            <option>DELETE</option>
+            <option>HEAD</option>
+            <option>OPTIONS</option>
+          </select>
+          <input id="url" class="url-input" spellcheck="false" placeholder="https://api.example.com/users 或 {{baseUrl}}/users">
+          <button id="btn-send" class="primary send-btn">发送</button>
+        </div>
+        <div class="meta-row">
+          <input id="req-name" class="name-input" placeholder="请求名称">
+          <span id="dirty" class="dirty" hidden>未保存</span>
+          <span class="spacer"></span>
+          <select id="env-select" class="env-select" title="环境"></select>
+          <button id="btn-env-edit" class="ghost">变量</button>
+          <button id="btn-import" class="ghost">导入</button>
+          <button id="btn-export" class="ghost">导出</button>
+        </div>
+      </header>
+
+      <section class="editor">
+        <div class="tabs" id="req-tabs">
+          <button data-tab="params">Params <span id="count-params" class="count"></span></button>
+          <button data-tab="headers">Headers <span id="count-headers" class="count"></span></button>
+          <button data-tab="body">Body</button>
+          <button data-tab="auth">Auth</button>
+        </div>
+
+        <div class="pane" id="pane-params">
+          <div class="pane-hint">查询参数会按启用状态拼在 URL 后面，支持 {{变量}}。</div>
+          <div class="kv" id="kv-params"></div>
+        </div>
+
+        <div class="pane" id="pane-headers" hidden>
+          <div class="pane-hint">请求头键值对；Content-Type 未手写时会按 Body 类型补默认值。</div>
+          <div class="kv" id="kv-headers"></div>
+        </div>
+
+        <div class="pane" id="pane-body" hidden>
+          <div class="body-head">
+            <select id="body-mode" class="body-mode">
+              <option value="none">none</option>
+              <option value="json">JSON</option>
+              <option value="text">Text</option>
+              <option value="form">Form URL Encoded</option>
+            </select>
+            <span id="body-hint" class="pane-hint"></span>
+          </div>
+          <div id="body-form" hidden>
+            <div class="kv" id="kv-body-form"></div>
+          </div>
+          <textarea id="body-raw" class="body-raw" spellcheck="false" placeholder='{"name":"efto"}'></textarea>
+        </div>
+
+        <div class="pane" id="pane-auth" hidden>
+          <div class="auth-row">
+            <label>类型</label>
+            <select id="auth-type" class="auth-type">
+              <option value="none">None</option>
+              <option value="bearer">Bearer Token</option>
+              <option value="basic">Basic Auth</option>
+            </select>
+          </div>
+          <div id="auth-bearer" class="auth-fields" hidden>
+            <label>Token</label>
+            <input id="auth-token" class="text-input" spellcheck="false" placeholder="eyJhbGciOi...">
+          </div>
+          <div id="auth-basic" class="auth-fields" hidden>
+            <label>用户名</label>
+            <input id="auth-user" class="text-input" spellcheck="false">
+            <label>密码</label>
+            <input id="auth-pass" class="text-input" type="password">
+          </div>
+        </div>
+      </section>
+
+      <section class="response">
+        <div class="resp-head">
+          <div id="resp-status" class="resp-status idle">未发送</div>
+          <div id="resp-meta" class="resp-meta"></div>
+          <div class="resp-actions">
+            <button data-resp="body" class="active">Body</button>
+            <button data-resp="headers">Headers</button>
+            <button id="btn-copy-response" class="ghost">复制</button>
+          </div>
+        </div>
+        <pre id="resp-body" class="resp-body">发送一个请求后，这里显示响应。</pre>
+        <div id="resp-headers" class="resp-headers" hidden></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal-root" class="modal-root" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="ui.js"></script>
+</body>
+</html>

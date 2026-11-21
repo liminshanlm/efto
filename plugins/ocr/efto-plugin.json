@@ -1,0 +1,16 @@
+{
+  "name": "ocr",
+  "version": "0.1.0",
+  "description": "OCR 文字识别：选图或拖图，用 设置 → 模型 里配置的模型提取文字 / 表格 / 公式（模型需支持图片输入）",
+  "main": "main.js",
+  "index": "index.html",
+  "logo": "logo.png",
+  "author": { "name": "efto" },
+  "cmds": [
+    { "type": "input", "label": "OCR", "cmd": "ocr" },
+    { "type": "input", "label": "文字识别", "cmd": "文字识别" },
+    { "type": "input", "label": "识图", "cmd": "识图" },
+    { "type": "input", "label": "表格识别", "cmd": "表格识别" },
+    { "type": "input", "label": "公式识别", "cmd": "公式识别" }
+  ]
+}

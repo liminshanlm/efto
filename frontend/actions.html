@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="window.actions">efto 通用动作</title>
+    <script src="theme.js"></script>
+    <script src="i18n.js"></script>
+    <link rel="stylesheet" href="actions.css" />
+  </head>
+  <body>
+    <header class="head">
+      <div class="brand">efto</div>
+      <div class="title" data-i18n="actions.title">通用动作</div>
+      <button id="close" class="close" title="关闭 (Esc)" data-i18n="actions.close" data-i18n-title="actions.closeTitle">关闭</button>
+    </header>
+    <main class="body">
+      <section class="selection">
+        <div class="label" data-i18n="actions.selected">选中的内容</div>
+        <pre id="text" class="text"></pre>
+        <div id="empty" class="empty" data-i18n="actions.empty" hidden>没有抓到选中文本。先在别的应用里选中文字，再按通用动作热键。</div>
+      </section>
+      <ul id="list" class="actions"></ul>
+    </main>
+    <footer class="foot">
+      <span data-i18n="actions.footer">Enter 复制 · Esc 关闭</span>
+      <span id="status" class="status"></span>
+    </footer>
+    <script src="actions.js"></script>
+  </body>
+</html>

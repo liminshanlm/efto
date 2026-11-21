@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Ctool · 程序开发常用工具</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="./favicon.ico" type="image/x-ico">
+  <meta name="X-UA-Compatible" content="IE=edge, chrome=1">
+  <meta name="ctool-version" content="2.3.0">
+  <meta name="ctool-build-timestamp" content="1694872660">
+  <link rel="stylesheet" href="./assets/tool-5dc3b96b.css">
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; }
+    /* Ctool 原本按 800×580 固定尺寸写死；efto 的插件窗口尺寸由宿主决定，这里改成自适应。 */
+    #ctool { width: auto !important; height: 100vh !important; overflow: hidden; }
+    #app { height: 100%; }
+    #ctool-boot {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; font: 14px/1.7 system-ui, "Segoe UI", sans-serif; color: #6b7280;
+    }
+  </style>
+  <script src="./ui/bridge.js"></script>
+</head>
+<body id="root">
+  <div id="ctool">
+    <div id="app"><div id="ctool-boot">正在加载 Ctool…</div></div>
+    <div id="ctool-append"></div>
+  </div>
+</body>
+</html>

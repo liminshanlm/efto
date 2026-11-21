@@ -1,0 +1,18 @@
+[package]
+name = "efto-jsrt"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+crossbeam-channel.workspace = true
+deno_ast = { version = "0.53.3", features = ["transpiling"] }
+once_cell.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+v8 = "152.2.0"
+
+[dev-dependencies]
+tempfile = "3.27.0"

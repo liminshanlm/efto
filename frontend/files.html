@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="window.files">efto 文件缓冲</title>
+    <script src="theme.js"></script>
+    <script src="i18n.js"></script>
+    <link rel="stylesheet" href="files.css" />
+  </head>
+  <body>
+    <header class="head">
+      <div class="brand">efto</div>
+      <div class="title">
+        <span data-i18n="files.title">文件缓冲</span>
+        <span id="count" class="count">0</span>
+      </div>
+      <button id="copy" class="btn" data-i18n="files.copy">复制到剪贴板</button>
+      <button id="copyTo" class="btn" data-i18n="files.copyTo">复制到…</button>
+      <button id="moveTo" class="btn" data-i18n="files.moveTo">移动到…</button>
+      <button id="delete" class="btn danger" data-i18n="files.delete">删除</button>
+      <button id="clear" class="btn ghost" data-i18n="files.clear">清空</button>
+    </header>
+    <main class="body">
+      <ul id="list" class="list"></ul>
+      <div id="empty" class="empty" data-i18n="files.empty">
+        缓冲是空的。在搜索结果里对文件按 Tab 打开动作菜单，选择「加入文件缓冲」。
+      </div>
+    </main>
+    <footer class="foot">
+      <span data-i18n="files.footer">Delete 移除选中 · Esc 关闭</span>
+      <span id="status" class="status"></span>
+    </footer>
+    <script src="files.js"></script>
+  </body>
+</html>

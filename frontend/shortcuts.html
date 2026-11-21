@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="window.shortcuts">efto 快捷键指南</title>
+    <script src="theme.js"></script>
+    <script src="i18n.js"></script>
+    <link rel="stylesheet" href="shortcuts.css" />
+  </head>
+  <body>
+    <header class="head">
+      <div class="brand">efto</div>
+      <div class="who">
+        <div id="app-name" class="app-name" data-i18n="shortcuts.generic">Windows 通用快捷键</div>
+        <div id="app-exe" class="app-exe"></div>
+      </div>
+      <select id="app-select" class="select" aria-label="切换应用" data-i18n-aria-label="shortcuts.switch"></select>
+      <input
+        id="filter"
+        class="filter"
+        type="search"
+        placeholder="筛选快捷键…"
+        data-i18n-placeholder="shortcuts.filter"
+        autocomplete="off"
+      />
+      <button id="close" class="close" title="关闭 (Esc)" data-i18n="shortcuts.close" data-i18n-title="shortcuts.closeTitle">
+        关闭
+      </button>
+    </header>
+    <div id="hint" class="hint" hidden></div>
+    <main id="groups" class="groups">
+      <p class="loading" data-i18n="shortcuts.loading">正在读取快捷键…</p>
+    </main>
+    <footer class="foot">
+      <span data-i18n="shortcuts.source">数据来自内置快捷键库，可用 ~/.efto/shortcuts/&lt;exe&gt;.json 覆盖</span>
+    </footer>
+    <script src="shortcuts.js"></script>
+  </body>
+</html>

@@ -1,0 +1,52 @@
+{
+  "app": {
+    "exe": ["excel.exe"],
+    "name": "Microsoft Excel"
+  },
+  "groups": [
+    {
+      "name": "文件",
+      "items": [
+        { "keys": "Ctrl+N", "action": "新建工作簿" },
+        { "keys": "Ctrl+O", "action": "打开工作簿" },
+        { "keys": "Ctrl+S", "action": "保存" },
+        { "keys": "Ctrl+P", "action": "打印" },
+        { "keys": "Ctrl+W", "action": "关闭工作簿" }
+      ]
+    },
+    {
+      "name": "编辑与选择",
+      "items": [
+        { "keys": "Ctrl+Z", "action": "撤销" },
+        { "keys": "Ctrl+Y", "action": "重做" },
+        { "keys": "F2", "action": "编辑当前单元格" },
+        { "keys": "F4", "action": "重复上一操作 / 切换引用方式" },
+        { "keys": "Ctrl+1", "action": "打开“设置单元格格式”" },
+        { "keys": "Ctrl+方向键", "action": "跳到数据区域边缘" },
+        { "keys": "Ctrl+Shift+方向键", "action": "选中到数据区域边缘" },
+        { "keys": "Ctrl+;", "action": "插入当前日期" },
+        { "keys": "Alt+Enter", "action": "在单元格内换行" }
+      ]
+    },
+    {
+      "name": "数据",
+      "items": [
+        { "keys": "Alt+=", "action": "自动求和" },
+        { "keys": "Ctrl+Shift+L", "action": "打开 / 关闭筛选" },
+        { "keys": "Ctrl+Shift+$", "action": "设为货币格式" },
+        { "keys": "Ctrl+Shift+%", "action": "设为百分比格式" },
+        { "keys": "Ctrl+Alt+V", "action": "选择性粘贴" }
+      ]
+    },
+    {
+      "name": "工作表",
+      "items": [
+        { "keys": "Ctrl+PageUp", "action": "切换到上一张工作表" },
+        { "keys": "Ctrl+PageDown", "action": "切换到下一张工作表" },
+        { "keys": "Shift+F11", "action": "新建工作表" },
+        { "keys": "Ctrl+Shift+PageUp", "action": "选中上一张工作表" },
+        { "keys": "Ctrl+Shift+PageDown", "action": "选中下一张工作表" }
+      ]
+    }
+  ]
+}
