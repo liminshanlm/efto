@@ -1,8 +1,8 @@
 # macOS 支持分阶段计划
 
 - **Date**: 2026-11-21
-- **Status**: Phase 0/1/2/3 已落地（2026-11-21，见 `docs/verification.md` mac 段与
-  `.agents/notes/implemented/feature/` 三条 note）；人手验证清单待走；Phase 4 未动工
+- **Status**: Phase 0-4 已落地（2026-11-21，截图除外；见 `docs/verification.md` mac 段与
+  `.agents/notes/implemented/feature/` 五条 note）；人手验证清单待走
 - **相关**: `docs/architecture.md`、`docs/roadmap.md`、`docs/verification.md`、`docs/plugin-development.md`
 
 本文件是 macOS 移植的唯一计划来源。实现过程中的判据、踩坑与实测记录分别进
@@ -229,7 +229,9 @@ exec/shell 与插件清单 `platforms` 差异；`roadmap.md` 挂本计划；`ver
 6. `cli ps` / `focus`（CGWindowList + AX）。
 7. 书签（mac 浏览器路径）、快捷键指南 macOS 数据集（`shortcuts/data/` 新增）。
 
-### Phase 4 · 重量级（各自独立立项，可能不排期）
+### Phase 4 · 重量级 ✅ 2026-11-21 部分落地：窗口平铺/撤销、通用动作放出、权限引导、
+发布工程脚手架已做；**截图按用户决定跳过**（两次子代理均未落盘，独立立项）；
+快捷键指南数据集未做
 
 - 截图 / 长截图 / 标注（ScreenCaptureKit + 权限引导 UI）
 - 窗口平铺 / 撤销平铺（CGWindowList + AX API + 私有 CGS）
@@ -278,3 +280,22 @@ exec/shell 与插件清单 `platforms` 差异；`roadmap.md` 挂本计划；`ver
   对齐是 `process`）；动手前可先落 `proposed`，完成后移 `implemented` 并让 Status 一致。
 - **名字边界（硬性约定 1）**：mac 上仍是 `efto`——`~/.efto`、`efto-plugin.json`、
   `efto.*` API、`efto://` 协议；**不做任何第三方启动器（Alfred / Raycast）的兼容导入**。
+
+
+## 附：macOS 发布工程（签名 / 公证 / 双架构）
+
+前置：Apple Developer ID（付费）与 Developer ID Application 证书。没有证书时 dmg 可以直发，
+但 Gatekeeper 会拦（用户右键打开或 `xattr -dr com.apple.quarantine`）。
+
+1. **签名**：`tauri.conf.json` 的 `bundle > macOS > signingIdentity` 填
+   `Developer ID Application: …`（或环境变量 `APPLE_SIGNING_IDENTITY`）后
+   `tauri build`——tauri-bundler 会做 `codesign --deep --options runtime`。
+2. **公证**：`xcrun notarytool submit efto.dmg --keychain-profile efto-notary --wait`
+   → `xcrun stapler staple efto.dmg`。凭证先用 `xcrun notarytool store-credentials` 录入。
+3. **双架构**：`tauri build --target universal-apple-darwin`；rustup 需装
+   aarch64/x86_64 两个 target，且 `vendor/rusty_v8/` 要备两个架构的静态库
+   （当前只有 aarch64，x86_64 产物由 `scripts/bootstrap.sh` 按需下载）。
+4. **自动更新**：`tauri-plugin-updater`（Windows 侧同样未接，见 roadmap「发布工程」）。
+
+人工验证：另一台 Mac 双击 dmg → 拖进 Applications → 首启无 Gatekeeper 拦截；
+`spctl -a -vv /Applications/efto.app` 显示 accepted。

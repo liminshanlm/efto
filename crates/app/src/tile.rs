@@ -1,12 +1,17 @@
 //! 窗口操作：网格平铺、左右半屏、最小化，以及撤销上一次平铺。
 //!
-//! 布局计算是纯函数（[`grid_layout`] / [`half_layout`]），Win32 枚举/移动单独一层，
-//! 这样边界可以在没有窗口的 CI 上单测。
+//! 布局计算是纯函数（[`grid_layout`] / [`half_layout`]），Win32 / AX(macOS) 的
+//! 枚举与移动单独一层，这样边界可以在没有窗口的 CI 上单测。
 //!
 //! 「搜索框下方的窗口」取唤起前的那个前台窗口：launcher 可见时前台是 efto 自己，
 //! 此时回落到 [`crate::guide::last`]；通过单项热键直接执行时前台就是要操作的应用。
 
 use serde::Serialize;
+
+/// macOS 窗口几何后端（AX / CoreGraphics / NSScreen 裸 extern FFI）。
+#[cfg(target_os = "macos")]
+#[path = "ax.rs"]
+mod ax;
 
 /// 屏幕矩形（物理像素）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -447,15 +452,17 @@ fn target_window() -> Result<Candidate, String> {
 }
 
 /// 上一次平铺前的窗口状态，供「还原上次平铺」使用。
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 #[derive(Clone)]
 struct SavedWindow {
     candidate: Candidate,
     rect: Rect,
+    /// Windows 的最大化状态（IsZoomed），还原时先还原最大化；macOS 无对应状态，恒为 false。
+    #[allow(dead_code)] // 只有 Windows 的 undo_last 读取
     zoomed: bool,
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 static LAST_TILE: std::sync::Mutex<Vec<SavedWindow>> = std::sync::Mutex::new(Vec::new());
 
 /// 按布局移动窗口；`remember` 为真时先记下原始矩形，成功后写入撤销状态。
@@ -692,9 +699,416 @@ fn undo_last(work: Rect, dry_run: bool) -> Result<Report, String> {
     })
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+const AX_PERMISSION_MSG: &str = "缺少辅助功能（Accessibility）权限：无法移动或缩放窗口。请在 系统设置 → 隐私与安全性 → 辅助功能 中勾选 efto";
+
+/// 动窗口前的权限闸门：缺辅助功能权限直接报错，绝不"看起来成功"。
+#[cfg(target_os = "macos")]
+fn ensure_ax() -> Result<(), String> {
+    if crate::permissions::accessibility_trusted() {
+        Ok(())
+    } else {
+        Err(AX_PERMISSION_MSG.into())
+    }
+}
+
+/// 失败文案追加区分性原因（窗口拒绝 AX / 窗口失效 / 系统错误）。
+#[cfg(target_os = "macos")]
+fn with_cause(base: String, cause: &Option<String>) -> String {
+    match cause {
+        Some(c) => format!("{base}：{c}"),
+        None => base,
+    }
+}
+
+/// 展示名：无屏幕录制权限时标题拿不到（winproc 的允许降级），回落进程名。
+#[cfg(target_os = "macos")]
+fn display_name(c: &Candidate) -> String {
+    if c.title.trim().is_empty() {
+        c.process.clone()
+    } else {
+        c.title.clone()
+    }
+}
+
+/// 执行一次窗口操作。
+#[cfg(target_os = "macos")]
+pub fn run_op(main_hwnd: Option<isize>, op: Op, dry_run: bool) -> Result<Report, String> {
+    let display = ax::target_display(main_hwnd)?;
+    let work = ax::work_area(display)?;
+
+    match op {
+        Op::Grid => {
+            let (candidates, skipped) = enumerate(Some(display), None);
+            let layout = grid_layout(work, candidates.len(), 8, 8);
+            let (tiled, failed, cause) = if dry_run {
+                (0, 0, None)
+            } else {
+                apply_layout(&candidates, &layout, true)?
+            };
+            let message = if candidates.is_empty() {
+                "当前显示器没有可平铺的窗口".to_string()
+            } else if dry_run {
+                format!("将平铺 {} 个窗口（跳过 {} 个）", candidates.len(), skipped)
+            } else if failed > 0 {
+                with_cause(
+                    format!(
+                        "已平铺 {} 个窗口，{} 个失败（跳过 {} 个）",
+                        tiled, failed, skipped
+                    ),
+                    &cause,
+                )
+            } else {
+                format!("已平铺 {} 个窗口（跳过 {} 个）", tiled, skipped)
+            };
+            Ok(Report { work, candidates, layout, tiled, skipped, failed, message })
+        }
+        Op::HalfLeft | Op::HalfRight => {
+            let right = op == Op::HalfRight;
+            let target = target_window()?;
+            let rect = half_layout(work, right, 8, 8);
+            let candidates = vec![target.clone()];
+            let layout = vec![rect];
+            let (tiled, failed, cause) = if dry_run {
+                (0, 0, None)
+            } else {
+                apply_layout(&candidates, &layout, true)?
+            };
+            let side = if right { "右半屏" } else { "左半屏" };
+            let name = display_name(&target);
+            let message = if dry_run {
+                format!("将把「{name}」放到{side}")
+            } else if failed > 0 {
+                with_cause(format!("无法移动「{name}」到{side}"), &cause)
+            } else {
+                format!("已把「{name}」放到{side}")
+            };
+            Ok(Report { work, candidates, layout, tiled, skipped: 0, failed, message })
+        }
+        Op::MinimizeOthers => {
+            let keep = target_window()?;
+            let (candidates, skipped) = enumerate(None, Some(keep.hwnd));
+            let (done, failed, cause) = if dry_run {
+                (0, 0, None)
+            } else {
+                minimize_all(&candidates)?
+            };
+            let keep_name = display_name(&keep);
+            let message = if candidates.is_empty() {
+                format!("除「{keep_name}」外没有可最小化的窗口")
+            } else if dry_run {
+                format!(
+                    "将最小化 {} 个窗口，保留「{keep_name}」（跳过 {} 个）",
+                    candidates.len(),
+                    skipped
+                )
+            } else if failed > 0 {
+                with_cause(
+                    format!(
+                        "已最小化 {} 个窗口，{} 个失败，保留「{keep_name}」（跳过 {} 个）",
+                        done, failed, skipped
+                    ),
+                    &cause,
+                )
+            } else {
+                format!(
+                    "已最小化 {} 个窗口，保留「{keep_name}」（跳过 {} 个）",
+                    done, skipped
+                )
+            };
+            Ok(Report {
+                work,
+                candidates,
+                layout: Vec::new(),
+                tiled: done,
+                skipped,
+                failed,
+                message,
+            })
+        }
+        Op::MinimizeAll => {
+            let (candidates, skipped) = enumerate(None, None);
+            let (done, failed, cause) = if dry_run {
+                (0, 0, None)
+            } else {
+                minimize_all(&candidates)?
+            };
+            let message = if candidates.is_empty() {
+                "当前没有可最小化的窗口".to_string()
+            } else if dry_run {
+                format!("将最小化 {} 个窗口（跳过 {} 个）", candidates.len(), skipped)
+            } else if failed > 0 {
+                with_cause(
+                    format!(
+                        "已最小化 {} 个窗口，{} 个失败（跳过 {} 个）",
+                        done, failed, skipped
+                    ),
+                    &cause,
+                )
+            } else {
+                format!("已最小化 {} 个窗口（跳过 {} 个）", done, skipped)
+            };
+            Ok(Report {
+                work,
+                candidates,
+                layout: Vec::new(),
+                tiled: done,
+                skipped,
+                failed,
+                message,
+            })
+        }
+        Op::Undo => undo_last(work, dry_run),
+    }
+}
+
+/// 枚举参与操作的可见顶层窗口。
+///
+/// `display` 为 `Some` 时只要该显示器上的窗口（平铺需要）；`keep` 用于
+/// 「最小化其他窗口」，既不进入结果也不计入 skipped。
+///
+/// 取舍与 Windows 版对齐：不按进程名去重、排除本进程窗口、其他屏窗口静默不进结果。
+/// 标题为空不淘汰（无屏幕录制权限时标题拿不到，是 winproc 的允许降级）；
+/// macOS 的在屏窗口列表本来就看不到最小化窗口，`skipped` 恒为 0。
+#[cfg(target_os = "macos")]
+fn enumerate(display: Option<u32>, keep: Option<isize>) -> (Vec<Candidate>, usize) {
+    let bounds = ax::window_bounds();
+    let displays = ax::displays();
+    let self_pid = std::process::id();
+    let mut out = Vec::new();
+    for w in crate::winproc::windows() {
+        if w.pid == 0 || w.pid == self_pid {
+            continue;
+        }
+        if Some(w.hwnd) == keep {
+            continue;
+        }
+        // 只处理指定显示器；其他屏窗口保持不动（相交面积最大的那块屏说了算）
+        if let Some(d) = display {
+            let Some(b) = bounds.get(&(w.hwnd as u32)) else {
+                continue;
+            };
+            let on = (displays.iter().position(|(id, _)| *id == d), ax::best_display(*b, &displays));
+            if let (Some(target), Some(found)) = on {
+                if target != found {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+        }
+        out.push(Candidate {
+            pid: w.pid,
+            hwnd: w.hwnd,
+            process: w.process,
+            title: w.title,
+        });
+    }
+    (out, 0)
+}
+
+/// 唤起前的窗口；launcher 自己在前台时回落到 [`crate::guide::last`]。
+#[cfg(target_os = "macos")]
+fn target_window() -> Result<Candidate, String> {
+    let w = crate::winproc::foreground()
+        .filter(|w| w.pid != 0 && w.pid != std::process::id())
+        .or_else(crate::guide::last);
+    let Some(info) = w else {
+        return Err("没有找到搜索框下方的窗口".into());
+    };
+    if crate::winproc::info(info.hwnd).is_none() {
+        return Err("搜索框下方的窗口已经关闭或不可见".into());
+    }
+    Ok(Candidate {
+        pid: info.pid,
+        hwnd: info.hwnd,
+        process: info.process,
+        title: info.title,
+    })
+}
+
+/// 移动一个窗口并复核实际矩形；调用成功不代表窗口真的动了，
+/// 偏差过大计入失败而不是静默成功（与 Windows 版一致）。
+#[cfg(target_os = "macos")]
+fn move_one(c: &Candidate, r: Rect) -> Result<(), String> {
+    let w = ax::ax_window(c.pid, c.hwnd)
+        .ok_or_else(|| "目标窗口不支持 AX 操作（找不到 AX 窗口句柄）".to_string())?;
+    w.set_frame(r)?;
+    let got = w.frame()?;
+    let placed = (got.x - r.x).abs() <= 2
+        && (got.y - r.y).abs() <= 2
+        && (got.width - r.width).abs() <= 2
+        && (got.height - r.height).abs() <= 2;
+    if placed {
+        Ok(())
+    } else {
+        Err("系统错误：移动后实际位置与目标不符".into())
+    }
+}
+
+/// 最小化一个窗口并复核。
+#[cfg(target_os = "macos")]
+fn minimize_one(c: &Candidate) -> Result<(), String> {
+    let w = ax::ax_window(c.pid, c.hwnd)
+        .ok_or_else(|| "目标窗口不支持 AX 操作（找不到 AX 窗口句柄）".to_string())?;
+    w.set_minimized(true)?;
+    if w.is_minimized()? {
+        Ok(())
+    } else {
+        Err("系统错误：最小化后窗口仍不在最小化状态".into())
+    }
+}
+
+/// 按布局移动窗口；`remember` 为真时先记下原始矩形，成功后写入撤销状态。
+/// 返回 `(成功数, 失败数, 首个失败原因)`。
+#[cfg(target_os = "macos")]
+fn apply_layout(
+    candidates: &[Candidate],
+    layout: &[Rect],
+    remember: bool,
+) -> Result<(usize, usize, Option<String>), String> {
+    if candidates.is_empty() {
+        return Ok((0, 0, None));
+    }
+    ensure_ax()?;
+
+    // 记下移动前的矩形供撤销；读不到的窗口不进记录（与 Windows 的 GetWindowRect 失败一致）
+    let mut saved: Vec<SavedWindow> = Vec::new();
+    if remember {
+        for c in candidates {
+            if let Some(w) = ax::ax_window(c.pid, c.hwnd) {
+                if let Ok(rect) = w.frame() {
+                    saved.push(SavedWindow {
+                        candidate: c.clone(),
+                        rect,
+                        zoomed: false,
+                    });
+                }
+            }
+        }
+    }
+
+    let mut tiled = 0usize;
+    let mut failed = 0usize;
+    let mut cause: Option<String> = None;
+    for (c, r) in candidates.iter().zip(layout.iter()) {
+        match move_one(c, *r) {
+            Ok(()) => tiled += 1,
+            Err(e) => {
+                tracing::warn!("移动窗口失败（{} {}）: {}", c.pid, display_name(c), e);
+                if cause.is_none() {
+                    cause = Some(e);
+                }
+                failed += 1;
+            }
+        }
+    }
+
+    if remember && tiled > 0 {
+        if let Ok(mut slot) = LAST_TILE.lock() {
+            *slot = saved;
+        }
+    }
+    Ok((tiled, failed, cause))
+}
+
+#[cfg(target_os = "macos")]
+fn minimize_all(candidates: &[Candidate]) -> Result<(usize, usize, Option<String>), String> {
+    if candidates.is_empty() {
+        return Ok((0, 0, None));
+    }
+    ensure_ax()?;
+
+    let mut done = 0usize;
+    let mut failed = 0usize;
+    let mut cause: Option<String> = None;
+    for c in candidates {
+        match minimize_one(c) {
+            Ok(()) => done += 1,
+            Err(e) => {
+                tracing::warn!("最小化窗口失败（{} {}）: {}", c.pid, display_name(c), e);
+                if cause.is_none() {
+                    cause = Some(e);
+                }
+                failed += 1;
+            }
+        }
+    }
+    Ok((done, failed, cause))
+}
+
+#[cfg(target_os = "macos")]
+fn undo_last(work: Rect, dry_run: bool) -> Result<Report, String> {
+    if dry_run {
+        let n = LAST_TILE.lock().map(|v| v.len()).unwrap_or(0);
+        let message = if n == 0 {
+            "没有可还原的平铺记录".to_string()
+        } else {
+            format!("将还原 {n} 个窗口")
+        };
+        return Ok(Report {
+            work,
+            candidates: Vec::new(),
+            layout: Vec::new(),
+            tiled: 0,
+            skipped: 0,
+            failed: 0,
+            message,
+        });
+    }
+
+    let saved = LAST_TILE
+        .lock()
+        .map(|mut v| std::mem::take(&mut *v))
+        .unwrap_or_default();
+    if saved.is_empty() {
+        return Ok(Report {
+            work,
+            candidates: Vec::new(),
+            layout: Vec::new(),
+            tiled: 0,
+            skipped: 0,
+            failed: 0,
+            message: "没有可还原的平铺记录".into(),
+        });
+    }
+    ensure_ax()?;
+
+    let mut restored = 0usize;
+    let mut failed = 0usize;
+    let mut cause: Option<String> = None;
+    for s in &saved {
+        // macOS 没有可保存的最大化状态（SavedWindow.zoomed 恒为 false），一律按矩形还原
+        match move_one(&s.candidate, s.rect) {
+            Ok(()) => restored += 1,
+            Err(e) => {
+                tracing::warn!("还原窗口失败（{} {}）: {}", s.candidate.pid, display_name(&s.candidate), e);
+                if cause.is_none() {
+                    cause = Some(e);
+                }
+                failed += 1;
+            }
+        }
+    }
+    let message = if failed > 0 {
+        with_cause(format!("已还原 {} 个窗口，{} 个失败", restored, failed), &cause)
+    } else {
+        format!("已还原 {restored} 个窗口")
+    };
+    Ok(Report {
+        work,
+        candidates: saved.iter().map(|s| s.candidate.clone()).collect(),
+        layout: saved.iter().map(|s| s.rect).collect(),
+        tiled: restored,
+        skipped: 0,
+        failed,
+        message,
+    })
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn run_op(_main_hwnd: Option<isize>, _op: Op, _dry_run: bool) -> Result<Report, String> {
-    Err("窗口操作仅支持 Windows".into())
+    Err("当前平台不支持：窗口平铺与最小化".into())
 }
 
 #[cfg(test)]
@@ -816,5 +1230,130 @@ mod tests {
             assert_eq!(Op::from_name(op.as_name()), Some(op));
         }
         assert_eq!(Op::from_name("nope"), None);
+    }
+
+    #[test]
+    fn report_serializes_shape() {
+        let report = Report {
+            work: work(),
+            candidates: vec![Candidate {
+                pid: 1,
+                hwnd: 2,
+                process: "p".into(),
+                title: "t".into(),
+            }],
+            layout: vec![Rect { x: 0, y: 0, width: 10, height: 10 }],
+            tiled: 1,
+            skipped: 0,
+            failed: 0,
+            message: "已平铺 1 个窗口（跳过 0 个）".into(),
+        };
+        let v = serde_json::to_value(&report).unwrap();
+        assert_eq!(v["work"]["width"], 1920);
+        assert_eq!(v["candidates"][0]["hwnd"], 2);
+        assert_eq!(v["candidates"][0]["process"], "p");
+        assert_eq!(v["layout"][0]["height"], 10);
+        assert_eq!(v["tiled"], 1);
+        assert_eq!(v["skipped"], 0);
+        assert_eq!(v["failed"], 0);
+        assert!(v["message"].is_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn display_name_falls_back_to_process_when_title_missing() {
+        let titled = Candidate {
+            pid: 1,
+            hwnd: 2,
+            process: "Safari".into(),
+            title: "首页".into(),
+        };
+        assert_eq!(display_name(&titled), "首页");
+        let untitled = Candidate {
+            pid: 1,
+            hwnd: 2,
+            process: "Safari".into(),
+            title: "  ".into(),
+        };
+        assert_eq!(display_name(&untitled), "Safari");
+    }
+
+    /// 缺辅助功能权限时动窗口必须明确报错；dry-run 不动窗口、不要求权限。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mutating_without_permission_reports_error_or_skip() {
+        if crate::permissions::accessibility_trusted() {
+            println!("skip: 已有辅助功能权限，缺权限报错路径无法在本机验证");
+            return;
+        }
+        let e = run_op(None, Op::Grid, false).unwrap_err();
+        assert!(e.contains("缺少辅助功能（Accessibility）权限"), "{e}");
+        assert!(e.contains("辅助功能 中勾选 efto"), "{e}");
+        // dry-run 只报计划，拿不到显示器时是另一条明确报错，但不该要权限
+        if let Err(e) = run_op(None, Op::Grid, true) {
+            assert!(!e.contains("权限"), "dry-run 不应要求辅助功能权限: {e}");
+        }
+    }
+
+    /// dry-run 计划形状：候选与目标矩形一一对应，不动窗口。无显示器时优雅跳过。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn dry_run_grid_reports_plan_or_skips() {
+        let report = match run_op(None, Op::Grid, true) {
+            Ok(r) => r,
+            Err(e) if e == "找不到目标显示器" => {
+                println!("skip: 无显示器信息（无头环境），跳过 dry-run 冒烟");
+                return;
+            }
+            Err(e) => panic!("dry-run 不应失败: {e}"),
+        };
+        assert_eq!(report.candidates.len(), report.layout.len());
+        assert!(report.work.width > 0 && report.work.height > 0, "{:?}", report.work);
+        assert!(!report.message.is_empty());
+        assert_eq!(report.tiled, 0, "dry-run 不动窗口");
+        assert_eq!(report.failed, 0, "dry-run 不动窗口");
+    }
+
+    /// 真实移动窗口：平铺后撤销应还原几何。无权限 / 无显示器 / 无可平铺窗口时优雅跳过。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn tile_then_undo_restores_geometry_or_skip() {
+        if !crate::permissions::accessibility_trusted() {
+            println!("skip: 缺少辅助功能权限，跳过真实移动窗口");
+            return;
+        }
+        let before = ax::window_bounds();
+        let report = match run_op(None, Op::Grid, false) {
+            Ok(r) => r,
+            Err(e) if e == "找不到目标显示器" => {
+                println!("skip: 无显示器信息（无头环境），跳过真实移动窗口");
+                return;
+            }
+            Err(e) => panic!("平铺失败: {e}"),
+        };
+        if report.candidates.is_empty() {
+            println!("skip: 当前显示器没有可平铺的窗口");
+            let undo = run_op(None, Op::Undo, false).unwrap();
+            assert!(undo.message.contains("没有可还原的平铺记录"), "{}", undo.message);
+            return;
+        }
+        let undo = run_op(None, Op::Undo, false).expect("撤销应成功");
+        assert_eq!(undo.candidates.len(), report.candidates.len());
+        let after = ax::window_bounds();
+        for c in &report.candidates {
+            let (Some(b), Some(a)) = (before.get(&(c.hwnd as u32)), after.get(&(c.hwnd as u32)))
+            else {
+                continue; // 窗口在测试期间关闭：跳过比对
+            };
+            assert!(
+                (a.x - b.x).abs() <= 3
+                    && (a.y - b.y).abs() <= 3
+                    && (a.width - b.width).abs() <= 3
+                    && (a.height - b.height).abs() <= 3,
+                "撤销后几何应还原: {:?} -> {:?}",
+                b,
+                a
+            );
+        }
     }
 }

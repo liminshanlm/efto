@@ -1377,8 +1377,38 @@ mac 新增/改造的测试重点：
 
 ### 已知取舍
 
-- **file_buffer / 通用动作的入口保持收口**：底层（winclip/CGEvent）已实现，但
-  `KNOWN_TOOLS` / `BuiltinAction::supported_on_platform` 未翻开关——CGEvent 成功路径
-  未实测，人手验证第 3 条后再放出（Phase 3.5）。
+- **file_buffer / 通用动作的入口**（Phase 4 已放出）：底层（winclip/CGEvent）就绪后随
+  Phase 4 翻开关；CGEvent 成功路径仍未实测，缺权限时明确报错并指向设置页"权限"区块。
 - 快捷键指南 macOS 数据集未做；`cli ps` 窗口标题依赖 Screen Recording 权限（降级为空）。
 - 系统设置页 id 面向 macOS 13+，个别 id 在旧系统可能落到设置首页（打开语义不受影响）。
+
+
+## macOS Phase 4 验证记录（2026-11-21，Apple Silicon / macOS 14.6.1）
+
+### 已跑过并看到输出
+
+- 单元测试全绿：efto-app 142 / efto-core 240 / efto-jsrt 48（新增 tile+ax 22 个：
+  布局、Cocoa→Quartz 坐标换算、显示器归属、AX 错误文案分类、Report 序列化；permissions 形状）。
+- **窗口平铺实机**：`cli tile-windows --dry-run` 产出 16 窗 4×4 计划（表格+JSON 形状正确）；
+  `--mode left`（真实）精确报 `缺少辅助功能（Accessibility）权限：…在 系统设置 → 隐私与安全
+  性 → 辅助功能 中勾选 efto`；`--mode undo` 空记录报"没有可还原的平铺记录"（不误要权限）。
+- **权限引导**：设置页"权限"区块仅 mac 展示（辅助功能/屏幕录制状态 + 去授权按钮，
+  直开对应系统设置页）；`permission_status` 形状稳定。
+- **开关放出**：TileWindows / UniversalActions / FileBuffer 进入 mac 搜索与工具面板
+  （`KNOWN_TOOLS` 5 项）；Screenshot / ShortcutGuide 保持收口。
+
+### 没验证（需要人手，接 Phase 3 清单继续）
+
+1. **给 efto 辅助功能授权后**：`cli tile-windows --mode left` 真的平铺 → `undo` 恢复；
+   tile 的 `tile_then_undo` 单测会自动跑绿。设置页"权限"区块状态变"已授权"。
+2. **给 efto 屏幕录制授权后**：截图捕获层未实现（见下），暂无实抓路径。
+3. CGEvent 实键（通用动作抓取/片段粘贴）同 Phase 3 清单第 3 条。
+4. hosts 提权写、五系统动作实跑同 Phase 3 清单。
+
+### 已知取舍
+
+- **截图跳过**（用户决定 2026-11-21）：两个实现子代理均被取消且未落盘，screenshot.rs
+  保持 Windows-only，mac 入口继续收口（搜"截图"无结果、CLI 报不支持）。独立立项再做。
+- 快捷键指南 macOS 数据集未做（ShortcutGuide 保持收口）。
+- 真实窗口移动用到 `_AXUIElementGetWindow`（HIServices 长期稳定的私有导出，
+  yabai/Hammerspoon 同用）；若未来系统移除该符号是链接期失败，不会静默错乱。

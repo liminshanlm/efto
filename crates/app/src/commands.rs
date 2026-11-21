@@ -1711,6 +1711,48 @@ pub fn open_url(url: String) -> Result<(), String> {
     efto_core::apps::launch::shell_open(&url, None).map_err(|e| e.to_string())
 }
 
+/// 平台权限状态（macOS：辅助功能 / 屏幕录制）。设置页"权限"区块与缺权限报错都读它。
+#[tauri::command]
+pub fn permission_status() -> serde_json::Value {
+    crate::permissions::status()
+}
+
+/// 请求屏幕录制权限（触发系统引导）；辅助功能只能去系统设置手动开。
+#[tauri::command]
+pub fn request_permission(kind: String) -> Result<String, String> {
+    match kind.as_str() {
+        "screen_recording" => {
+            crate::permissions::request_screen_recording();
+            Ok(format!(
+                "已请求屏幕录制权限：当前状态 {}",
+                if crate::permissions::screen_recording_allowed() {
+                    "已授权"
+                } else {
+                    "未授权（请在系统设置中勾选 efto）"
+                }
+            ))
+        }
+        "accessibility" => Err(
+            "辅助功能权限需在 系统设置 → 隐私与安全性 → 辅助功能 中手动勾选 efto".into(),
+        ),
+        other => Err(format!("未知权限类型: {other}")),
+    }
+}
+
+/// 打开系统设置的权限页（macOS）。kind: accessibility / screen_recording。
+#[tauri::command]
+pub fn open_permission_settings(kind: String) -> Result<String, String> {
+    let pane = match kind.as_str() {
+        "accessibility" => "com.apple.preference.security?Privacy_Accessibility",
+        "screen_recording" => "com.apple.preference.security?Privacy_ScreenCapture",
+        other => return Err(format!("未知权限类型: {other}")),
+    };
+    let uri = efto_core::search::sys_settings::pane_uri(pane)
+        .ok_or_else(|| format!("设置页未收录: {pane}"))?;
+    efto_core::apps::launch::shell_open(&uri, None).map_err(|e| e.to_string())?;
+    Ok("已打开系统设置".into())
+}
+
 /// 前端平台适配信息：shell 下拉、工具清单、功能开关都以宿主为单一事实源
 /// （`config::KNOWN_TOOLS` / `CommandShell::available_on_platform` / `BuiltinAction`），
 /// 前端只按这份清单展示或隐藏，不自己猜平台。

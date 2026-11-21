@@ -402,5 +402,13 @@
   "files.clear": "清空",
   "files.empty": "缓冲是空的。在搜索结果里对文件按 Tab 打开动作菜单，选择「加入文件缓冲」。",
   "files.footer": "Delete 移除选中 · Esc 关闭",
-  "files.cleared": "已清空文件缓冲"
+  "files.cleared": "已清空文件缓冲",
+  "settings.group.permissions": "权限",
+  "settings.perm.accessibility.label": "辅助功能",
+  "settings.perm.accessibility.desc": "窗口平铺、粘贴到前台与通用动作需要它（系统设置 → 隐私与安全性 → 辅助功能）",
+  "settings.perm.screen.label": "屏幕录制",
+  "settings.perm.screen.desc": "截图需要它（系统设置 → 隐私与安全性 → 屏幕录制）",
+  "settings.perm.grant": "去授权",
+  "settings.perm.granted": "已授权",
+  "settings.perm.notGranted": "未授权"
 }

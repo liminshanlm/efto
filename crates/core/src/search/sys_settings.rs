@@ -119,6 +119,14 @@ pub fn is_query(query: &str) -> bool {
     cfg!(target_os = "macos") && query.trim().to_ascii_lowercase().starts_with(PREFIX)
 }
 
+/// 已收录设置页的完整 URI（宿主直接打开用；权限引导等场景不重复维护 id）。
+pub fn pane_uri(id: &str) -> Option<String> {
+    PAGES
+        .iter()
+        .find(|(i, _, _)| *i == id)
+        .map(|(i, _, _)| format!("{PREFIX}{i}"))
+}
+
 /// 生成设置页结果。空后缀列出常用页，未知 URI 保留一条"打开"行。
 pub fn hits(query: &str, limit: usize) -> Vec<SearchHit> {
     if !cfg!(target_os = "macos") {

@@ -402,5 +402,13 @@
   "files.clear": "Clear",
   "files.empty": "The buffer is empty. Press Tab on a file in search results to open its action menu, then choose Add to file buffer.",
   "files.footer": "Delete removes the selected item · Esc closes",
-  "files.cleared": "File buffer cleared"
+  "files.cleared": "File buffer cleared",
+  "settings.group.permissions": "Permissions",
+  "settings.perm.accessibility.label": "Accessibility",
+  "settings.perm.accessibility.desc": "Required by window tiling, paste-to-front, and Universal Actions (System Settings → Privacy & Security → Accessibility)",
+  "settings.perm.screen.label": "Screen Recording",
+  "settings.perm.screen.desc": "Required by screenshots (System Settings → Privacy & Security → Screen Recording)",
+  "settings.perm.grant": "Grant Access",
+  "settings.perm.granted": "Granted",
+  "settings.perm.notGranted": "Not granted"
 }

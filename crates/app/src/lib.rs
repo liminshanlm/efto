@@ -24,6 +24,7 @@ mod i18n;
 mod icons;
 mod protocol;
 mod pump;
+mod permissions;
 mod preview;
 mod screenshot;
 mod share;
@@ -155,6 +156,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::search,
             commands::platform_info,
+            commands::permission_status,
+            commands::request_permission,
+            commands::open_permission_settings,
             commands::search_files,
             commands::clear_recent,
             commands::invoke_hit,

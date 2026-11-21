@@ -146,6 +146,25 @@
     }
   }
 
+  // 权限区块：仅 macOS 展示（Windows 无此授权模型）
+  function loadPermissions() {
+    if (!platformCaps || platformCaps.platform !== 'macos') return;
+    $('permGroup').hidden = false;
+    invoke('permission_status')
+      .then(function (p) {
+        var paint = function (id, on) {
+          var el = $(id);
+          el.textContent = T(on ? 'settings.perm.granted' : 'settings.perm.notGranted');
+          el.className = 'hint ' + (on ? 'ok' : 'error');
+        };
+        paint('permA11yState', !!p.accessibility);
+        paint('permScreenState', !!p.screen_recording);
+      })
+      .catch(function (e) {
+        console.warn('[settings] 权限状态读取失败: ' + e);
+      });
+  }
+
   function paintTheme(mode) {
     document.querySelectorAll('#themeSeg .seg-item').forEach(function (btn) {
       var on = btn.dataset.theme === mode;
@@ -1137,6 +1156,7 @@
         loadIndex();
         loadEverything();
         loadPlugins();
+        loadPermissions();
         // 热键占位符是展示文案，按平台装饰（录入/存储仍是 Tauri 语法）
         if (window.eftoI18n && window.eftoI18n.decorateKeys) {
           var dk = window.eftoI18n.decorateKeys;
@@ -1145,5 +1165,20 @@
           });
         }
       });
+  });
+
+  $('permA11yOpen').addEventListener('click', function () {
+    // 辅助功能只能手动勾选；打开对应设置页并刷新状态
+    invoke('open_permission_settings', { kind: 'accessibility' })
+      .then(function () { setTimeout(loadPermissions, 800); })
+      .catch(function (e) { toast(String(e), true); });
+  });
+
+  $('permScreenOpen').addEventListener('click', function () {
+    // 先触发系统权限引导（CGRequestScreenCaptureAccess），再打开设置页兜底
+    invoke('request_permission', { kind: 'screen_recording' })
+      .then(function () { return invoke('open_permission_settings', { kind: 'screen_recording' }); })
+      .then(function () { setTimeout(loadPermissions, 800); })
+      .catch(function (e) { toast(String(e), true); });
   });
 })();

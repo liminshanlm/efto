@@ -107,6 +107,32 @@
             </div>
           </div>
 
+          <div class="group" id="permGroup" hidden>
+            <div class="group-title" data-i18n="settings.group.permissions">权限</div>
+            <div class="card">
+              <div class="row">
+                <div class="row-text">
+                  <div class="label" data-i18n="settings.perm.accessibility.label">辅助功能</div>
+                  <div class="desc" data-i18n="settings.perm.accessibility.desc">窗口平铺、粘贴到前台与通用动作需要它</div>
+                </div>
+                <span class="row-actions">
+                  <span id="permA11yState" class="hint"></span>
+                  <button id="permA11yOpen" class="ghost" data-i18n="settings.perm.grant">去授权</button>
+                </span>
+              </div>
+              <div class="row">
+                <div class="row-text">
+                  <div class="label" data-i18n="settings.perm.screen.label">屏幕录制</div>
+                  <div class="desc" data-i18n="settings.perm.screen.desc">截图需要它</div>
+                </div>
+                <span class="row-actions">
+                  <span id="permScreenState" class="hint"></span>
+                  <button id="permScreenOpen" class="ghost" data-i18n="settings.perm.grant">去授权</button>
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div class="group">
             <div class="group-title" data-i18n="settings.group.tools">常用工具</div>
             <div class="card">
