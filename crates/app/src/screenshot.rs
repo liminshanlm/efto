@@ -199,14 +199,13 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Shot, S
 /// 不返回空白图（硬性约定 3）。
 #[cfg(target_os = "macos")]
 mod ffi {
-    #![allow(non_camel_case_types)]
+    // C 命名对齐 Apple 头文件（kCG* 常量 / CGRect 结构），不按 Rust 风格改写
+    #![allow(non_camel_case_types, non_upper_case_globals)]
     use std::ffi::c_void;
 
     pub type CGImageRef = *mut c_void;
     pub type CGContextRef = *mut c_void;
     pub type CGColorSpaceRef = *mut c_void;
-    pub type CGDisplayModeRef = *mut c_void;
-    pub type CGDirectDisplayID = u32;
     pub type CGWindowID = u32;
 
     #[repr(C)]
@@ -234,15 +233,9 @@ mod ffi {
     /// 位图上下文的内存序：R、G、B、A（premultipliedLast + 32Big）
     pub const BITMAP_RGBA: u32 = 1 | (4 << 12);
 
+    // 显示器枚举 / scale 在 crate::tile::ax（与平铺共用一套 CG 声明，避免符号重复声明）
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {
-        pub fn CGGetActiveDisplayList(max: u32, ids: *mut CGDirectDisplayID, count: *mut u32) -> i32;
-        pub fn CGDisplayBounds(id: CGDirectDisplayID) -> CGRect;
-        pub fn CGMainDisplayID() -> CGDirectDisplayID;
-        pub fn CGDisplayCopyDisplayMode(id: CGDirectDisplayID) -> CGDisplayModeRef;
-        pub fn CGDisplayModeGetPixelWidth(mode: CGDisplayModeRef) -> usize;
-        pub fn CGDisplayModeGetWidth(mode: CGDisplayModeRef) -> usize;
-        pub fn CGDisplayModeRelease(mode: CGDisplayModeRef);
         pub fn CGWindowListCreateImage(
             rect: CGRect,
             option: u32,
@@ -268,25 +261,6 @@ mod ffi {
     }
 }
 
-/// 主屏 backing scale（Retina 为 2.0）。CGDisplayMode 的 像素宽 / 点宽。
-#[cfg(target_os = "macos")]
-fn display_scale() -> f64 {
-    unsafe {
-        let mode = ffi::CGDisplayCopyDisplayMode(ffi::CGMainDisplayID());
-        if mode.is_null() {
-            return 1.0;
-        }
-        let pixel = ffi::CGDisplayModeGetPixelWidth(mode) as f64;
-        let point = ffi::CGDisplayModeGetWidth(mode) as f64;
-        ffi::CGDisplayModeRelease(mode);
-        if point > 0.0 && pixel > 0.0 {
-            (pixel / point).clamp(0.5, 4.0)
-        } else {
-            1.0
-        }
-    }
-}
-
 #[cfg(target_os = "macos")]
 pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Shot, String> {
     let width = width.max(1);
@@ -298,7 +272,7 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Shot, S
                 .into(),
         );
     }
-    let s = display_scale();
+    let s = crate::tile::ax::display_scale();
     let rect = ffi::CGRect {
         origin: ffi::CGPoint {
             x: x as f64 / s,
@@ -421,29 +395,26 @@ pub fn capture_virtual_screen() -> Result<Shot, String> {
 }
 
 /// macOS：所有活动显示器的包围盒（点）× 主屏缩放 = 虚拟桌面物理像素。
+/// 显示器枚举与 scale 复用 `crate::tile::ax`（与平铺共用一套 CG 声明）。
 #[cfg(target_os = "macos")]
 pub fn capture_virtual_screen() -> Result<Shot, String> {
-    let mut ids = [0u32; 16];
-    let mut count = 0u32;
-    let status =
-        unsafe { ffi::CGGetActiveDisplayList(ids.len() as u32, ids.as_mut_ptr(), &mut count) };
-    if status != 0 || count == 0 {
+    let displays = crate::tile::ax::displays();
+    if displays.is_empty() {
         return Err("无法读取显示器信息".into());
     }
-    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
-    for id in &ids[..count as usize] {
-        let b = unsafe { ffi::CGDisplayBounds(*id) };
-        min_x = min_x.min(b.origin.x);
-        min_y = min_y.min(b.origin.y);
-        max_x = max_x.max(b.origin.x + b.size.width);
-        max_y = max_y.max(b.origin.y + b.size.height);
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
+    for (_, r) in &displays {
+        min_x = min_x.min(r.x);
+        min_y = min_y.min(r.y);
+        max_x = max_x.max(r.x + r.width);
+        max_y = max_y.max(r.y + r.height);
     }
-    let s = display_scale();
+    let s = crate::tile::ax::display_scale();
     capture_region(
-        (min_x * s).round() as i32,
-        (min_y * s).round() as i32,
-        ((max_x - min_x) * s).round().max(1.0) as u32,
-        ((max_y - min_y) * s).round().max(1.0) as u32,
+        (min_x as f64 * s).round() as i32,
+        (min_y as f64 * s).round() as i32,
+        ((max_x - min_x) as f64 * s).round().max(1.0) as u32,
+        ((max_y - min_y) as f64 * s).round().max(1.0) as u32,
     )
 }
 

@@ -9,9 +9,10 @@
 use serde::Serialize;
 
 /// macOS 窗口几何后端（AX / CoreGraphics / NSScreen 裸 extern FFI）。
+/// pub(crate)：screenshot 的捕获层复用这里的显示器枚举与 scale，避免重复声明 CG 符号。
 #[cfg(target_os = "macos")]
 #[path = "ax.rs"]
-mod ax;
+pub(crate) mod ax;
 
 /// 屏幕矩形（物理像素）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

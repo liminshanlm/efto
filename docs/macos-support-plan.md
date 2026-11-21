@@ -284,7 +284,10 @@ exec/shell 与插件清单 `platforms` 差异；`roadmap.md` 挂本计划；`ver
 
 ## 附：macOS 发布工程（签名 / 公证 / 双架构）
 
-前置：Apple Developer ID（付费）与 Developer ID Application 证书。没有证书时 dmg 可以直发，
+构建入口：`scripts/release.sh`（设置 V8 环境后跑 `tauri build`，产出
+`target/release/bundle/` 下的 .app 与 .dmg；未签名产物本机可用）。
+
+前置（签名/公证）：Apple Developer ID（付费）与 Developer ID Application 证书。没有证书时 dmg 可以直发，
 但 Gatekeeper 会拦（用户右键打开或 `xattr -dr com.apple.quarantine`）。
 
 1. **签名**：`tauri.conf.json` 的 `bundle > macOS > signingIdentity` 填

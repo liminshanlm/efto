@@ -1468,3 +1468,14 @@ log:error 事件、线程回收），**全部通过、零报错**：
 - **没验证**（人工清单新增）：截图交互全链路（框选/标注/复制/保存/钉图）与
   长截图滚动拼接；混合缩放多屏的取景精度；CGWindowListCreateImage 已 deprecated
   （macOS 14 仍工作），后续可换 ScreenCaptureKit。
+
+
+## macOS release 构建（2026-11-21）
+
+- 入口 `scripts/release.sh`（tauri CLI 三级回退 + V8 环境按 arch 取 vendor 产物）。
+- 产物实测：`target/release/efto`、`bundle/macos/efto.app`（54.31 MiB，icns 自动生成、
+  LSUIElement=1）、`bundle/dmg/efto_0.1.0_aarch64.dmg`（19.98 MiB）。
+- release 二进制冒烟（capabilities/search）与 .app 真机启停正常；
+  `codesign -dv` = adhoc（linker-signed），外部分发会被 Gatekeeper 拦——
+  签名/公证待 Apple Developer 证书（plan 附录）。Intel 产物未构建。
+- 顺手收掉 CGDisplayBounds 重复声明（显示器层归 crate::tile::ax 共用）。

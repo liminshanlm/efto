@@ -183,6 +183,10 @@ mod ffi {
             ids: *mut u32,
             count: *mut u32,
         ) -> i32;
+        pub(super) fn CGDisplayCopyDisplayMode(display: u32) -> *mut core::ffi::c_void;
+        pub(super) fn CGDisplayModeGetPixelWidth(mode: *mut core::ffi::c_void) -> usize;
+        pub(super) fn CGDisplayModeGetWidth(mode: *mut core::ffi::c_void) -> usize;
+        pub(super) fn CGDisplayModeRelease(mode: *mut core::ffi::c_void);
         /// kCGWindowBounds 的 CFDictionary 表示 → CGRect（CGGeometry.h）。
         pub(super) fn CGRectMakeWithDictionaryRepresentation(
             dict: *const c_void,
@@ -367,6 +371,26 @@ pub(crate) fn ax_window(pid: u32, cg_id: isize) -> Option<AxWindow> {
 // ---------- 显示器与窗口快照 ----------
 
 /// 全部显示器：`(CGDirectDisplayID, 全局边界)`。
+/// 主屏 backing scale（Retina 为 2.0）：CGDisplayMode 的像素宽 / 点宽。
+/// screenshot 捕获层用它做"点 ↔ 虚拟桌面物理像素"换算（单屏/同缩放多屏精确）。
+pub(crate) fn display_scale() -> f64 {
+    // SAFETY: 纯查询；mode 非空时由本函数 Release。
+    unsafe {
+        let mode = ffi::CGDisplayCopyDisplayMode(ffi::CGMainDisplayID());
+        if mode.is_null() {
+            return 1.0;
+        }
+        let pixel = ffi::CGDisplayModeGetPixelWidth(mode) as f64;
+        let point = ffi::CGDisplayModeGetWidth(mode) as f64;
+        ffi::CGDisplayModeRelease(mode);
+        if point > 0.0 && pixel > 0.0 {
+            (pixel / point).clamp(0.5, 4.0)
+        } else {
+            1.0
+        }
+    }
+}
+
 pub(crate) fn displays() -> Vec<(u32, Rect)> {
     const MAX_DISPLAYS: usize = 32;
     let mut ids = [0u32; MAX_DISPLAYS];
