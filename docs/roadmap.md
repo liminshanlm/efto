@@ -47,7 +47,10 @@ mac 工具链脚本（`scripts/*.sh`）、`verify.sh` 端到端全绿、CI 矩�
 `.app` bundle 发现、zsh 命令源、平台化配置回落；实测见 `docs/verification.md` mac 段。
 **Phase 2（GUI 宿主）已落地（2026-11-21）**：透明窗口（macOSPrivateApi）、NSWorkspace 图标、
 设置页平台化（platform_info 单一事实源）、插件清单 platform 门、hosts 平台报错；
-人手验证清单见 `docs/verification.md`。Phase 3（mdfind 等系统集成）未动工。
+**Phase 3（系统集成）已落地（2026-11-21）**：mdfind 文件源（含 exec 行数封顶）、
+系统设置搜索、五系统动作、hosts 提权、文件剪贴板/回收站、cli ps/focus、mac 书签路径；
+人手验证清单见 `docs/verification.md`。剩余：快捷键指南数据集、file_buffer/通用动作
+开关放出（待权限链路人手验证）。
 
 ## 已知技术债（不排期，顺手清）
 

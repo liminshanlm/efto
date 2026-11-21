@@ -1,7 +1,8 @@
 //! 顶层窗口枚举与前台切换。
 //!
 //! 只服务 `cli ps` / `cli focus`：命令行通道需要"看有哪些窗口、把某个窗口切到前台"，
-//! 但没有 GUI 线程与 Tauri 上下文，所以直接走 Win32。不参与 GUI 的窗口模型。
+//! 但没有 GUI 线程与 Tauri 上下文，所以直接走 Win32 / CGWindowList+AppKit。
+//! 不参与 GUI 的窗口模型。
 
 use serde::Serialize;
 
@@ -62,10 +63,31 @@ pub fn activate(w: &WindowInfo) -> Result<(), String> {
         }
         Ok(())
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
+        // 只用 pid 激活整个应用；hwnd 是 CGWindowID，AppKit 没有单窗口前置 API。
+        let Some(app) = NSRunningApplication::runningApplicationWithProcessIdentifier(w.pid as i32)
+        else {
+            return Err(format!("没有匹配的窗口: 找不到 pid {} 对应的运行中应用", w.pid));
+        };
+        // IgnoringOtherApps 在 macOS 14+ 已无效（binding 里标了 deprecated），
+        // 旧系统上带上它激活更可靠。
+        #[allow(deprecated)]
+        let ok = app.activateWithOptions(NSApplicationActivationOptions::ActivateIgnoringOtherApps);
+        if ok {
+            Ok(())
+        } else {
+            Err(format!(
+                "macOS 拒绝把 {} ({}) 切到前台",
+                w.title, w.process
+            ))
+        }
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = w;
-        Err("窗口聚焦仅支持 Windows".into())
+        Err("当前平台不支持：窗口聚焦".into())
     }
 }
 
@@ -101,7 +123,17 @@ pub fn info(hwnd: isize) -> Option<WindowInfo> {
     }
 }
 
-#[cfg(not(windows))]
+/// 取指定窗口的信息；macOS 上 hwnd 装的是 CGWindowID（kCGWindowNumber），
+/// 按它在当前可见窗口列表里查找。
+#[cfg(target_os = "macos")]
+pub fn info(hwnd: isize) -> Option<WindowInfo> {
+    if hwnd <= 0 {
+        return None;
+    }
+    visible_windows().into_iter().find(|w| w.hwnd == hwnd)
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn info(_hwnd: isize) -> Option<WindowInfo> {
     None
 }
@@ -118,7 +150,13 @@ pub fn foreground() -> Option<WindowInfo> {
     info(hwnd as isize)
 }
 
-#[cfg(not(windows))]
+/// 当前前台窗口；macOS 上取窗口列表（前到后排序）的第一个普通窗口。
+#[cfg(target_os = "macos")]
+pub fn foreground() -> Option<WindowInfo> {
+    visible_windows().into_iter().next()
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn foreground() -> Option<WindowInfo> {
     None
 }
@@ -193,7 +231,162 @@ pub(crate) unsafe fn process_name(pid: u32) -> String {
         .unwrap_or(path)
 }
 
-#[cfg(not(windows))]
+/// 从 CG 窗口字典取 CFString 值（无权限时标题可能缺失，调用方自行降级）。
+#[cfg(target_os = "macos")]
+fn cf_str(dict: &objc2_core_foundation::CFDictionary, key: &objc2_core_foundation::CFString) -> Option<String> {
+    use core::ffi::c_void;
+    use objc2_core_foundation::{CFString, CFType};
+
+    // CFDictionaryGetValue 按指针取值；字典的 K/V 是异质 CFType，用 CFGetTypeID 校验后降级。
+    let ptr = unsafe { dict.value(key as *const CFString as *const c_void) };
+    if ptr.is_null() {
+        return None;
+    }
+    // SAFETY: 非空指针来自 CFDictionary，必是有效 CF 对象。
+    let val = unsafe { &*(ptr as *const CFType) };
+    val.downcast_ref::<CFString>().map(|s| s.to_string())
+}
+
+/// 从 CG 窗口字典取 CFNumber 值（pid、layer、window id）。
+#[cfg(target_os = "macos")]
+fn cf_num(dict: &objc2_core_foundation::CFDictionary, key: &objc2_core_foundation::CFString) -> Option<i64> {
+    use core::ffi::c_void;
+    use objc2_core_foundation::{CFNumber, CFString, CFType};
+
+    let ptr = unsafe { dict.value(key as *const CFString as *const c_void) };
+    if ptr.is_null() {
+        return None;
+    }
+    // SAFETY: 同 cf_str。
+    let val = unsafe { &*(ptr as *const CFType) };
+    val.downcast_ref::<CFNumber>().and_then(|n| n.as_i64())
+}
+
+#[cfg(target_os = "macos")]
+fn visible_windows() -> Vec<WindowInfo> {
+    use objc2_core_foundation::{CFArray, CFType};
+    use objc2_core_graphics::{
+        kCGNullWindowID, kCGWindowLayer, kCGWindowName, kCGWindowNumber, kCGWindowOwnerName,
+        kCGWindowOwnerPID, CGWindowListCopyWindowInfo, CGWindowListOption,
+    };
+
+    // 前到后排序（最前在前）；排除桌面元素（壁纸、Dock 等）。
+    // 键静态是 extern，读取需要 unsafe。
+    let Some(list) = CGWindowListCopyWindowInfo(
+        CGWindowListOption::OptionOnScreenOnly | CGWindowListOption::ExcludeDesktopElements,
+        kCGNullWindowID,
+    ) else {
+        return Vec::new();
+    };
+    let (key_layer, key_pid, key_owner, key_name, key_id) = unsafe {
+        (
+            kCGWindowLayer,
+            kCGWindowOwnerPID,
+            kCGWindowOwnerName,
+            kCGWindowName,
+            kCGWindowNumber,
+        )
+    };
+
+    // SAFETY: CGWindowListCopyWindowInfo 的元素都是 CFDictionary，此处只把
+    // 元素类型参数换成 CFType 以便逐个 downcast（cast_unchecked 不改运行时行为）。
+    let items: &CFArray<CFType> = unsafe { list.cast_unchecked() };
+    let mut out = Vec::new();
+    for item in items.iter() {
+        let Some(dict) = item.downcast_ref::<objc2_core_foundation::CFDictionary>() else {
+            continue;
+        };
+        // 只要普通窗口层（kCGNormalWindowLevel = 0），过滤菜单/状态项/屏保层
+        if cf_num(dict, key_layer) != Some(0) {
+            continue;
+        }
+        // pid 与进程名（ownerName）是必有信息；两者缺一则跳过
+        let (Some(pid), Some(process)) = (cf_num(dict, key_pid), cf_str(dict, key_owner)) else {
+            continue;
+        };
+        // 标题需要屏幕录制权限（macOS 10.15+），无权限时为空——允许的降级
+        let title = cf_str(dict, key_name).unwrap_or_default();
+        let id = cf_num(dict, key_id).unwrap_or(0);
+        out.push(WindowInfo {
+            pid: pid as u32,
+            hwnd: id as isize,
+            process,
+            title,
+        });
+    }
+    out
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn visible_windows() -> Vec<WindowInfo> {
     Vec::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn window_info_serializes_fields() {
+        let w = WindowInfo {
+            pid: 7,
+            hwnd: 3,
+            process: "Safari".into(),
+            title: "首页".into(),
+        };
+        let v = serde_json::to_value(&w).unwrap();
+        assert_eq!(v["pid"], 7);
+        assert_eq!(v["hwnd"], 3);
+        assert_eq!(v["process"], "Safari");
+        assert_eq!(v["title"], "首页");
+    }
+
+    #[test]
+    fn find_without_pid_or_needle_matches_nothing() {
+        // 不给 pid 也不给关键词时不许乱匹配（cmd_focus 在上层拒绝这种入参，
+        // 这里守住 find 本身的语义）
+        assert!(find(None, "  ").is_none());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn info_for_missing_window_is_none() {
+        assert!(info(0).is_none());
+        assert!(info(999_999_999).is_none());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn activate_unknown_pid_reports_no_matching_window() {
+        let w = WindowInfo {
+            pid: u32::MAX,
+            hwnd: 0,
+            process: String::new(),
+            title: String::new(),
+        };
+        let e = activate(&w).unwrap_err();
+        // 文案对齐 cli focus 的 not_found 语义
+        assert!(e.contains("没有匹配的窗口"), "{e}");
+    }
+
+    /// 真实窗口枚举：无头 CI 没有可见窗口时优雅跳过，不算失败。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn visible_windows_enumerates_or_skips_when_headless() {
+        let list = windows();
+        if list.is_empty() {
+            println!("skip: 当前会话没有可见窗口（无头环境），跳过真实窗口枚举断言");
+            return;
+        }
+        for w in &list {
+            assert_ne!(w.pid, 0, "CGWindow 列表应带 owner pid: {w:?}");
+            assert!(!w.process.is_empty(), "进程名（ownerName）不能为空: {w:?}");
+        }
+        // windows() 按 进程名 / 标题 排序（不区分大小写）
+        for pair in list.windows(2) {
+            let a = (pair[0].process.to_lowercase(), pair[0].title.to_lowercase());
+            let b = (pair[1].process.to_lowercase(), pair[1].title.to_lowercase());
+            assert!(a <= b, "windows() 应按 进程名/标题 排序: {a:?} !<= {b:?}");
+        }
+    }
 }

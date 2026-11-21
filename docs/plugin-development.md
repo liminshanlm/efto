@@ -130,9 +130,10 @@ efto.output([{ title: '42', copy: '42' }]);
 
 ### efto 扩展：`efto.exec`
 
-让插件执行外部程序。目前白名单里只有 `es`（Everything CLI），**仅 Windows 可执行**——
-macOS/Linux 上调用会明确报"当前平台不支持"（`core/src/exec.rs::run` 的平台门，
-在参数拦截之后，保证边界语义跨平台可测）。
+让插件执行外部程序。白名单按平台生效（`core/src/exec.rs`，平台门在参数拦截之后，
+保证边界语义跨平台可测）：`es`（Everything CLI，仅 Windows）与 `mdfind`（Spotlight，
+仅 macOS）。系统工具类条目走固定绝对路径、免钉 sha256（系统升级会换二进制），
+且按条目限制参数形状（mdfind 只允许 `[-name, 查询词]`）；其余条目必须钉摘要。
 
 > 现状说明：**目前没有一方插件在用它**。首个使用者（Everything 文件检索）已改成
 > 内置搜索源（结果内联在下拉框），执行器下沉到 `core/src/exec.rs`，内联源与这个能力共用同一套
@@ -249,7 +250,9 @@ const r = await efto.hosts.save({ text: doc.text, encoding: doc.encoding });
   不需要 efto 本身以管理员身份运行。用户点"否"会立刻返回"已取消"，不是超时。
 - **安全边界**：提权子进程只接受 `~/.efto/uac/` 下的请求文件，目标固定为系统 hosts，
   请求里没有"写哪个文件"的字段 —— 避免变成"点一下 UAC 就能以管理员写任意文件"。
-- 仅 Windows；非 Windows 上调用 `hosts` 的 path/read/save 都会明确报"当前平台不支持：hosts"。
+- Windows 与 macOS 可用：macOS 读写 `/etc/hosts`，保存走 osascript 管理员授权拉起同一个
+  `hosts-apply` 提权子进程（请求文件/校验/原子写的安全边界两边共用）；其它平台调用
+  path/read/save 明确报"当前平台不支持：hosts"。
 
 示例插件：`plugins/hosts`（条目编辑 + 原文编辑，保存时自动备份）。
 

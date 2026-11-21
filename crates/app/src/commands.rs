@@ -45,14 +45,17 @@ pub async fn search_files(
         if blocked {
             return Vec::new();
         }
-        // 文件检索源（Everything/es.exe）是 Windows-only；mac 的 mdfind 是 v1.5
-        // （见 docs/macos-support-plan.md），这里返回空而不是报错——搜索源不该出结果
-        // 是"宁可不出"，不是失败。
+        // 文件检索源：Windows 走 Everything/es.exe，macOS 走 Spotlight/mdfind
+        //（均在 core::search 内，分数压应用下）；其它平台无文件源，返回空。
         #[cfg(windows)]
         {
             efto_core::search::everything::hits(&query)
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        {
+            efto_core::search::spotlight::hits(&query)
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             Vec::new()
         }

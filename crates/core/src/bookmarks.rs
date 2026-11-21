@@ -116,15 +116,34 @@ impl BookmarkStore {
     }
 }
 
-/// `%LOCALAPPDATA%` 下两个浏览器的 User Data 根目录。
+/// 浏览器 User Data 根目录：Windows 在 `%LOCALAPPDATA%` 下，macOS 在
+/// `~/Library/Application Support` 下（Profile 子目录布局两边一致）。
 fn user_data_roots() -> Vec<(PathBuf, &'static str)> {
-    let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) else {
-        return Vec::new();
-    };
-    vec![
-        (local.join("Google").join("Chrome").join("User Data"), "chrome"),
-        (local.join("Microsoft").join("Edge").join("User Data"), "edge"),
-    ]
+    #[cfg(windows)]
+    {
+        let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) else {
+            return Vec::new();
+        };
+        vec![
+            (local.join("Google").join("Chrome").join("User Data"), "chrome"),
+            (local.join("Microsoft").join("Edge").join("User Data"), "edge"),
+        ]
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let Some(home) = dirs::home_dir() else {
+            return Vec::new();
+        };
+        let sup = home.join("Library").join("Application Support");
+        vec![
+            (sup.join("Google").join("Chrome"), "chrome"),
+            (sup.join("Microsoft Edge"), "edge"),
+        ]
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        Vec::new()
+    }
 }
 
 /// 找出每个 Profile 目录下的 `Bookmarks` 文件。
@@ -261,6 +280,23 @@ mod tests {
         assert!(entries.iter().all(|b| b.url.starts_with("http")));
         assert_eq!(entries[1].folder, "书签栏 / 工作");
         assert_eq!(entries[0].browser, "edge");
+    }
+
+    /// User Data 根目录的平台形状（有没有装浏览器不关心，只验路径拼对）。
+    #[test]
+    fn user_data_roots_platform_shape() {
+        let roots = user_data_roots();
+        let names: Vec<&str> = roots.iter().map(|(_, b)| *b).collect();
+        #[cfg(any(windows, target_os = "macos"))]
+        assert_eq!(names, vec!["chrome", "edge"]);
+        #[cfg(target_os = "macos")]
+        for (p, _) in &roots {
+            assert!(p.starts_with(dirs::home_dir().unwrap()), "{p:?}");
+            assert!(
+                p.ends_with("Google/Chrome") || p.ends_with("Microsoft Edge"),
+                "{p:?}"
+            );
+        }
     }
 
     #[test]

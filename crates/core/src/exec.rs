@@ -92,25 +92,64 @@ pub struct Allowed {
     pub key: &'static str,
     /// 期望文件名
     pub file: &'static str,
-    /// 锁定的 sha256（小写十六进制）
+    /// 锁定的 sha256（小写十六进制）。绝对路径的系统工具（[`Allowed::absolute_path`]）免钉
+    /// ——系统升级会换二进制内容；其余条目必须钉死，否则"往 PATH 写同名文件"就拿到执行。
     pub sha256: &'static str,
     /// 缺失时的官方下载地址（zip）
     pub zip_url: &'static str,
     /// 对应版本，仅用于日志与错误文案
     pub version: &'static str,
+    /// 固定绝对路径（系统自带工具用）；为空表示按候选目录查找 + 摘要校验。
+    pub absolute_path: &'static str,
+    /// 可执行平台：`"windows"` / `"macos"` / 空 = 全平台。
+    pub os: &'static str,
+    /// stdout 收满这么多行就杀进程、带部分结果返回（0 = 等自然退出）。
+    /// 全量枚举型工具（mdfind 检索全盘能吐上万行、跑十几秒）内联检索等不起，
+    /// 取前 N 行就够填结果框。
+    pub max_lines: usize,
+}
+
+impl Allowed {
+    /// 该条目在当前平台是否可执行。放在参数拦截之后判，边界语义跨平台都能测到。
+    pub fn available_here(&self) -> bool {
+        match self.os {
+            "" => true,
+            "windows" => cfg!(windows),
+            "macos" => cfg!(target_os = "macos"),
+            _ => false,
+        }
+    }
 }
 
 /// es.exe 1.1.0.18，取自 https://www.voidtools.com/es.zip
 /// （zip 本身 sha256 = 9412f3b083a539a8de02301dc5f60a0033b3edadf12668136223baca66beb7b3）
 pub const ES_SHA256: &str = "224550eddd6f09fbae8ffe9d5e1d4bab07563a96c895fe1fc43fe60df48c0d12";
 
-pub const ALLOWLIST: &[Allowed] = &[Allowed {
-    key: "es",
-    file: "es.exe",
-    sha256: ES_SHA256,
-    zip_url: "https://www.voidtools.com/es.zip",
-    version: "1.1.0.18",
-}];
+pub const ALLOWLIST: &[Allowed] = &[
+    Allowed {
+        key: "es",
+        file: "es.exe",
+        sha256: ES_SHA256,
+        zip_url: "https://www.voidtools.com/es.zip",
+        version: "1.1.0.18",
+        absolute_path: "",
+        os: "windows",
+        max_lines: 0,
+    },
+    // Spotlight 的命令行入口：系统自带、路径固定，只做文件名检索（`-name`）。
+    // 不钉 sha256（系统升级会变），安全性靠"绝对路径 + 参数白名单"（见 rejected_arg）。
+    // max_lines：mdfind 全量枚举（常见查询几千行）实测要十几秒，收满 40 行即返回。
+    Allowed {
+        key: "mdfind",
+        file: "mdfind",
+        sha256: "",
+        zip_url: "",
+        version: "macOS 自带",
+        absolute_path: "/usr/bin/mdfind",
+        os: "macos",
+        max_lines: 40,
+    },
+];
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExecError {
@@ -120,7 +159,7 @@ pub enum ExecError {
     BadArgs,
     #[error("参数被拒绝: {0}")]
     DeniedArg(String),
-    #[error("找不到已校验的 {key}.exe。已检查：{checked}。请安装 Everything 自带的 es.exe，或运行 scripts/fetch-es.ps1 取官方版本")]
+    #[error("找不到已校验的 {key}。已检查：{checked}。es 可运行 scripts/fetch-es.ps1 取官方版本；系统工具应预装在标准路径")]
     NotFound { key: String, checked: String },
     #[error("拒绝执行 {path}：sha256 与内置清单不符（期望 {expected}，实际 {actual}）")]
     DigestMismatch {
@@ -280,6 +319,26 @@ fn hex(b: &[u8]) -> String {
 /// 找到第一个"存在且摘要匹配"的候选。都不匹配时返回最刺眼的那个错误，
 /// 把期望/实际摘要都打出来，方便决定是重新 vendor 还是更新清单。
 pub fn resolve_verified(a: &Allowed, settings_hint: Option<&Path>) -> Result<PathBuf, ExecError> {
+    // 绝对路径的系统工具（mdfind）：路径固定即消掉 PATH 劫持面；系统升级会换二进制
+    // 内容，没法钉 sha256，校验只到"固定路径 + 存在"。
+    if !a.absolute_path.is_empty() {
+        let p = Path::new(a.absolute_path);
+        return if p.is_file() {
+            Ok(p.to_path_buf())
+        } else {
+            Err(ExecError::NotFound {
+                key: a.key.to_string(),
+                checked: a.absolute_path.to_string(),
+            })
+        };
+    }
+    // 其余条目必须钉摘要：否则"往候选目录写同名文件"就绕过白名单
+    if a.sha256.is_empty() {
+        return Err(ExecError::Spawn(format!(
+            "白名单条目 {} 配置错误：非绝对路径条目必须钉 sha256",
+            a.key
+        )));
+    }
     let list = candidates(a, settings_hint);
     if list.is_empty() {
         return Err(ExecError::NotFound {
@@ -317,14 +376,38 @@ pub fn resolve_verified(a: &Allowed, settings_hint: Option<&Path>) -> Result<Pat
     }))
 }
 
-/// 参数级拦截。
+/// 参数级拦截（按条目分派）。
+pub fn rejected_arg(key: &str, args: &[String]) -> Option<String> {
+    match key {
+        "es" => rejected_arg_es(args),
+        "mdfind" => rejected_arg_mdfind(args),
+        _ => Some(format!("未知白名单条目 {key:?}，参数一律拒绝")),
+    }
+}
+
+/// mdfind（Spotlight CLI）：只允许 `["-name", <查询词>]`。
+/// 查询词不能以 `-` 开头（否则会被当成选项），长度有上限（防拉爆）。
+fn rejected_arg_mdfind(args: &[String]) -> Option<String> {
+    if args.len() != 2 || args[0] != "-name" {
+        return Some("mdfind 只允许 [-name, 查询词] 形式的参数".into());
+    }
+    let q = &args[1];
+    if q.is_empty() || q.starts_with('-') || q.len() > 512 {
+        return Some(format!(
+            "查询词 {q:?} 不合法：不能为空、不能以 - 开头、长度不超过 512"
+        ));
+    }
+    None
+}
+
+/// es 的参数级拦截。
 ///
 /// 白名单 + 摘要只解决"能跑哪个程序"，没解决"能让它干什么"。es.exe 本身有
 /// 写文件的能力（`-export-csv/-efu/-txt/-m3u <路径>` 会把结果写到任意位置，
 /// `-set-run-count`/`-inc-run-count` 会改 Everything 的库，`-save-settings` 会落配置文件，
 /// `-instance` 会去连别的 Everything 实例）。这些对"检索文件"这个用途毫无必要，
 /// 所以直接拒 —— 否则白名单等于给插件开了个"用 es 写任意文件"的后门。
-pub fn rejected_arg(args: &[String]) -> Option<String> {
+fn rejected_arg_es(args: &[String]) -> Option<String> {
     // es 文档："Internal -'s in options can be omitted, eg: -nodigitgrouping"，
     // 也允许 / 开头。所以判定前必须把前导符号和内部连字符都去掉再比，
     // 否则 `-exportcsv`、`/export-csv` 这类写法就绕过去了。
@@ -371,7 +454,6 @@ pub fn rejected_arg(args: &[String]) -> Option<String> {
 }
 
 /// 执行白名单程序。
-#[cfg_attr(not(windows), allow(unused_variables, unreachable_code))]
 pub fn run(
     key: &str,
     args: &[String],
@@ -379,28 +461,20 @@ pub fn run(
     settings_hint: Option<&Path>,
 ) -> Result<RunOk, ExecError> {
     let a = lookup(key).ok_or_else(|| ExecError::NotAllowed(key.to_string()))?;
-    if let Some(why) = rejected_arg(args) {
+    if let Some(why) = rejected_arg(key, args) {
         return Err(ExecError::DeniedArg(why));
     }
-    // 白名单目前只有 es（Windows 程序）：macOS/Linux 上执行不了，明确报平台不支持，
-    // 而不是让 spawn 报一个含糊的 EACCES（硬性约定 3）。放在参数拦截之后，
-    // 保证"参数级拒绝"这类边界语义在所有平台都能被测试到；新增跨平台白名单条目时按条目判定。
-    #[cfg(not(windows))]
-    {
-        let _ = a;
-        return Err(ExecError::Spawn(format!(
-            "当前平台不支持：{key}（外部工具白名单目前仅 Windows 可用）"
-        )));
-    }
-    if let Some(why) = rejected_arg(args) {
-        return Err(ExecError::DeniedArg(why));
+    // 平台门按条目判定（es 仅 Windows、mdfind 仅 macOS）。放在参数拦截之后，
+    // 保证"参数级拒绝"这类边界语义在所有平台都能被测试到（硬性约定 3）。
+    if !a.available_here() {
+        return Err(ExecError::Spawn(format!("当前平台不支持：{key}")));
     }
     let timeout = timeout.min(MAX_TIMEOUT).max(Duration::from_millis(100));
     let path = resolve_verified(a, settings_hint)?;
 
     let mut cmd = Command::new(&path);
     cmd.args(args);
-    let mut ok = spawn_and_collect(cmd, timeout, None)?;
+    let mut ok = spawn_and_collect(cmd, timeout, None, a.max_lines)?;
     ok.path = path.display().to_string();
     Ok(ok)
 }
@@ -414,6 +488,7 @@ fn spawn_and_collect(
     mut cmd: Command,
     timeout: Duration,
     cancel: Option<&AtomicBool>,
+    max_lines: usize,
 ) -> Result<RunOk, ExecError> {
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -428,7 +503,11 @@ fn spawn_and_collect(
 
     let mut so = child.stdout.take().expect("stdout piped");
     let mut se = child.stderr.take().expect("stderr piped");
-    let t1 = std::thread::spawn(move || read_capped(&mut so, MAX_OUTPUT));
+    let reached = std::sync::Arc::new(AtomicBool::new(false));
+    let t1 = {
+        let reached = reached.clone();
+        std::thread::spawn(move || read_capped_lines(&mut so, MAX_OUTPUT, max_lines, &reached))
+    };
     let t2 = std::thread::spawn(move || read_capped(&mut se, MAX_OUTPUT));
 
     let deadline = Instant::now() + timeout;
@@ -442,6 +521,21 @@ fn spawn_and_collect(
                 let _ = t2.join();
                 return Err(ExecError::Cancelled);
             }
+        }
+        // 行数收够：提前杀进程返回部分结果（见 Allowed::max_lines）
+        if reached.load(Ordering::Relaxed) {
+            let _ = child.kill();
+            let _ = child.wait();
+            let (out_bytes, _) = t1.join().map_err(|_| ExecError::Spawn("读取线程 panic".into()))?;
+            let (err_bytes, _) = t2.join().map_err(|_| ExecError::Spawn("读取线程 panic".into()))?;
+            return Ok(RunOk {
+                code: 0,
+                stdout: decode_os_bytes(&out_bytes),
+                stderr: decode_os_bytes(&err_bytes),
+                path: String::new(),
+                // 提前收满即返回 = 输出必然不完整
+                truncated: true,
+            });
         }
         match child.try_wait() {
             Ok(Some(st)) => {
@@ -502,7 +596,7 @@ pub fn run_script(
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
-    let mut ok = spawn_and_collect(cmd, timeout, None)?;
+    let mut ok = spawn_and_collect(cmd, timeout, None, 0)?;
     ok.path = exe.display().to_string();
     Ok(ok)
 }
@@ -518,7 +612,7 @@ pub fn probe_interpreter(interpreter: &str) -> Result<String, ExecError> {
     let exe = resolve_interpreter(interpreter)?;
     let mut cmd = Command::new(&exe);
     cmd.arg("--version");
-    let out = spawn_and_collect(cmd, Duration::from_secs(5), None)?;
+    let out = spawn_and_collect(cmd, Duration::from_secs(5), None, 0)?;
     let line = out
         .stdout
         .lines()
@@ -770,7 +864,7 @@ pub fn run_command(
     let timeout = timeout.max(Duration::from_millis(200));
     let mut cmd = Command::new(&launch.program);
     cmd.args(&launch.args);
-    let mut ok = spawn_and_collect(cmd, timeout, cancel)?;
+    let mut ok = spawn_and_collect(cmd, timeout, cancel, 0)?;
     ok.path = launch.program.display().to_string();
     Ok(ok)
 }
@@ -856,6 +950,47 @@ fn read_capped<R: Read>(r: &mut R, cap: usize) -> (Vec<u8>, bool) {
                     break;
                 }
                 buf.extend_from_slice(&chunk[..n]);
+            }
+            Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => {
+                cut = true;
+                break;
+            }
+        }
+    }
+    (buf, cut)
+}
+
+/// 同 [`read_capped`]，但收满 `max_lines` 行就置位 `reached` 并停止读取。
+/// 配合 [`Allowed::max_lines`]：调用方看到 `reached` 后杀掉子进程、带部分结果返回。
+fn read_capped_lines<R: Read>(
+    r: &mut R,
+    cap: usize,
+    max_lines: usize,
+    reached: &AtomicBool,
+) -> (Vec<u8>, bool) {
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 8192];
+    let mut cut = false;
+    let mut lines = 0usize;
+    loop {
+        match r.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                if buf.len() + n > cap {
+                    let take = cap.saturating_sub(buf.len());
+                    buf.extend_from_slice(&chunk[..take]);
+                    cut = true;
+                    break;
+                }
+                buf.extend_from_slice(&chunk[..n]);
+                if max_lines > 0 {
+                    lines += chunk[..n].iter().filter(|b| **b == b'\n').count();
+                    if lines >= max_lines {
+                        reached.store(true, Ordering::Relaxed);
+                        break;
+                    }
+                }
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(_) => {
@@ -1055,7 +1190,7 @@ mod tests {
             "-instance",
         ] {
             assert!(
-                rejected_arg(&[bad.into(), "C:\\Users\\x\\Start Menu\\evil".into()]).is_some(),
+                rejected_arg("es", &[bad.into(), "C:\\Users\\x\\Start Menu\\evil".into()]).is_some(),
                 "{bad} 应被拒绝"
             );
         }
@@ -1064,10 +1199,115 @@ mod tests {
             .iter()
             .map(|s| s.to_string())
             .collect();
-        assert_eq!(rejected_arg(&ok_args), None, "常规检索参数被误拦");
+        assert_eq!(rejected_arg("es", &ok_args), None, "常规检索参数被误拦");
         // 条数上限
-        assert!(rejected_arg(&["-n".into(), "501".into(), "x".into()]).is_some());
-        assert!(rejected_arg(&["-max-results".into(), "500".into(), "x".into()]).is_none());
+        assert!(rejected_arg("es", &["-n".into(), "501".into(), "x".into()]).is_some());
+        assert!(rejected_arg("es", &["-max-results".into(), "500".into(), "x".into()]).is_none());
+    }
+
+    /// mdfind 的参数白名单：只允许 `[-name, 查询词]`，查询词不能长得像选项。
+    #[test]
+    fn mdfind_only_allows_name_query() {
+        assert_eq!(rejected_arg("mdfind", &["-name".into(), "报告".into()]), None);
+        assert!(rejected_arg("mdfind", &["报告".into()]).is_some(), "缺 -name 必须拒");
+        assert!(rejected_arg("mdfind", &["-name".into(), "-onlyin".into()]).is_some());
+        assert!(rejected_arg("mdfind", &["-interpret".into(), "x".into()]).is_some());
+        assert!(rejected_arg("mdfind", &["-name".into(), String::new()]).is_some());
+        let long = "x".repeat(513);
+        assert!(rejected_arg("mdfind", &["-name".into(), long]).is_some(), "超长查询必须拒");
+        // 未知条目一律拒绝
+        assert!(rejected_arg("nope", &["x".into()]).is_some());
+    }
+
+    /// 绝对路径条目免摘要校验；非绝对路径条目缺摘要属于配置错误，必须明确报错。
+    #[test]
+    fn absolute_path_entry_skips_digest() {
+        let mdfind = lookup("mdfind").unwrap();
+        assert!(!mdfind.absolute_path.is_empty());
+        if cfg!(target_os = "macos") {
+            let p = resolve_verified(mdfind, None).expect("/usr/bin/mdfind 应存在");
+            assert_eq!(p, std::path::Path::new("/usr/bin/mdfind"));
+        }
+        let bad = Allowed {
+            key: "x",
+            file: "x",
+            sha256: "",
+            zip_url: "",
+            version: "",
+            absolute_path: "",
+            os: "",
+            max_lines: 0,
+        };
+        assert!(matches!(resolve_verified(&bad, None), Err(ExecError::Spawn(_))));
+    }
+
+    /// 平台门按条目判定：在各自平台外调用要报"当前平台不支持"。
+    #[test]
+    fn run_reports_platform_gate_per_entry() {
+        #[cfg(not(target_os = "macos"))]
+        {
+            let e = run("mdfind", &["-name".into(), "x".into()], Duration::from_secs(1), None)
+                .expect_err("非 macOS 不该跑 mdfind");
+            assert!(e.to_string().contains("当前平台不支持"), "{e}");
+        }
+        #[cfg(not(windows))]
+        {
+            let e = run("es", &["report".into()], Duration::from_secs(1), None)
+                .expect_err("非 Windows 不该跑 es");
+            assert!(e.to_string().contains("当前平台不支持"), "{e}");
+        }
+    }
+
+    /// 行数封顶：全量枚举型输出收满 N 行就提前杀进程返回，不等它跑完。
+    #[test]
+    fn max_lines_returns_early_with_partial_output() {
+        #[cfg(windows)]
+        let mut cmd = {
+            let mut c = Command::new("cmd");
+            c.args(["/C", "for /L %i in (1,1,1000000) do @echo line"]);
+            c
+        };
+        #[cfg(not(windows))]
+        let mut cmd = {
+            let mut c = Command::new("sh");
+            c.args(["-c", "yes line"]);
+            c
+        };
+        let started = Instant::now();
+        let ok = spawn_and_collect(cmd, Duration::from_secs(10), None, 8)
+            .expect("收满行数应提前返回 Ok");
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "不该等全量枚举完: {:?}",
+            started.elapsed()
+        );
+        assert!(ok.truncated, "提前返回必然截断");
+        assert!(!ok.stdout.is_empty());
+    }
+
+    /// mdfind 端到端（真机）：常见查询全量上万行、十几秒，行数封顶必须生效。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mdfind_is_capped_and_fast() {
+        let started = Instant::now();
+        let ok = run(
+            "mdfind",
+            &["-name".into(), "the".into()],
+            Duration::from_secs(10),
+            None,
+        )
+        .expect("mdfind 应能跑通");
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "行数封顶没生效，等了全量枚举: {:?}",
+            started.elapsed()
+        );
+        // 读块（8KB）粒度会过冲几行；上界只要证明"远小于全量"即可
+        assert!(
+            ok.stdout.lines().count() <= 500,
+            "输出应收敛在 max_lines 附近，实际 {} 行",
+            ok.stdout.lines().count()
+        );
     }
 
     #[test]

@@ -151,10 +151,132 @@ mod imp {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 mod imp {
-    /// 非 Windows 没有原生确认框；返回 true 让流程继续，不支持的动作会在执行步
-    /// 返回明确错误（硬性约定 3）。不能返回 false——那会把"不支持"吞成"已取消"。
+    //! macOS 实现。系统工具（pmset / osascript / open）都是固定 argv、无用户输入
+    //! 拼接，直接 spawn（先例：`commands.rs` 的 `pmset displaysleepnow`）。
+    //!
+    //! 确认框走 `osascript display dialog`（任意线程可用）——rfd 的 macOS 对话框
+    //! 有主线程约束，这里不碰。重启/注销/清空废纸篓走 Apple Events，首次会弹
+    //! Automation 授权（提示文案来自 Info.plist 的 NSAppleEventsUsageDescription）。
+
+    /// AppleScript 字符串字面量转义：只处理 `\` 与 `"`，其余原样保留。
+    fn apple_string(s: &str) -> String {
+        s.replace('\\', "\\\\").replace('"', "\\\"")
+    }
+
+    /// 跑一段 AppleScript，失败时把 stderr 一起带上（含 Automation 被拒的
+    /// -1743、用户取消的 -128 等），绝不静默成功（硬性约定 3）。
+    fn run_osascript(script: &str) -> Result<(), String> {
+        let out = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .output()
+            .map_err(|e| format!("调用 osascript 失败: {e}"))?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+        }
+    }
+
+    /// 确认框脚本：取消按钮/关闭 = 用户拒绝；点"确定"才放行。
+    fn confirm_script(message: &str) -> String {
+        format!(
+            "display dialog \"{}\" buttons {{\"取消\", \"确定\"}} default button \"确定\" \
+             cancel button \"取消\" with icon caution with title \"efto\"",
+            apple_string(message)
+        )
+    }
+
+    pub fn confirm(message: &str) -> bool {
+        // display dialog 点"取消"（或按 Esc）时 osascript 以 -128 退出；
+        // 其它失败（osascript 缺失等）保守地当作不放行，同时把错误打到 stderr。
+        match run_osascript(&confirm_script(message)) {
+            Ok(()) => true,
+            Err(e) => {
+                if !e.contains("(-128)") {
+                    eprintln!("确认框弹出失败，已按取消处理: {e}");
+                }
+                false
+            }
+        }
+    }
+
+    pub fn sleep() -> Result<(), String> {
+        // pmset 是系统自带工具，当前用户可用，无需提权
+        let out = std::process::Command::new("pmset")
+            .arg("sleepnow")
+            .output()
+            .map_err(|e| format!("进入睡眠失败：pmset sleepnow：{e}"))?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "进入睡眠失败：{}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ))
+        }
+    }
+
+    pub fn restart() -> Result<(), String> {
+        run_osascript("tell application \"System Events\" to restart")
+            .map_err(|e| format!("重启请求被拒绝：{e}"))
+    }
+
+    pub fn logout() -> Result<(), String> {
+        run_osascript("tell application \"System Events\" to log out")
+            .map_err(|e| format!("注销请求被拒绝：{e}"))
+    }
+
+    pub fn empty_trash() -> Result<(), String> {
+        run_osascript("tell application \"Finder\" to empty trash")
+            .map_err(|e| format!("清空回收站失败：{e}"))
+    }
+
+    pub fn screensaver() -> Result<(), String> {
+        let out = std::process::Command::new("open")
+            .arg("/System/Library/CoreServices/ScreenSaverEngine.app")
+            .output()
+            .map_err(|e| format!("启动屏幕保护失败：{e}"))?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "启动屏幕保护失败：{}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ))
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn apple_string_escapes_backslash_and_quote() {
+            assert_eq!(apple_string(r#"a"b\c"#), r#"a\"b\\c"#);
+            assert_eq!(apple_string("确定要重启电脑吗？"), "确定要重启电脑吗？");
+        }
+
+        #[test]
+        fn confirm_script_has_cancel_and_confirm_buttons() {
+            let s = confirm_script("确定要重启电脑吗？");
+            assert!(s.contains(r#"display dialog "确定要重启电脑吗？""#), "{s}");
+            assert!(s.contains(r#"buttons {"取消", "确定"}"#), "{s}");
+            assert!(s.contains(r#"cancel button "取消""#), "{s}");
+            // 消息里的引号/反斜杠必须被转义进 AppleScript 字面量
+            let s = confirm_script(r#"say "hi" \now"#);
+            assert!(s.contains(r#"say \"hi\" \\now"#), "{s}");
+        }
+    }
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
+mod imp {
+    /// 其它非 Windows 平台没有实现；不支持的动作在执行步返回明确错误
+    /// （硬性约定 3）。confirm 返回 true 让流程走到执行步——不能返回 false，
+    /// 那会把"不支持"吞成"已取消"。
     pub fn confirm(_message: &str) -> bool {
         true
     }

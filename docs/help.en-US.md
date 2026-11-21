@@ -77,7 +77,11 @@ Built-in sources appear only when the input matches their rules, so they never h
 
 ## 6. Favorite Tools
 
-> On macOS today: clipboard, lock screen, and snippets. Screenshot, window tiling, shortcut guide, Universal Actions, and file buffer are not yet available.
+> On macOS today: search/launch apps, calculator & time, command source, plugins, clipboard
+> history, snippets, lock screen, system commands (sleep/restart/log out/empty trash/screensaver),
+> file search (Spotlight), System Settings search, the hosts plugin, and window list/focus (CLI).
+> Screenshot, window tiling, shortcut guide, Universal Actions, and file buffer entries are not
+> exposed yet (their underlying capabilities are ready; gated pending manual permission checks).
 
 The default panel (empty input) contains "Recent" and "Favorite tools":
 

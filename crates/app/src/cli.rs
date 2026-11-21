@@ -619,14 +619,20 @@ fn cmd_search(settings: &Settings, f: &CliFlags) -> i32 {
             .map_or(true, |k| k.contains(&ItemKind::File));
     if wants_files {
         let room = limit.saturating_sub(hits.len());
-        // 文件检索源（Everything/es.exe）是 Windows-only；mac 的 mdfind 是 v1.5
+        // 文件检索源：Windows 走 Everything，macOS 走 Spotlight（分数均压应用下）
         #[cfg(windows)]
         hits.extend(
             efto_core::search::everything::hits(&query)
                 .into_iter()
                 .take(room),
         );
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        hits.extend(
+            efto_core::search::spotlight::hits(&query)
+                .into_iter()
+                .take(room),
+        );
+        #[cfg(not(any(windows, target_os = "macos")))]
         let _ = room;
     }
     if f.as_json {

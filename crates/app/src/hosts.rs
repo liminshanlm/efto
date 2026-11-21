@@ -1,11 +1,12 @@
-//! hosts 落盘：UAC 提权助手。
+//! hosts 落盘：提权写入助手。
 //!
-//! hosts 在 `%SystemRoot%\System32\drivers\etc\` 下，普通进程没有写权限。
-//! 这里刻意**不**要求 efto 整体以管理员身份运行，而是保存时临时拉起一个提权的
-//! `efto.exe hosts-apply <request>`：
+//! hosts 在系统目录下（Windows `%SystemRoot%\System32\drivers\etc\`、
+//! macOS `/etc/hosts`），普通进程没有写权限。这里刻意**不**要求 efto 整体以
+//! 管理员身份运行，而是保存时临时拉起一个提权的 `efto hosts-apply <request>`：
 //!
 //! 1. 非提权侧把校验过的内容写成请求文件（`~/.efto/uac/request-*.json`）；
-//! 2. `ShellExecuteExW(verb="runas")` 拉起同一 exe，等待它退出；
+//! 2. 拉起同一 exe 并等它退出：Windows `ShellExecuteExW(verb="runas")`（UAC），
+//!    macOS `osascript … do shell script … with administrator privileges`；
 //! 3. 提权侧重新校验内容 → 备份到同目录 `hosts.efto.bak` → 临时文件 + 原子替换；
 //! 4. 提权侧把结果写成 `<request>.resp.json`，非提权侧读回并清理。
 //!
@@ -29,8 +30,19 @@ use efto_core::hosts;
 pub const APPLY_ARG: &str = "hosts-apply";
 
 /// hosts 文件位置。
+///
+/// Windows 走 `efto_core::hosts::default_path()`（`%SystemRoot%` 拼出，不写死盘符）；
+/// macOS 固定 `/etc/hosts`。其它平台的 read/save/path 都会报平台不支持，
+/// 这里的返回值不会被用户看到。
 pub fn target_path() -> PathBuf {
-    hosts::default_path()
+    #[cfg(target_os = "macos")]
+    {
+        PathBuf::from("/etc/hosts")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        hosts::default_path()
+    }
 }
 
 /// 写入前自动备份的位置（与 hosts 同目录，便于用户自己找回）。
@@ -42,13 +54,13 @@ fn uac_dir() -> PathBuf {
     fsutil::data_root().join("uac")
 }
 
-/// `efto.hosts` 的 path 查询。非 Windows 明确报平台不支持（同 read/save）。
+/// `efto.hosts` 的 path 查询。Windows / macOS 给真实路径，其它平台明确报平台不支持。
 pub fn path_capability() -> Result<Value, String> {
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         Err("当前平台不支持：hosts".into())
     }
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     {
         Ok(Value::String(target_path().to_string_lossy().to_string()))
     }
@@ -56,11 +68,11 @@ pub fn path_capability() -> Result<Value, String> {
 
 /// `efto.hosts.read` 的实现。
 ///
-/// 非 Windows 明确报平台不支持（macOS 读 /etc/hosts 与 osascript 提权是 v1.5，
-/// 见 docs/macos-support-plan.md）——不能拿 `C:\Windows\...` 的"文件不存在"糊弄人。
-#[cfg_attr(not(windows), allow(unused_variables, unreachable_code))]
+/// Windows / macOS 走真流程；其它平台明确报平台不支持——不能拿
+/// `C:\Windows\...` 的"文件不存在"糊弄人（硬性约定 3）。
+#[cfg_attr(not(any(windows, target_os = "macos")), allow(unused_variables, unreachable_code))]
 pub fn read_capability() -> Result<Value, String> {
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         return Err("当前平台不支持：hosts".into());
     }
@@ -92,62 +104,63 @@ pub fn save_capability(opts: &Value) -> Result<Value, String> {
     save_bytes(&bytes)
 }
 
-/// 提权写入入口（阻塞到 UAC 走完）。GUI 与 CLI 共用。
-#[cfg_attr(not(windows), allow(unused_variables, unreachable_code))]
+/// 提权写入入口（阻塞到提权授权走完）。GUI 与 CLI 共用。
+///
+/// 请求文件写入、响应读回与清理是平台无关的；平台差异只收敛在
+/// `shell_execute_runas`（Windows: ShellExecuteExW(verb="runas")；
+/// macOS: osascript `do shell script … with administrator privileges`）。
+#[cfg_attr(not(any(windows, target_os = "macos")), allow(unused_variables, unreachable_code))]
 pub fn save_bytes(bytes: &[u8]) -> Result<Value, String> {
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         return Err("当前平台不支持：hosts".into());
     }
-    #[cfg(windows)]
-    {
-        let dir = uac_dir();
-        std::fs::create_dir_all(&dir).map_err(|e| format!("创建 {} 失败: {e}", dir.display()))?;
-        let token = format!(
-            "{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_micros())
-                .unwrap_or(0)
-        );
-        let request = dir.join(format!("request-{token}.json"));
-        let response = response_path(&request);
-        let payload = json!({ "content": STANDARD.encode(bytes) });
-        std::fs::write(&request, serde_json::to_vec(&payload).map_err(|e| e.to_string())?)
-            .map_err(|e| format!("写请求文件失败: {e}"))?;
+    let dir = uac_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建 {} 失败: {e}", dir.display()))?;
+    let token = format!(
+        "{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_micros())
+            .unwrap_or(0)
+    );
+    let request = dir.join(format!("request-{token}.json"));
+    let response = response_path(&request);
+    let payload = json!({ "content": STANDARD.encode(bytes) });
+    std::fs::write(&request, serde_json::to_vec(&payload).map_err(|e| e.to_string())?)
+        .map_err(|e| format!("写请求文件失败: {e}"))?;
 
-        let exe = std::env::current_exe().map_err(|e| format!("定位 efto.exe 失败: {e}"))?;
-        let params = format!("\"{APPLY_ARG}\" \"{}\"", request.display());
-        let outcome = shell_execute_runas(&exe, &params);
-        let resp = std::fs::read(&response).ok();
-        let _ = std::fs::remove_file(&request);
-        let _ = std::fs::remove_file(&response);
+    let exe = std::env::current_exe().map_err(|e| format!("定位 efto.exe 失败: {e}"))?;
+    let request_arg = request.to_string_lossy().to_string();
+    let outcome = shell_execute_runas(&exe, &[APPLY_ARG, &request_arg]);
+    let resp = std::fs::read(&response).ok();
+    let _ = std::fs::remove_file(&request);
+    let _ = std::fs::remove_file(&response);
 
-        let code = outcome?;
-        let resp: Response = match resp {
-            Some(bytes) => serde_json::from_slice(&bytes)
-                .map_err(|e| format!("提权进程返回了无法解析的结果: {e}"))?,
-            None => {
-                return Err(format!(
-                    "提权进程未返回结果（退出码 {code:?}）。可能被安全软件拦截，或 hosts 目录不可写"
-                ))
-            }
-        };
-        if !resp.ok {
-            return Err(if resp.error.is_empty() {
-                "提权写入失败".into()
-            } else {
-                resp.error
-            });
+    let code = outcome?;
+    let resp: Response = match resp {
+        Some(bytes) => serde_json::from_slice(&bytes)
+            .map_err(|e| format!("提权进程返回了无法解析的结果: {e}"))?,
+        None => {
+            return Err(format!(
+                "提权进程未返回结果（退出码 {code:?}）。可能被安全软件拦截，或 hosts 目录不可写"
+            ))
         }
-        Ok(json!({
-            "ok": true,
-            "path": target_path().to_string_lossy(),
-            "backup": resp.backup,
-            "bytes": resp.bytes,
-        }))
+    };
+    if !resp.ok {
+        return Err(if resp.error.is_empty() {
+            "提权写入失败".into()
+        } else {
+            resp.error
+        });
     }
+    Ok(json!({
+        "ok": true,
+        "path": target_path().to_string_lossy(),
+        "backup": resp.backup,
+        "bytes": resp.bytes,
+    }))
 }
 
 /// 提权子进程入口。返回值即进程退出码。
@@ -280,20 +293,26 @@ fn replace_file(from: &Path, to: &Path) -> Result<(), String> {
     std::fs::rename(from, to).map_err(|e| format!("替换 {} 失败: {e}", to.display()))
 }
 
-/// `runas` 拉起子进程并等它结束，返回退出码。
-///
-/// 用 ShellExecuteExW 而不是 ShellExecuteW：只有前者能拿到进程句柄，
-/// 用户点"否"时也能立刻拿到 ERROR_CANCELLED（1223），不用靠超时去猜。
+/// 提权拉起子进程并等它结束，返回退出码。平台差异只在"怎么拉起"：
+/// Windows 走 `ShellExecuteExW(verb="runas")`，macOS 走 osascript
+/// `do shell script … with administrator privileges`。
 #[cfg(windows)]
-fn shell_execute_runas(exe: &Path, params: &str) -> Result<Option<u32>, String> {
+fn shell_execute_runas(exe: &Path, args: &[&str]) -> Result<Option<u32>, String> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, WAIT_OBJECT_0, WAIT_TIMEOUT};
     use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
     use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
+    // 用 ShellExecuteExW 而不是 ShellExecuteW：只有前者能拿到进程句柄，
+    // 用户点"否"时也能立刻拿到 ERROR_CANCELLED（1223），不用靠超时去猜。
     let verb: Vec<u16> = "runas\0".encode_utf16().collect();
     let file: Vec<u16> = exe.as_os_str().encode_wide().chain(Some(0)).collect();
+    let params = args
+        .iter()
+        .map(|a| format!("\"{a}\""))
+        .collect::<Vec<_>>()
+        .join(" ");
     let parameters: Vec<u16> = params.encode_utf16().chain(Some(0)).collect();
     let mut info: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
     info.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
@@ -339,18 +358,92 @@ fn shell_execute_runas(exe: &Path, params: &str) -> Result<Option<u32>, String> 
     Ok(Some(code))
 }
 
-#[cfg(not(windows))]
-fn shell_execute_runas(_exe: &Path, _params: &str) -> Result<Option<u32>, String> {
-    Err("hosts 编辑仅支持 Windows".into())
+/// sh 单引号引用：空格、单引号、`$` 等一律安全。
+#[cfg(target_os = "macos")]
+fn sh_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', r"'\''"))
+}
+
+/// AppleScript 字符串字面量转义。
+#[cfg(target_os = "macos")]
+fn apple_string(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// 组装 `do shell script … with administrator privileges` 脚本。
+///
+/// 显式注入 `HOME=`：提权后命令以 root 身份跑，HOME 会解析成 root 的家目录，
+/// `apply_main` 的 `uac/` 边界校验会把合法请求拒掉；发起方的 HOME 跟着命令走，
+/// `apply_main` 一个字不用改（硬性约定 4：校验只有一份）。
+#[cfg(target_os = "macos")]
+fn admin_shell_script(exe: &Path, args: &[&str], home: &Path) -> String {
+    let mut cmd = format!(
+        "HOME={} {}",
+        sh_quote(&home.to_string_lossy()),
+        sh_quote(&exe.to_string_lossy())
+    );
+    for a in args {
+        cmd.push(' ');
+        cmd.push_str(&sh_quote(a));
+    }
+    format!(
+        "do shell script \"{}\" with administrator privileges",
+        apple_string(&cmd)
+    )
+}
+
+/// 解析 osascript 的失败输出。
+///
+/// osascript 自身退出码恒为 1，真正信息在 stderr 结尾的 `… (N)`：
+/// N = -128 是用户取消授权框；N > 0 是 `do shell script` 里命令自己的退出码
+/// （`apply_main` 此时已写完响应文件，交回调用方读响应拿具体错误）；
+/// 其它是 AppleScript/Apple Events 错误（如 Automation 被拒的 -1743）。
+#[cfg(target_os = "macos")]
+fn classify_osascript_failure(stderr: &str) -> Result<Option<u32>, String> {
+    match trailing_error_code(stderr) {
+        Some(-128) => Err("已取消：未授予管理员权限（macOS 管理员授权）".into()),
+        Some(c) if c > 0 => Ok(Some(c as u32)),
+        _ => Err(format!("提权拉起失败: {}", stderr.trim())),
+    }
+}
+
+/// 取 stderr 末尾 `… (N)` 里的 N。
+#[cfg(target_os = "macos")]
+fn trailing_error_code(stderr: &str) -> Option<i64> {
+    let s = stderr.trim_end();
+    let inner = s.strip_suffix(')')?;
+    let open = inner.rfind('(')?;
+    inner[open + 1..].parse().ok()
+}
+
+#[cfg(target_os = "macos")]
+fn shell_execute_runas(exe: &Path, args: &[&str]) -> Result<Option<u32>, String> {
+    let home = dirs::home_dir().ok_or_else(|| "无法定位用户主目录".to_string())?;
+    let script = admin_shell_script(exe, args, &home);
+    let out = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .map_err(|e| format!("调用 osascript 失败: {e}"))?;
+    if out.status.success() {
+        return Ok(Some(0));
+    }
+    // 不设超时：管理员密码框是交互的，超时反而会把用户正在填的框杀掉
+    classify_osascript_failure(&String::from_utf8_lossy(&out.stderr))
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
+fn shell_execute_runas(_exe: &Path, _args: &[&str]) -> Result<Option<u32>, String> {
+    Err("当前平台不支持：hosts".into())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// 非 Windows：hosts 能力（path/read/save）必须报"当前平台不支持"，
+    /// Windows / macOS 之外：hosts 能力（path/read/save）必须报"当前平台不支持"，
     /// 不能拿 `C:\Windows\...` 的"文件不存在"或更糟的静默成功糊弄（硬性约定 3）。
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     #[test]
     fn hosts_capability_errors_on_this_platform() {
         for r in [
@@ -358,9 +451,79 @@ mod tests {
             read_capability(),
             save_capability(&serde_json::json!({"text": "127.0.0.1 x"})),
         ] {
-            let e = r.expect_err("非 Windows 上 hosts 能力必须报错");
+            let e = r.expect_err("此平台上 hosts 能力必须报错");
             assert!(e.contains("当前平台不支持"), "{e}");
         }
+    }
+
+    /// macOS：路径固定 /etc/hosts，读取走真流程（/etc/hosts 是 UTF-8，
+    /// `decode` 先试 UTF-8 应直接命中）。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_target_path_and_capabilities() {
+        assert_eq!(target_path(), PathBuf::from("/etc/hosts"));
+        assert_eq!(
+            backup_path(),
+            PathBuf::from("/etc/hosts.efto.bak"),
+            "备份与 hosts 同目录"
+        );
+        assert_eq!(
+            path_capability().unwrap(),
+            Value::String("/etc/hosts".into())
+        );
+        let v = read_capability().expect("macOS 上 read 应能读 /etc/hosts");
+        assert_eq!(v["path"], "/etc/hosts");
+        assert_eq!(v["encoding"], "utf8");
+        assert!(v["text"].as_str().unwrap().contains("localhost"));
+    }
+
+    /// macOS：提权命令构造。路径含空格/单引号必须安全；HOME 显式注入
+    /// （提权后 root 身份下 HOME 会解析成 root 的家目录）。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_admin_shell_script_quotes_paths_and_injects_home() {
+        let exe = Path::new("/Applications/My App/efto's bin");
+        let req = "/Users/a b/.efto/uac/request-1.json";
+        let script = admin_shell_script(exe, &["hosts-apply", req], Path::new("/Users/a b"));
+        // 注入 HOME、每个参数单引号引用；单引号在 sh 里以 '\'' 转义，
+        // 该反斜杠再经 AppleScript 字面量转义变成 \\ （正文里就是两个反斜杠）
+        assert_eq!(
+            script,
+            "do shell script \"HOME='/Users/a b' '/Applications/My App/efto'\\\\''s bin' 'hosts-apply' '/Users/a b/.efto/uac/request-1.json'\" with administrator privileges"
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_sh_quote_is_safe_for_shell_metacharacters() {
+        assert_eq!(sh_quote("plain"), "'plain'");
+        assert_eq!(sh_quote("a b"), "'a b'");
+        assert_eq!(sh_quote("it's"), r"'it'\''s'");
+        assert_eq!(sh_quote(r#"a"b$c`d"#), r#"'a"b$c`d'"#);
+    }
+
+    /// macOS：osascript 失败分类。取消（-128）报"已取消"；正数是提权子进程
+    /// 退出码（交给响应文件解析）；其它（如 Automation 被拒 -1743）明确报错。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_classify_osascript_failure() {
+        let cancel = "0:24: execution error: 用户已取消。 (-128)";
+        let e = classify_osascript_failure(cancel).unwrap_err();
+        assert!(e.contains("已取消"), "{e}");
+
+        let apply_failed = "0:39: execution error: 第 1 行：… (1)";
+        assert_eq!(classify_osascript_failure(apply_failed).unwrap(), Some(1));
+        assert_eq!(
+            classify_osascript_failure("execution error: x (255)").unwrap(),
+            Some(255)
+        );
+
+        let no_automation = "execution error: Not authorized to send Apple events. (-1743)";
+        let e = classify_osascript_failure(no_automation).unwrap_err();
+        assert!(e.contains("提权拉起失败"), "{e}");
+        assert!(e.contains("-1743"), "{e}");
+        let e = classify_osascript_failure("").unwrap_err();
+        assert!(e.contains("提权拉起失败"), "{e}");
     }
 
     #[test]

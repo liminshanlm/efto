@@ -1,9 +1,8 @@
 # macOS 支持分阶段计划
 
 - **Date**: 2026-11-21
-- **Status**: Phase 0/1/2 已落地（2026-11-21，见 `docs/verification.md` mac 段与
-  `.agents/notes/implemented/feature/2026-11-21-macos-phase0-1.md`、
-  `2026-11-21-macos-phase2-gui.md`）；Phase 2 人手验证清单待走；Phase 3 起未动工
+- **Status**: Phase 0/1/2/3 已落地（2026-11-21，见 `docs/verification.md` mac 段与
+  `.agents/notes/implemented/feature/` 三条 note）；人手验证清单待走；Phase 4 未动工
 - **相关**: `docs/architecture.md`、`docs/roadmap.md`、`docs/verification.md`、`docs/plugin-development.md`
 
 本文件是 macOS 移植的唯一计划来源。实现过程中的判据、踩坑与实测记录分别进
@@ -218,7 +217,8 @@ exec/shell 与插件清单 `platforms` 差异；`roadmap.md` 挂本计划；`ver
 **退出判据**：GUI 日常可用 = v1 发布候选。
 **文档**：`help.*.md`、`plugin-development.md`、`verification.md` 同步。
 
-### Phase 3 · v1.5 系统集成补齐（按性价比排序）
+### Phase 3 · v1.5 系统集成补齐（按性价比排序）✅ 2026-11-21 落地（1-7 全做；入口开关与
+快捷键指南数据除外，见 verification.md 已知取舍）
 
 1. `mdfind` 文件检索源：≥2 字符才查、基础分 160 压应用下、超时短、失败静默；
    反例测试照 `everything.rs` 先例。

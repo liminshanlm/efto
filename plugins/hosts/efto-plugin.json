@@ -4,9 +4,12 @@
   "platform": [
     {
       "os": "win32"
+    },
+    {
+      "os": "darwin"
     }
   ],
-  "description": "编辑 Windows hosts：查看、新增、修改、删除、启用/禁用映射；保存前自动备份，写入时请求管理员权限（UAC）",
+  "description": "编辑 hosts 文件（Windows / macOS）：查看、新增、修改、删除、启用/禁用映射；保存前自动备份，写入时请求管理员权限（UAC / 管理员授权）",
   "main": "main.js",
   "index": "index.html",
   "logo": "logo.png",

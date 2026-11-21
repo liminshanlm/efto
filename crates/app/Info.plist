@@ -6,5 +6,9 @@
        裸 cargo run 没有 Info.plist，由 lib.rs 启动时的 accessory 激活策略兜底。 -->
   <key>LSUIElement</key>
   <true/>
+  <!-- 系统动作（重启/注销/清空回收站）经 osascript 向"系统事件"/"访达"发
+       Apple Events，首次会弹 Automation 授权，这里提供提示文案。 -->
+  <key>NSAppleEventsUsageDescription</key>
+  <string>efto 需要控制“系统事件”以执行重启、注销，并控制“访达”以清空废纸篓。</string>
 </dict>
 </plist>

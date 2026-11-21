@@ -335,6 +335,10 @@ impl SearchService {
         if super::win_settings::is_query(q) && q.len() > super::win_settings::PREFIX.len() {
             return super::win_settings::hits(q, limit);
         }
+        // macOS 的 `x-apple.systempreferences:` 同语义（sys_settings 自带平台门）
+        if super::sys_settings::is_query(q) && q.len() > super::sys_settings::PREFIX.len() {
+            return super::sys_settings::hits(q, limit);
+        }
         let mut groups = vec![
             Self::search_apps(index, q, limit),
             Self::search_plugins(registry, q, limit),
@@ -368,6 +372,8 @@ impl SearchService {
         // `ms-settings:` 前缀：列出/过滤 Windows 设置页（仅 Windows）
         #[cfg(windows)]
         groups.push(super::win_settings::hits(q, limit));
+        // `x-apple.systempreferences:` 前缀：macOS 系统设置（自带平台门）
+        groups.push(super::sys_settings::hits(q, limit));
         if let Some(ext) = external_hit(q) {
             groups.push(vec![ext]);
         }
@@ -712,6 +718,19 @@ mod tests {
             let hits = SearchService::query(q, &index, &reg, 10);
             assert!(hits.iter().all(|h| h.source != "settings"), "{q}: {hits:?}");
         }
+    }
+
+    /// macOS 的 `x-apple.systempreferences:` 接线 + 不劫持反例（硬性约定 2）。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn sys_settings_prefix_lists_pages_on_macos() {
+        let index = AppIndex::empty();
+        let reg = PluginRegistry::empty();
+        let hits = SearchService::query("x-apple.systempreferences:", &index, &reg, 20);
+        assert!(hits.iter().any(|h| h.source == "settings"), "{hits:?}");
+
+        let hits = SearchService::query("显示", &index, &reg, 10);
+        assert!(hits.iter().all(|h| h.source != "settings"), "{hits:?}");
     }
 
     #[test]

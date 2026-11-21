@@ -1348,3 +1348,37 @@ mac 新增/改造的测试重点：
 
 
 
+
+
+## macOS Phase 3 验证记录（2026-11-21，Apple Silicon / macOS 14.6.1）
+
+### 已跑过并看到输出
+
+- 单元测试全绿：efto-app 128 / efto-core 238 / efto-jsrt 48（新增：mdfind 参数白名单/
+  绝对路径免摘要/行数封顶、sys_settings 前缀与不劫持反例、hosts 提权转义与 HOME 注入、
+  系统动作 AppleScript 转义、winclip 粘贴板回环与回收站、winproc 窗口枚举）。
+- `scripts/verify.sh` ALL CHECKS PASSED，其中新检查：
+  - **spotlight 文件源**：真机 `cli search json --kind file` 出 `(spotlight)` 行、无垃圾桶噪音；
+  - **系统设置源**：`x-apple.systempreferences:` 出 settings 行，普通输入"显示"不被劫持；
+  - **hosts 插件**：`cli plugin-run hosts hosts hosts` 真读到 `/etc/hosts`（utf8）。
+- 子代理真机 e2e：`cli ps` 列出 15 个窗口（pid/CGWindowID/进程名/标题）；
+  `cli focus --pid <finder>` 聚焦成功、未知 pid 报"没有匹配的窗口" exit 3。
+- **性能发现**：mdfind 全量枚举常见查询 8439 行 / 12.95s——exec `max_lines` 行数封顶后
+  提前杀进程返回（测试断言 <3s、行数远小于全量）。
+
+### 没验证（需要人手）
+
+1. 五系统动作实跑（睡眠会真的睡眠！建议先试"屏保"）；确认框与 Automation 授权弹窗。
+2. hosts 真实提权写（管理员密码框 → 备份 `/etc/hosts.efto.bak` → 写入生效）。
+3. CGEvent 实键链路：通用动作抓取/片段粘贴（**先在 系统设置 → 隐私与安全性 → 辅助功能
+   给 efto 授权**，否则只会看到"缺少辅助功能权限"的报错——报错本身也算验证了失败路径）。
+4. 文件剪贴板真机回环：复制文件 → 资源管理器/访达里粘贴。
+5. 无 Screen Recording 权限时 `cli ps` 的标题降级为本机已有权限，未测降级形态。
+
+### 已知取舍
+
+- **file_buffer / 通用动作的入口保持收口**：底层（winclip/CGEvent）已实现，但
+  `KNOWN_TOOLS` / `BuiltinAction::supported_on_platform` 未翻开关——CGEvent 成功路径
+  未实测，人手验证第 3 条后再放出（Phase 3.5）。
+- 快捷键指南 macOS 数据集未做；`cli ps` 窗口标题依赖 Screen Recording 权限（降级为空）。
+- 系统设置页 id 面向 macOS 13+，个别 id 在旧系统可能落到设置首页（打开语义不受影响）。

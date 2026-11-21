@@ -8,6 +8,8 @@ pub mod everything;
 pub mod fuzzy;
 pub mod pinyin;
 pub mod service;
+pub mod spotlight;
+pub mod sys_settings;
 pub mod timestamp;
 #[cfg(windows)]
 pub mod win_settings;

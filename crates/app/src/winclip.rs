@@ -1,8 +1,8 @@
-//! Windows 原生剪贴板（文件列表）与键盘模拟。
+//! 原生剪贴板（文件列表）与键盘模拟（Windows / macOS）。
 //!
-//! arboard 只覆盖文本/图片；文件列表要走 CF_HDROP，粘贴到前台窗口与
-//! 通用动作抓取选中文本要走 SendInput。这两件事都集中在这里，
-//! 命令层只调用，不各写一份 unsafe。
+//! arboard 只覆盖文本/图片；文件列表 Windows 走 CF_HDROP、macOS 走 NSPasteboard
+//! file URL，粘贴到前台窗口与通用动作抓取选中文本分别走 SendInput / CGEvent。
+//! 这些 unsafe 都集中在这里，命令层只调用，不各写一份。
 
 #[cfg(windows)]
 mod imp {
@@ -230,24 +230,260 @@ mod imp {
 #[cfg(windows)]
 pub use imp::{paste_to, read_files, recycle, send_copy, write_files};
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 mod imp {
+    //! macOS 实现：NSPasteboard（file URL）读写文件列表、NSFileManager 回收站、
+    //! CGEvent 模拟 Cmd 组合。与 Windows 版的差异：
+    //! - `paste_to(hwnd)` 的 hwnd 无意义（mac 没有窗口句柄），语义 = 向前台窗口发 Cmd+V；
+    //! - `send_chord(vk)` 的 vk 按 win32 VK 码解释，仅支持 ASCII 字母（映射 kVK_ANSI_*），
+    //!   其余明确报错；
+    //! - `send_copy`/`send_paste` 签名与 Windows 版一致（无返回值），无辅助功能权限时
+    //!   不空跑，记 `tracing::error!`；`paste_to` 返回 `Result`，权限缺失直接报给调用方。
+
+    use objc2::rc::Retained;
+    use objc2::runtime::ProtocolObject;
+    use objc2::ClassType;
+    use objc2_app_kit::{NSPasteboard, NSPasteboardWriting};
+    use objc2_core_graphics::{CGEvent, CGEventFlags, CGEventTapLocation, CGKeyCode};
+    use objc2_foundation::{NSArray, NSFileManager, NSString, NSURL};
+
+    // AXIsProcessTrusted（HIServices）：进程是否已获辅助功能（Accessibility）授权。
+    // CGEvent 发布键盘事件需要它，无授权时事件会被系统丢弃。
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        fn AXIsProcessTrusted() -> u8;
+    }
+
+    fn accessibility_trusted() -> bool {
+        // SAFETY: 无参无副作用的纯查询；HIServices 的 Boolean 按 u8 返回。
+        unsafe { AXIsProcessTrusted() != 0 }
+    }
+
+    /// 把文件列表写进指定粘贴板（Finder 里可直接 Cmd+V）。
+    fn write_files_to(pb: &NSPasteboard, paths: &[String]) -> Result<(), String> {
+        if paths.is_empty() {
+            return Err("没有要复制的文件".into());
+        }
+        let urls: Vec<Retained<ProtocolObject<dyn NSPasteboardWriting>>> = paths
+            .iter()
+            .map(|p| ProtocolObject::from_retained(NSURL::fileURLWithPath(&NSString::from_str(p))))
+            .collect();
+        let objects = NSArray::from_retained_slice(&urls);
+        pb.clearContents();
+        if pb.writeObjects(&objects) {
+            Ok(())
+        } else {
+            Err("写入剪贴板失败（NSPasteboard writeObjects 返回 false）".into())
+        }
+    }
+
+    /// 读取指定粘贴板里的文件列表（public.file-url）；没有文件时返回空。
+    fn read_files_from(pb: &NSPasteboard) -> Vec<String> {
+        let classes = NSArray::from_slice(&[NSURL::class()]);
+        // SAFETY: class_array 声明的类是 NSURL，与读取选项（无）匹配。
+        let Some(items) = (unsafe { pb.readObjectsForClasses_options(&classes, None) }) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for item in items.iter() {
+            let Some(url) = item.downcast_ref::<NSURL>() else {
+                continue;
+            };
+            if !url.isFileURL() {
+                continue;
+            }
+            // filePathURL 把文件引用 URL（file:///.file/id=...）解析成路径 URL。
+            if let Some(path) = url.filePathURL().and_then(|u| u.path()) {
+                out.push(path.to_string());
+            }
+        }
+        out
+    }
+
+    pub fn read_files() -> Vec<String> {
+        read_files_from(&NSPasteboard::generalPasteboard())
+    }
+
+    pub fn write_files(paths: &[String]) -> Result<(), String> {
+        write_files_to(&NSPasteboard::generalPasteboard(), paths)
+    }
+
+    /// win32 VK 码（仅 ASCII 大写字母）→ macOS 虚拟键码 kVK_ANSI_*（Carbon Events.h）。
+    fn mac_keycode_for_vk(vk: u16) -> Result<CGKeyCode, String> {
+        // A..Z 对应的 kVK_ANSI_* 键码
+        const KVK_ANSI_LETTERS: [u16; 26] = [
+            0x00, 0x0B, 0x08, 0x02, 0x0E, 0x03, 0x05, 0x04, 0x22, 0x26, 0x28, 0x25, 0x2E, 0x2D,
+            0x1F, 0x23, 0x0C, 0x0F, 0x01, 0x11, 0x20, 0x09, 0x0D, 0x07, 0x10, 0x06,
+        ];
+        match vk {
+            0x41..=0x5A => Ok(KVK_ANSI_LETTERS[(vk - 0x41) as usize]),
+            _ => Err(format!(
+                "当前平台不支持：send_chord（macOS 仅支持 ASCII 字母键的 Cmd 组合，收到 VK 0x{vk:02X}）"
+            )),
+        }
+    }
+
+    /// 向系统事件流发一次 Cmd+<key>（按下+抬起各一个事件）。
+    fn post_cmd_key(key: CGKeyCode) -> Result<(), String> {
+        for key_down in [true, false] {
+            let Some(ev) = CGEvent::new_keyboard_event(None, key, key_down) else {
+                return Err("创建键盘事件失败".into());
+            };
+            CGEvent::set_flags(Some(&ev), CGEventFlags::MaskCommand);
+            CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&ev));
+        }
+        Ok(())
+    }
+
+    /// 发送 Cmd+<vk>（vk 按 win32 VK 码，仅 ASCII 字母）。
+    pub fn send_chord(vk: u16) -> Result<(), String> {
+        if !accessibility_trusted() {
+            return Err(
+                "缺少辅助功能（Accessibility）权限：无法模拟键盘按键。请在 系统设置 → 隐私与安全性 → 辅助功能 中勾选 efto"
+                    .into(),
+            );
+        }
+        post_cmd_key(mac_keycode_for_vk(vk)?)
+    }
+
+    /// 向当前焦点窗口发送 Cmd+C（通用动作抓取选中文本）。
+    ///
+    /// 签名与 Windows 版一致（无返回值），失败只记 error 日志，绝不空跑假装成功。
+    pub fn send_copy() {
+        if let Err(e) = send_chord(0x43) {
+            tracing::error!("发送 Cmd+C 失败: {e}");
+        }
+    }
+
+    /// 向当前焦点窗口发送 Cmd+V。
+    pub fn send_paste() -> Result<(), String> {
+        send_chord(0x56)
+    }
+
+    /// 向前台窗口粘贴。macOS 没有 hwnd，忽略参数（等价 [`send_paste`]）。
+    pub fn paste_to(_hwnd: isize) -> Result<(), String> {
+        std::thread::sleep(std::time::Duration::from_millis(40));
+        send_paste()
+    }
+
+    /// 删除到回收站（NSFileManager trashItemAtURL，无需额外权限）。
+    pub fn recycle(paths: &[String]) -> Result<(), String> {
+        if paths.is_empty() {
+            return Ok(());
+        }
+        let fm = NSFileManager::defaultManager();
+        for p in paths {
+            let url = NSURL::fileURLWithPath(&NSString::from_str(p));
+            if let Err(e) = fm.trashItemAtURL_resultingItemURL_error(&url, None) {
+                return Err(format!(
+                    "删除到回收站失败（{p}）: {}",
+                    e.localizedDescription()
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn vk_letters_map_to_ansi_keycodes() {
+            // win32 VK 码 → kVK_ANSI_*（Carbon HIToolbox/Events.h）
+            assert_eq!(mac_keycode_for_vk(0x41).unwrap(), 0x00); // A
+            assert_eq!(mac_keycode_for_vk(0x43).unwrap(), 0x08); // C
+            assert_eq!(mac_keycode_for_vk(0x56).unwrap(), 0x09); // V
+            assert_eq!(mac_keycode_for_vk(0x5A).unwrap(), 0x06); // Z
+        }
+
+        #[test]
+        fn vk_non_letters_are_explicitly_rejected() {
+            let e = mac_keycode_for_vk(0x11).unwrap_err(); // VK_CONTROL
+            assert!(e.contains("当前平台不支持：send_chord"), "{e}");
+        }
+
+        #[test]
+        fn write_and_read_files_roundtrip_on_private_pasteboard() {
+            let dir = tempfile::tempdir().unwrap();
+            let a = dir.path().join("a.txt");
+            let b = dir.path().join("带空格 b.txt");
+            std::fs::write(&a, "x").unwrap();
+            std::fs::write(&b, "y").unwrap();
+            let paths = vec![
+                a.to_string_lossy().into_owned(),
+                b.to_string_lossy().into_owned(),
+            ];
+            // 独立粘贴板，不污染用户剪贴板
+            let pb = NSPasteboard::pasteboardWithUniqueName();
+            write_files_to(&pb, &paths).unwrap();
+            assert_eq!(read_files_from(&pb), paths);
+        }
+
+        #[test]
+        fn write_files_rejects_empty_list() {
+            let pb = NSPasteboard::pasteboardWithUniqueName();
+            assert_eq!(write_files_to(&pb, &[]).unwrap_err(), "没有要复制的文件");
+        }
+
+        #[test]
+        fn read_files_from_empty_pasteboard_is_empty() {
+            let pb = NSPasteboard::pasteboardWithUniqueName();
+            assert!(read_files_from(&pb).is_empty());
+        }
+
+        #[test]
+        fn recycle_empty_list_is_noop() {
+            assert!(recycle(&[]).is_ok());
+        }
+
+        #[test]
+        fn recycle_missing_path_fails_with_reason() {
+            let e = recycle(&["/nonexistent/efto-recycle-test".into()]).unwrap_err();
+            assert!(e.contains("删除到回收站失败"), "{e}");
+        }
+
+        #[test]
+        fn recycle_moves_file_to_trash() {
+            let dir = tempfile::tempdir().unwrap();
+            let p = dir.path().join("efto-recycle-live.txt");
+            std::fs::write(&p, "x").unwrap();
+            recycle(&[p.to_string_lossy().into_owned()]).unwrap();
+            assert!(!p.exists(), "回收站删除后原路径应不存在");
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub use imp::{paste_to, read_files, recycle, send_copy, write_files};
+
+#[cfg(not(any(windows, target_os = "macos")))]
+mod imp {
+    //! 未支持的平台：能力缺失必须明确报错，不留空操作桩。
+    //! `read_files` 例外：剪贴板轮询每 500ms 调一次，返回空列表表示"没有文件"，
+    //! 不刷错误日志；写入/粘贴/回收站走 Result 通道明确报错。
     pub fn read_files() -> Vec<String> {
         Vec::new()
     }
     pub fn write_files(_: &[String]) -> Result<(), String> {
-        Err("文件剪贴板仅支持 Windows".into())
+        Err("当前平台不支持：写入文件剪贴板".into())
     }
-    pub fn send_copy() {}
-    pub fn send_paste() {}
-    pub fn send_chord(_: u16) {}
+    pub fn send_copy() {
+        tracing::error!("当前平台不支持：send_copy");
+    }
+    pub fn send_paste() {
+        tracing::error!("当前平台不支持：send_paste");
+    }
+    pub fn send_chord(_: u16) {
+        tracing::error!("当前平台不支持：send_chord");
+    }
     pub fn paste_to(_: isize) -> Result<(), String> {
-        Err("粘贴到前台仅支持 Windows".into())
+        Err("当前平台不支持：粘贴到前台".into())
     }
     pub fn recycle(_: &[String]) -> Result<(), String> {
-        Err("回收站删除仅支持 Windows".into())
+        Err("当前平台不支持：删除到回收站".into())
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub use imp::{paste_to, read_files, recycle, send_copy, write_files};

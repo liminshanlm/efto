@@ -58,6 +58,9 @@ macOS 支持的总设计见 `docs/macos-support-plan.md`，这里只记施工约
   功能入口都按它显隐）；热键展示文案的平台装饰（`Alt`→`Option` 等）在 i18n 解析出口
   做（Rust `i18n::decorate_keys` 与前端 `decorateKeys` 同规则，改一侧对齐另一侧），
   热键录入/存储始终是 Tauri 语法。
+- **搜索源成对**：文件检索 Windows 走 `everything.rs`（es.exe）、macOS 走 `spotlight.rs`
+  （mdfind，exec 白名单的 `max_lines` 行数封顶——全量枚举实测十几秒）；系统设置搜索
+  `win_settings.rs` / `sys_settings.rs` 各守各的前缀，都带"不该触发"反例。
 - **双端 gate**：平台敏感改动要在两端各跑一次 `scripts/verify.sh` / `scripts/verify.ps1`
   （检查清单的唯一事实源是 `docs/verification.md`，改一侧必对齐另一侧）；无双机时由
   `.github/workflows/ci.yml` 的 windows-latest + macos-latest 矩阵兜底。

@@ -69,8 +69,8 @@ interface EftoKv {
 }
 
 interface EftoExecOptions {
-  /** 白名单里的程序名。目前只有 'es'（Everything 官方命令行），仅 Windows 可执行——
-   * macOS/Linux 上调用会明确报"当前平台不支持"，不会静默成功 */
+  /** 白名单里的程序名，按平台生效：'es'（Everything CLI，仅 Windows）、
+   * 'mdfind'（Spotlight，仅 macOS）。平台外调用明确报"当前平台不支持"，不会静默成功 */
   name: string;
   /** 参数数组，原样交给 CreateProcess —— 不经过任何 shell */
   args?: string[];
@@ -275,8 +275,9 @@ interface Efto {
   node: { run(opts: EftoScriptOptions): Promise<EftoScriptResult> };
   /** Python 脚本（需在 设置 → 运行时 配置解释器） */
   python: { run(opts: EftoScriptOptions): Promise<EftoScriptResult> };
-  /** Windows hosts 文件（仅 Windows；macOS/Linux 调用 path/read/save 都会明确报
-   * "当前平台不支持：hosts"） */
+  /** 系统 hosts 文件（Windows %SystemRoot%\...\hosts / macOS /etc/hosts）。
+   * 保存时提权（Windows UAC / macOS 管理员授权）；其它平台调用明确报
+   * "当前平台不支持：hosts" */
   hosts: {
     path(): string;
     read(): EftoHostsRead;

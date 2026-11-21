@@ -168,7 +168,7 @@ else
 fi
 
 # [win] hosts 插件读原生 hosts 能力（写入要 UAC 提权）——mac 上是 v1.5，SKIP
-Step 'plugin-run: hosts plugin reads native capability [win] -> SKIP on this platform'
+Check 'plugin-run: hosts plugin reads native capability' 0 cli plugin-run hosts hosts hosts
 
 # translate：空载荷给出内联提示（证明插件加载 + efto.output 通路），不碰网络
 Step 'plugin-run: translate with empty payload'
@@ -184,8 +184,41 @@ fi
 
 Check 'plugin-run: unknown plugin must fail loudly' 1 cli plugin-run nope x y
 
-# [win] everything 内联文件源（真实 es.exe + Everything 索引）——mac 的 mdfind 是 v1.5
-Step 'everything inline source [win] -> SKIP on this platform'
+Say 'spotlight inline source (real mdfind + Spotlight index)'
+f="$work/mdfind.txt"
+code=$(Run "$f" cli search json --kind file)
+text=$(cat "$f")
+if echo "$text" | grep -q '(spotlight)'; then
+  if echo "$text" | grep -q '/\.Trash/'; then
+    fail=$((fail + 1)); echo '  FAIL: trash noise leaked into inline rows'
+  else
+    echo '  OK (file rows merged below app results, no noise)'
+  fi
+elif [ "$code" = "3" ]; then
+  echo '  SKIP: no rows at all -- Spotlight index has no match; not counted as pass'
+else
+  fail=$((fail + 1)); echo "  FAIL (exit $code): unexpected search failure"
+  echo "$text"
+fi
+
+Step 'macOS system settings source (x-apple.systempreferences:)'
+f="$work/syssettings.txt"
+code=$(Run "$f" cli search x-apple.systempreferences: --json)
+text=$(cat "$f")
+if [ "$code" = "0" ] && echo "$text" | grep -q '"source": "settings"'; then
+  echo '  OK'
+else
+  fail=$((fail + 1)); echo "  FAIL (exit $code)"
+fi
+# 反例（硬性约定 2）：普通输入不许被劫持成设置页
+f="$work/syssettings-neg.txt"
+code=$(Run "$f" cli search 显示 --json)
+text=$(cat "$f")
+if echo "$text" | grep -q '"source": "settings"'; then
+  fail=$((fail + 1)); echo '  FAIL: normal input hijacked by settings source'
+else
+  echo '  OK (not hijacked)'
+fi
 
 Say 'run-command: dry-run resolves a shell'
 out=$(Check 'run-command: dry-run' 0 cli run-command 'echo efto-verify' --dry-run)
