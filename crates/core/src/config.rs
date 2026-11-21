@@ -286,6 +286,7 @@ pub const KNOWN_TOOLS: &[&str] = &[
     "clipboard",
     "lock_screen",
     "tile_windows",
+    "shortcut_guide",
     "snippets",
     "file_buffer",
 ];
@@ -839,13 +840,13 @@ mod tests {
             assert_eq!(s.command_shell, CommandShell::Custom);
             assert_eq!(s.command_shell_path, Some("/bin/sh".into()));
         }
-        // 工具列表里的平台外 id 要被丢掉（shortcut_guide 在非 Windows 未提供）
-        s.tools = vec!["shortcut_guide".into(), "snippets".into()];
+        // 工具列表里的平台外 id 要被丢掉（screenshot 在非 Windows 未提供）
+        s.tools = vec!["screenshot".into(), "snippets".into()];
         s.normalize_for_platform();
         #[cfg(not(windows))]
         assert_eq!(s.tools, vec!["snippets"]);
         #[cfg(windows)]
-        assert_eq!(s.tools, vec!["shortcut_guide", "snippets"]);
+        assert_eq!(s.tools, vec!["screenshot", "snippets"]);
     }
 
     #[test]

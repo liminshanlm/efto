@@ -1,0 +1,81 @@
+{
+  "app": {
+    "exe": [
+      "Microsoft Word"
+    ],
+    "name": "Microsoft Word"
+  },
+  "os": "darwin",
+  "groups": [
+    {
+      "name": "文件与编辑",
+      "items": [
+        {
+          "keys": "Cmd+N / Cmd+O / Cmd+S",
+          "action": "新建 / 打开 / 保存"
+        },
+        {
+          "keys": "Cmd+Shift+S",
+          "action": "另存为…"
+        },
+        {
+          "keys": "Cmd+P",
+          "action": "打印"
+        },
+        {
+          "keys": "Cmd+W",
+          "action": "关闭文档"
+        },
+        {
+          "keys": "Cmd+Z / Cmd+Shift+Z / Cmd+Y",
+          "action": "撤销 / 重做 / 重复"
+        },
+        {
+          "keys": "Cmd+A / Cmd+X / Cmd+C / Cmd+V",
+          "action": "全选 / 剪切 / 拷贝 / 粘贴"
+        },
+        {
+          "keys": "Cmd+F / Cmd+H",
+          "action": "查找 / 替换"
+        },
+        {
+          "keys": "Cmd+Shift+C / Cmd+Shift+V",
+          "action": "复制 / 粘贴格式"
+        },
+        {
+          "keys": "Cmd+Enter",
+          "action": "分页符"
+        }
+      ]
+    },
+    {
+      "name": "格式",
+      "items": [
+        {
+          "keys": "Cmd+B / Cmd+I / Cmd+U",
+          "action": "加粗 / 斜体 / 下划线"
+        },
+        {
+          "keys": "Cmd+Shift+> / Cmd+Shift+<",
+          "action": "增大 / 减小字号"
+        },
+        {
+          "keys": "Cmd+E / Cmd+L / Cmd+R / Cmd+J",
+          "action": "居中 / 左对齐 / 右对齐 / 两端对齐"
+        },
+        {
+          "keys": "Cmd+1 / Cmd+2 / Cmd+5",
+          "action": "单倍 / 双倍 / 1.5 倍行距"
+        },
+        {
+          "keys": "Cmd+Shift+N",
+          "action": "应用「正文」样式"
+        },
+        {
+          "keys": "Cmd+Option+1 / Cmd+Option+2 / Cmd+Option+3",
+          "action": "标题 1 / 2 / 3"
+        }
+      ]
+    }
+  ]
+}

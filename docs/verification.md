@@ -1444,3 +1444,14 @@ log:error 事件、线程回收），**全部通过、零报错**：
 - 插件 **UI 页面**在 mac Webview 的实点（需 GUI 交互）：dev-tools 的大工具箱、api-manager
   的集合编辑、ai-chat 的对话流（需配置模型）——后端与通道已冒烟，UI 交互留人工。
 - ai-chat 真实流式回复（事件循环的增量推送）需配置模型后人工验证。
+
+
+## 快捷键指南 macOS 数据集（2026-11-21）
+
+- 数据：`macos.json`（通用 48 条）+ 11 份 `*.macos.json`（约 216 条，键位 mac 记法）；
+  现有 13 份 Windows 数据标 `os: "win32"`，同 id 多平台各一份、查询按 `os` 分流。
+- 单测全绿（shortcuts 11 个）；verify.sh ALL CHECKS PASSED；GUI 冒烟
+  `Ctrl+Alt+4 -> shortcut_guide` 绑定成功（mac 工具 6 项）。
+- **没验证**：指南窗口实际展示与"识别唤起前的应用"命中链路（需 GUI 交互）；
+  Office/Photoshop 等细节点位来自公开文档与使用经验，用户可在
+  `~/.efto/shortcuts/<exe>.json` 覆盖修正（合并规则：同名分组按 keys、用户优先）。

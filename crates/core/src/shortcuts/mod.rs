@@ -36,7 +36,40 @@ pub struct ShortcutGroup {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortcutSet {
     pub app: ShortcutApp,
+    /// 适用平台：`win32` / `darwin`（与插件清单 `platform` 同词汇）。
+    /// 缺省 = 全平台（用户导入数据的默认）。内置数据按平台各备一份、共用 id，
+    /// 查询侧只放行当前平台的那条。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os: Option<String>,
     pub groups: Vec<ShortcutGroup>,
+}
+
+/// 数据集是否适用于当前平台。
+fn os_matches(os: Option<&str>) -> bool {
+    match os {
+        None => true,
+        Some(v) => {
+            let cur = if cfg!(windows) {
+                "win32"
+            } else if cfg!(target_os = "macos") {
+                "darwin"
+            } else {
+                "linux"
+            };
+            v.eq_ignore_ascii_case(cur)
+        }
+    }
+}
+
+/// 未识别到应用时的通用数据 id。
+fn generic_id() -> &'static str {
+    if cfg!(windows) {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "windows"
+    }
 }
 
 /// 下拉选择器里的一项。
@@ -56,26 +89,40 @@ pub struct Resolved {
     pub exe: Option<String>,
     /// 识别到的应用名；未收录时为 `None`，前端据此展示提示。
     pub name: Option<String>,
-    /// 是否回退到 Windows 通用快捷键。
+    /// 是否回退到平台通用快捷键。
     pub fallback: bool,
     pub set: ShortcutSet,
 }
 
 /// 内置数据：id 与 JSON 源。id 也是下拉选择的键。
+/// 同一 id 允许多平台各一份（`os` 字段区分），查询侧只放行当前平台的那条。
 const BUILTINS: &[(&str, &str)] = &[
     ("windows", include_str!("data/windows.json")),
+    ("macos", include_str!("data/macos.json")),
     ("word", include_str!("data/word.json")),
+    ("word", include_str!("data/word.macos.json")),
     ("excel", include_str!("data/excel.json")),
+    ("excel", include_str!("data/excel.macos.json")),
     ("powerpoint", include_str!("data/powerpoint.json")),
+    ("powerpoint", include_str!("data/powerpoint.macos.json")),
     ("outlook", include_str!("data/outlook.json")),
+    ("outlook", include_str!("data/outlook.macos.json")),
     ("chrome", include_str!("data/chrome.json")),
+    ("chrome", include_str!("data/chrome.macos.json")),
     ("edge", include_str!("data/edge.json")),
+    ("edge", include_str!("data/edge.macos.json")),
     ("firefox", include_str!("data/firefox.json")),
+    ("firefox", include_str!("data/firefox.macos.json")),
     ("vscode", include_str!("data/vscode.json")),
+    ("vscode", include_str!("data/vscode.macos.json")),
     ("photoshop", include_str!("data/photoshop.json")),
+    ("photoshop", include_str!("data/photoshop.macos.json")),
     ("figma", include_str!("data/figma.json")),
+    ("figma", include_str!("data/figma.macos.json")),
     ("idea", include_str!("data/idea.json")),
+    ("idea", include_str!("data/idea.macos.json")),
     ("trae", include_str!("data/trae.json")),
+    ("trae", include_str!("data/trae.macos.json")),
 ];
 
 /// 解析全部内置数据（只做一次）。解析失败会打日志，测试会单独校验。
@@ -253,6 +300,7 @@ fn import_into(
                 exe: vec![exe.clone()],
                 name: set.app.name.trim().to_string(),
             },
+            os: None,
             groups: Vec::new(),
         },
         Err(e) => return Err(format!("读取 {} 失败: {e}", path.display())),
@@ -295,6 +343,7 @@ fn import_into(
 pub fn apps() -> Vec<ShortcutEntry> {
     PARSED
         .iter()
+        .filter(|(_, set)| os_matches(set.os.as_deref()))
         .map(|(id, set)| ShortcutEntry {
             id: id.clone(),
             name: set.app.name.clone(),
@@ -303,9 +352,12 @@ pub fn apps() -> Vec<ShortcutEntry> {
         .collect()
 }
 
-/// 按 id 取数据（合并该应用所有 exe 的用户覆盖）。
+/// 按 id 取数据（合并该应用所有 exe 的用户覆盖）。同 id 的多平台数据里
+/// 只取当前平台的那条。
 pub fn by_id(id: &str) -> Option<ShortcutSet> {
-    let (_, base) = PARSED.iter().find(|(key, _)| key == id)?;
+    let (_, base) = PARSED
+        .iter()
+        .find(|(key, set)| key == id && os_matches(set.os.as_deref()))?;
     let mut set = base.clone();
     for exe in set.app.exe.clone() {
         if let Some(user) = user_override(&exe) {
@@ -322,10 +374,12 @@ pub fn by_exe(exe: &str) -> Option<ShortcutSet> {
         return None;
     }
     let builtin = PARSED.iter().find(|(_, set)| {
-        set.app
-            .exe
-            .iter()
-            .any(|e| normalize_exe(e) == needle)
+        os_matches(set.os.as_deref())
+            && set
+                .app
+                .exe
+                .iter()
+                .any(|e| normalize_exe(e) == needle)
     });
     if let Some((_, base)) = builtin {
         let mut set = base.clone();
@@ -339,18 +393,23 @@ pub fn by_exe(exe: &str) -> Option<ShortcutSet> {
     user_override(&needle)
 }
 
-/// 解析"唤起前的应用"：未收录时回退到 Windows 通用数据。
+/// 解析"唤起前的应用"：未收录时回退到平台通用数据。
 pub fn resolve(exe: Option<&str>) -> Resolved {
-    let generic = by_id("windows").unwrap_or_else(|| ShortcutSet {
+    let generic = by_id(generic_id()).unwrap_or_else(|| ShortcutSet {
         app: ShortcutApp {
             exe: vec![],
-            name: "Windows".into(),
+            name: if cfg!(target_os = "macos") {
+                "macOS".into()
+            } else {
+                "Windows".into()
+            },
         },
+        os: None,
         groups: vec![],
     });
     let Some(raw) = exe.filter(|e| !e.trim().is_empty()) else {
         return Resolved {
-            id: "windows".into(),
+            id: generic_id().into(),
             exe: None,
             name: None,
             fallback: true,
@@ -362,10 +421,11 @@ pub fn resolve(exe: Option<&str>) -> Resolved {
             id: PARSED
                 .iter()
                 .find(|(_, s)| {
-                    s.app
-                        .exe
-                        .iter()
-                        .any(|e| normalize_exe(e) == normalize_exe(raw))
+                    os_matches(s.os.as_deref())
+                        && s.app
+                            .exe
+                            .iter()
+                            .any(|e| normalize_exe(e) == normalize_exe(raw))
                 })
                 .map(|(id, _)| id.clone())
                 .unwrap_or_else(|| "custom".into()),
@@ -375,7 +435,7 @@ pub fn resolve(exe: Option<&str>) -> Resolved {
             set,
         },
         None => Resolved {
-            id: "windows".into(),
+            id: generic_id().into(),
             exe: Some(raw.to_string()),
             name: None,
             fallback: true,
@@ -432,33 +492,67 @@ mod tests {
         }
     }
 
+    /// 同一 id 允许多平台各一份数据；同一平台上不允许重复。
     #[test]
-    fn ids_are_unique() {
+    fn ids_are_unique_per_platform() {
         let mut seen = std::collections::HashSet::new();
-        for (id, _) in BUILTINS {
-            assert!(seen.insert(*id), "重复的应用 id: {id}");
+        for (id, raw) in BUILTINS {
+            let set: ShortcutSet = serde_json::from_str(raw).unwrap();
+            if !os_matches(set.os.as_deref()) {
+                continue;
+            }
+            assert!(seen.insert(*id), "同一平台上重复的应用 id: {id}");
         }
     }
 
     #[test]
+    fn os_matches_known_values() {
+        assert!(os_matches(None));
+        assert!(os_matches(Some("win32")) != os_matches(Some("darwin")) || cfg!(linux));
+        let cur = if cfg!(windows) {
+            "win32"
+        } else if cfg!(target_os = "macos") {
+            "darwin"
+        } else {
+            "linux"
+        };
+        assert!(os_matches(Some(cur)));
+        assert!(!os_matches(Some("plan9")));
+    }
+
+    #[test]
     fn lookup_is_case_insensitive() {
-        assert!(by_exe("WINWORD.EXE").is_some());
-        assert!(by_exe("chrome.exe").is_some());
+        #[cfg(windows)]
+        {
+            assert!(by_exe("WINWORD.EXE").is_some());
+            assert!(by_exe("chrome.exe").is_some());
+        }
+        #[cfg(target_os = "macos")]
+        {
+            assert!(by_exe("MICROSOFT WORD").is_some());
+            assert!(by_exe("google chrome").is_some());
+        }
         assert!(by_exe("").is_none());
-        assert!(by_exe("not-a-real-app.exe").is_none());
+        assert!(by_exe("not-a-real-app").is_none());
     }
 
     #[test]
     fn unknown_app_falls_back_to_generic() {
-        let r = resolve(Some("not-a-real-app.exe"));
+        let r = resolve(Some("not-a-real-app"));
         assert!(r.fallback);
-        assert_eq!(r.id, "windows");
+        assert_eq!(r.id, generic_id());
         assert!(r.name.is_none());
         assert!(!r.set.groups.is_empty());
     }
 
     #[test]
     fn known_app_reports_its_id_and_name() {
+        // 同 id 多平台各一份：输入取本平台的进程名
+        #[cfg(windows)]
+        let r = resolve(Some("Code.exe"));
+        #[cfg(target_os = "macos")]
+        let r = resolve(Some("Code"));
+        #[cfg(not(any(windows, target_os = "macos")))]
         let r = resolve(Some("Code.exe"));
         assert!(!r.fallback);
         assert_eq!(r.id, "vscode");
@@ -470,7 +564,7 @@ mod tests {
         let r = resolve(None);
         assert!(r.fallback);
         assert!(r.exe.is_none());
-        assert_eq!(r.id, "windows");
+        assert_eq!(r.id, generic_id());
     }
 
     #[test]
@@ -480,6 +574,7 @@ mod tests {
                 exe: vec!["demo.exe".into()],
                 name: "Demo".into(),
             },
+            os: None,
             groups: vec![ShortcutGroup {
                 name: "文件".into(),
                 items: vec![
@@ -503,6 +598,7 @@ mod tests {
                     exe: vec!["demo.exe".into()],
                     name: "Demo".into(),
                 },
+                os: None,
                 groups: vec![
                     ShortcutGroup {
                         name: "文件".into(),
@@ -542,6 +638,7 @@ mod tests {
                 exe: vec!["demo.exe".into()],
                 name: "Demo".into(),
             },
+            os: None,
             groups: vec![ShortcutGroup {
                 name: "文件".into(),
                 items: vec![ShortcutItem {

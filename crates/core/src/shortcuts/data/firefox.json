@@ -1,43 +1,109 @@
 {
   "app": {
-    "exe": ["firefox.exe"],
+    "exe": [
+      "firefox.exe"
+    ],
     "name": "Mozilla Firefox"
   },
+  "os": "win32",
   "groups": [
     {
       "name": "标签页与窗口",
       "items": [
-        { "keys": "Ctrl+T", "action": "新建标签页" },
-        { "keys": "Ctrl+W", "action": "关闭当前标签页" },
-        { "keys": "Ctrl+Shift+T", "action": "重新打开关闭的标签页" },
-        { "keys": "Ctrl+Tab", "action": "切换到下一个标签页" },
-        { "keys": "Ctrl+Shift+Tab", "action": "切换到上一个标签页" },
-        { "keys": "Ctrl+N", "action": "新建窗口" },
-        { "keys": "Ctrl+Shift+P", "action": "新建隐私窗口" }
+        {
+          "keys": "Ctrl+T",
+          "action": "新建标签页"
+        },
+        {
+          "keys": "Ctrl+W",
+          "action": "关闭当前标签页"
+        },
+        {
+          "keys": "Ctrl+Shift+T",
+          "action": "重新打开关闭的标签页"
+        },
+        {
+          "keys": "Ctrl+Tab",
+          "action": "切换到下一个标签页"
+        },
+        {
+          "keys": "Ctrl+Shift+Tab",
+          "action": "切换到上一个标签页"
+        },
+        {
+          "keys": "Ctrl+N",
+          "action": "新建窗口"
+        },
+        {
+          "keys": "Ctrl+Shift+P",
+          "action": "新建隐私窗口"
+        }
       ]
     },
     {
       "name": "地址栏与书签",
       "items": [
-        { "keys": "Ctrl+L", "action": "定位到地址栏" },
-        { "keys": "Alt+D", "action": "定位到地址栏" },
-        { "keys": "Ctrl+D", "action": "收藏当前页" },
-        { "keys": "Ctrl+Shift+B", "action": "显示 / 隐藏书签工具栏" },
-        { "keys": "Ctrl+Shift+O", "action": "打开书签库" },
-        { "keys": "Ctrl+H", "action": "打开历史记录" }
+        {
+          "keys": "Ctrl+L",
+          "action": "定位到地址栏"
+        },
+        {
+          "keys": "Alt+D",
+          "action": "定位到地址栏"
+        },
+        {
+          "keys": "Ctrl+D",
+          "action": "收藏当前页"
+        },
+        {
+          "keys": "Ctrl+Shift+B",
+          "action": "显示 / 隐藏书签工具栏"
+        },
+        {
+          "keys": "Ctrl+Shift+O",
+          "action": "打开书签库"
+        },
+        {
+          "keys": "Ctrl+H",
+          "action": "打开历史记录"
+        }
       ]
     },
     {
       "name": "页面",
       "items": [
-        { "keys": "Alt+←", "action": "后退" },
-        { "keys": "Alt+→", "action": "前进" },
-        { "keys": "F5", "action": "刷新" },
-        { "keys": "Ctrl+F", "action": "页内查找" },
-        { "keys": "Ctrl+P", "action": "打印" },
-        { "keys": "Ctrl+0", "action": "恢复默认缩放" },
-        { "keys": "F12", "action": "打开开发者工具" },
-        { "keys": "Ctrl+Shift+Delete", "action": "清除最近历史记录" }
+        {
+          "keys": "Alt+←",
+          "action": "后退"
+        },
+        {
+          "keys": "Alt+→",
+          "action": "前进"
+        },
+        {
+          "keys": "F5",
+          "action": "刷新"
+        },
+        {
+          "keys": "Ctrl+F",
+          "action": "页内查找"
+        },
+        {
+          "keys": "Ctrl+P",
+          "action": "打印"
+        },
+        {
+          "keys": "Ctrl+0",
+          "action": "恢复默认缩放"
+        },
+        {
+          "keys": "F12",
+          "action": "打开开发者工具"
+        },
+        {
+          "keys": "Ctrl+Shift+Delete",
+          "action": "清除最近历史记录"
+        }
       ]
     }
   ]

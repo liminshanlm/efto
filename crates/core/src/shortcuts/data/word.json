@@ -1,59 +1,158 @@
 {
   "app": {
-    "exe": ["winword.exe"],
+    "exe": [
+      "winword.exe"
+    ],
     "name": "Microsoft Word"
   },
+  "os": "win32",
   "groups": [
     {
       "name": "文件",
       "items": [
-        { "keys": "Ctrl+N", "action": "新建文档" },
-        { "keys": "Ctrl+O", "action": "打开文档" },
-        { "keys": "Ctrl+S", "action": "保存" },
-        { "keys": "F12", "action": "另存为" },
-        { "keys": "Ctrl+P", "action": "打印" },
-        { "keys": "Ctrl+W", "action": "关闭文档" }
+        {
+          "keys": "Ctrl+N",
+          "action": "新建文档"
+        },
+        {
+          "keys": "Ctrl+O",
+          "action": "打开文档"
+        },
+        {
+          "keys": "Ctrl+S",
+          "action": "保存"
+        },
+        {
+          "keys": "F12",
+          "action": "另存为"
+        },
+        {
+          "keys": "Ctrl+P",
+          "action": "打印"
+        },
+        {
+          "keys": "Ctrl+W",
+          "action": "关闭文档"
+        }
       ]
     },
     {
       "name": "编辑",
       "items": [
-        { "keys": "Ctrl+Z", "action": "撤销" },
-        { "keys": "Ctrl+Y", "action": "重做" },
-        { "keys": "Ctrl+C", "action": "复制" },
-        { "keys": "Ctrl+X", "action": "剪切" },
-        { "keys": "Ctrl+V", "action": "粘贴" },
-        { "keys": "Ctrl+Shift+C", "action": "复制格式" },
-        { "keys": "Ctrl+Shift+V", "action": "粘贴格式" },
-        { "keys": "Ctrl+F", "action": "查找" },
-        { "keys": "Ctrl+H", "action": "替换" },
-        { "keys": "Ctrl+Enter", "action": "插入分页符" }
+        {
+          "keys": "Ctrl+Z",
+          "action": "撤销"
+        },
+        {
+          "keys": "Ctrl+Y",
+          "action": "重做"
+        },
+        {
+          "keys": "Ctrl+C",
+          "action": "复制"
+        },
+        {
+          "keys": "Ctrl+X",
+          "action": "剪切"
+        },
+        {
+          "keys": "Ctrl+V",
+          "action": "粘贴"
+        },
+        {
+          "keys": "Ctrl+Shift+C",
+          "action": "复制格式"
+        },
+        {
+          "keys": "Ctrl+Shift+V",
+          "action": "粘贴格式"
+        },
+        {
+          "keys": "Ctrl+F",
+          "action": "查找"
+        },
+        {
+          "keys": "Ctrl+H",
+          "action": "替换"
+        },
+        {
+          "keys": "Ctrl+Enter",
+          "action": "插入分页符"
+        }
       ]
     },
     {
       "name": "格式",
       "items": [
-        { "keys": "Ctrl+B", "action": "加粗" },
-        { "keys": "Ctrl+I", "action": "斜体" },
-        { "keys": "Ctrl+U", "action": "下划线" },
-        { "keys": "Ctrl+E", "action": "居中" },
-        { "keys": "Ctrl+L", "action": "左对齐" },
-        { "keys": "Ctrl+R", "action": "右对齐" },
-        { "keys": "Ctrl+J", "action": "两端对齐" },
-        { "keys": "Ctrl+Shift+>", "action": "增大字号" },
-        { "keys": "Ctrl+Shift+<", "action": "减小字号" }
+        {
+          "keys": "Ctrl+B",
+          "action": "加粗"
+        },
+        {
+          "keys": "Ctrl+I",
+          "action": "斜体"
+        },
+        {
+          "keys": "Ctrl+U",
+          "action": "下划线"
+        },
+        {
+          "keys": "Ctrl+E",
+          "action": "居中"
+        },
+        {
+          "keys": "Ctrl+L",
+          "action": "左对齐"
+        },
+        {
+          "keys": "Ctrl+R",
+          "action": "右对齐"
+        },
+        {
+          "keys": "Ctrl+J",
+          "action": "两端对齐"
+        },
+        {
+          "keys": "Ctrl+Shift+>",
+          "action": "增大字号"
+        },
+        {
+          "keys": "Ctrl+Shift+<",
+          "action": "减小字号"
+        }
       ]
     },
     {
       "name": "导航与视图",
       "items": [
-        { "keys": "Ctrl+Home", "action": "跳到文档开头" },
-        { "keys": "Ctrl+End", "action": "跳到文档末尾" },
-        { "keys": "Ctrl+PageUp", "action": "跳到上一页" },
-        { "keys": "Ctrl+PageDown", "action": "跳到下一页" },
-        { "keys": "Alt+Ctrl+S", "action": "拆分窗口" },
-        { "keys": "Ctrl+Alt+N", "action": "草稿视图" },
-        { "keys": "Ctrl+Alt+P", "action": "打印视图" }
+        {
+          "keys": "Ctrl+Home",
+          "action": "跳到文档开头"
+        },
+        {
+          "keys": "Ctrl+End",
+          "action": "跳到文档末尾"
+        },
+        {
+          "keys": "Ctrl+PageUp",
+          "action": "跳到上一页"
+        },
+        {
+          "keys": "Ctrl+PageDown",
+          "action": "跳到下一页"
+        },
+        {
+          "keys": "Alt+Ctrl+S",
+          "action": "拆分窗口"
+        },
+        {
+          "keys": "Ctrl+Alt+N",
+          "action": "草稿视图"
+        },
+        {
+          "keys": "Ctrl+Alt+P",
+          "action": "打印视图"
+        }
       ]
     }
   ]

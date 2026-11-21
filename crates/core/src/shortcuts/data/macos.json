@@ -1,0 +1,240 @@
+{
+  "app": {
+    "exe": [
+      "访达",
+      "Finder"
+    ],
+    "name": "macOS / 访达"
+  },
+  "os": "darwin",
+  "groups": [
+    {
+      "name": "系统",
+      "items": [
+        {
+          "keys": "Cmd+Space",
+          "action": "唤起 Spotlight"
+        },
+        {
+          "keys": "Cmd+Tab",
+          "action": "切换应用"
+        },
+        {
+          "keys": "Cmd+`",
+          "action": "切换同一应用的窗口"
+        },
+        {
+          "keys": "Cmd+,",
+          "action": "打开当前应用的设置"
+        },
+        {
+          "keys": "Cmd+Q",
+          "action": "退出当前应用"
+        },
+        {
+          "keys": "Cmd+Option+Esc",
+          "action": "强制退出…"
+        },
+        {
+          "keys": "Ctrl+Cmd+Q",
+          "action": "立即锁定屏幕"
+        }
+      ]
+    },
+    {
+      "name": "窗口",
+      "items": [
+        {
+          "keys": "Cmd+W",
+          "action": "关闭窗口"
+        },
+        {
+          "keys": "Cmd+M",
+          "action": "最小化窗口"
+        },
+        {
+          "keys": "Option+Cmd+M",
+          "action": "最小化全部窗口"
+        },
+        {
+          "keys": "Cmd+Ctrl+F",
+          "action": "切换全屏"
+        },
+        {
+          "keys": "Cmd+H",
+          "action": "隐藏当前应用"
+        },
+        {
+          "keys": "Option+Cmd+H",
+          "action": "隐藏其他应用"
+        }
+      ]
+    },
+    {
+      "name": "截图与录屏",
+      "items": [
+        {
+          "keys": "Cmd+Shift+3",
+          "action": "截取整个屏幕"
+        },
+        {
+          "keys": "Cmd+Shift+4",
+          "action": "截取选定区域",
+          "note": "再按空格可切换为窗口截图"
+        },
+        {
+          "keys": "Cmd+Shift+5",
+          "action": "截图与录屏工具栏"
+        },
+        {
+          "keys": "Ctrl+Cmd+Shift+3",
+          "action": "复制整个屏幕到剪贴板"
+        },
+        {
+          "keys": "Ctrl+Cmd+Shift+4",
+          "action": "复制选定区域到剪贴板"
+        }
+      ]
+    },
+    {
+      "name": "剪贴板与编辑",
+      "items": [
+        {
+          "keys": "Cmd+C / Cmd+V / Cmd+X",
+          "action": "拷贝 / 粘贴 / 剪切"
+        },
+        {
+          "keys": "Cmd+Z / Cmd+Shift+Z",
+          "action": "撤销 / 重做"
+        },
+        {
+          "keys": "Cmd+A",
+          "action": "全选"
+        },
+        {
+          "keys": "Cmd+B / Cmd+I / Cmd+U",
+          "action": "加粗 / 斜体 / 下划线"
+        },
+        {
+          "keys": "Cmd+S",
+          "action": "保存"
+        },
+        {
+          "keys": "Cmd+P",
+          "action": "打印"
+        },
+        {
+          "keys": "Cmd+F",
+          "action": "查找"
+        },
+        {
+          "keys": "Cmd+G / Cmd+Shift+G",
+          "action": "查找下一个 / 上一个"
+        }
+      ]
+    },
+    {
+      "name": "文本导航",
+      "items": [
+        {
+          "keys": "Cmd+Left / Cmd+Right",
+          "action": "移到行首 / 行尾"
+        },
+        {
+          "keys": "Cmd+Up / Cmd+Down",
+          "action": "移到文首 / 文尾"
+        },
+        {
+          "keys": "Option+Left / Option+Right",
+          "action": "按词移动"
+        },
+        {
+          "keys": "Shift+方向键",
+          "action": "扩展选择"
+        },
+        {
+          "keys": "Cmd+Delete",
+          "action": "删除到行首"
+        },
+        {
+          "keys": "Option+Delete",
+          "action": "删除前一个词"
+        }
+      ]
+    },
+    {
+      "name": "访达",
+      "items": [
+        {
+          "keys": "Cmd+N",
+          "action": "新建访达窗口"
+        },
+        {
+          "keys": "Cmd+Shift+N",
+          "action": "新建文件夹"
+        },
+        {
+          "keys": "Cmd+Delete",
+          "action": "移到废纸篓"
+        },
+        {
+          "keys": "Cmd+Shift+Delete",
+          "action": "清空废纸篓"
+        },
+        {
+          "keys": "Cmd+I",
+          "action": "显示简介"
+        },
+        {
+          "keys": "Space",
+          "action": "快速查看"
+        },
+        {
+          "keys": "Cmd+D",
+          "action": "复制所选项"
+        },
+        {
+          "keys": "Cmd+R",
+          "action": "显示原身"
+        },
+        {
+          "keys": "Cmd+Shift+G",
+          "action": "前往文件夹…"
+        },
+        {
+          "keys": "Cmd+Shift+A",
+          "action": "前往「应用程序」"
+        },
+        {
+          "keys": "Cmd+[ / Cmd+]",
+          "action": "后退 / 前进"
+        },
+        {
+          "keys": "Cmd+1 / Cmd+2 / Cmd+3 / Cmd+4",
+          "action": "图标 / 列表 / 分栏 / 画廊视图"
+        }
+      ]
+    },
+    {
+      "name": "调度中心",
+      "items": [
+        {
+          "keys": "Control+Up",
+          "action": "调度中心"
+        },
+        {
+          "keys": "Control+Down",
+          "action": "应用窗口"
+        },
+        {
+          "keys": "Control+Left / Control+Right",
+          "action": "切换桌面"
+        },
+        {
+          "keys": "F11",
+          "action": "显示桌面"
+        }
+      ]
+    }
+  ]
+}

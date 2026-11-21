@@ -1,0 +1,65 @@
+{
+  "app": {
+    "exe": [
+      "Figma"
+    ],
+    "name": "Figma"
+  },
+  "os": "darwin",
+  "groups": [
+    {
+      "name": "编辑",
+      "items": [
+        {
+          "keys": "Cmd+G / Cmd+Shift+G",
+          "action": "组合 / 取消组合"
+        },
+        {
+          "keys": "Cmd+D",
+          "action": "复制所选"
+        },
+        {
+          "keys": "Cmd+Option+K",
+          "action": "创建组件"
+        },
+        {
+          "keys": "Cmd+Option+G",
+          "action": "框架选择"
+        },
+        {
+          "keys": "Cmd+Shift+K",
+          "action": "插入图片"
+        },
+        {
+          "keys": "Cmd+/",
+          "action": "快速操作"
+        },
+        {
+          "keys": "Cmd+F",
+          "action": "搜索图层"
+        },
+        {
+          "keys": "Cmd+Shift+E",
+          "action": "导出"
+        }
+      ]
+    },
+    {
+      "name": "视图",
+      "items": [
+        {
+          "keys": "Shift+1",
+          "action": "缩放至适应"
+        },
+        {
+          "keys": "Shift+2",
+          "action": "缩放到所选"
+        },
+        {
+          "keys": "Cmd+= / Cmd+-",
+          "action": "放大 / 缩小"
+        }
+      ]
+    }
+  ]
+}

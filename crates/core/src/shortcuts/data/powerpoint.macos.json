@@ -1,0 +1,69 @@
+{
+  "app": {
+    "exe": [
+      "Microsoft PowerPoint"
+    ],
+    "name": "Microsoft PowerPoint"
+  },
+  "os": "darwin",
+  "groups": [
+    {
+      "name": "文件与编辑",
+      "items": [
+        {
+          "keys": "Cmd+N / Cmd+O / Cmd+S",
+          "action": "新建 / 打开 / 保存"
+        },
+        {
+          "keys": "Cmd+P",
+          "action": "打印"
+        },
+        {
+          "keys": "Cmd+W",
+          "action": "关闭演示文稿"
+        },
+        {
+          "keys": "Cmd+Z / Cmd+Shift+Z",
+          "action": "撤销 / 重做"
+        },
+        {
+          "keys": "Cmd+A / Cmd+X / Cmd+C / Cmd+V",
+          "action": "全选 / 剪切 / 拷贝 / 粘贴"
+        },
+        {
+          "keys": "Cmd+F",
+          "action": "查找"
+        }
+      ]
+    },
+    {
+      "name": "幻灯片",
+      "items": [
+        {
+          "keys": "Cmd+M",
+          "action": "新建幻灯片"
+        },
+        {
+          "keys": "Cmd+Shift+D",
+          "action": "复制当前幻灯片"
+        },
+        {
+          "keys": "Cmd+Shift+P",
+          "action": "从头开始放映"
+        },
+        {
+          "keys": "Cmd+Shift+> / Cmd+Shift+<",
+          "action": "增大 / 减小字号"
+        },
+        {
+          "keys": "Cmd+B / Cmd+I / Cmd+U",
+          "action": "加粗 / 斜体 / 下划线"
+        },
+        {
+          "keys": "Cmd+Shift+C / Cmd+Shift+V",
+          "action": "复制 / 粘贴格式"
+        }
+      ]
+    }
+  ]
+}

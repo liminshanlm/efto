@@ -1,40 +1,97 @@
 {
   "app": {
-    "exe": ["figma.exe"],
+    "exe": [
+      "figma.exe"
+    ],
     "name": "Figma"
   },
+  "os": "win32",
   "groups": [
     {
       "name": "工具",
       "items": [
-        { "keys": "V", "action": "移动工具" },
-        { "keys": "F", "action": "画框工具" },
-        { "keys": "R", "action": "矩形工具" },
-        { "keys": "O", "action": "椭圆工具" },
-        { "keys": "T", "action": "文字工具" },
-        { "keys": "P", "action": "钢笔工具" }
+        {
+          "keys": "V",
+          "action": "移动工具"
+        },
+        {
+          "keys": "F",
+          "action": "画框工具"
+        },
+        {
+          "keys": "R",
+          "action": "矩形工具"
+        },
+        {
+          "keys": "O",
+          "action": "椭圆工具"
+        },
+        {
+          "keys": "T",
+          "action": "文字工具"
+        },
+        {
+          "keys": "P",
+          "action": "钢笔工具"
+        }
       ]
     },
     {
       "name": "编辑",
       "items": [
-        { "keys": "Ctrl+D", "action": "复制选中项" },
-        { "keys": "Ctrl+G", "action": "编组" },
-        { "keys": "Ctrl+Shift+G", "action": "取消编组" },
-        { "keys": "Ctrl+Alt+G", "action": "创建组件" },
-        { "keys": "Shift+A", "action": "添加自动布局" },
-        { "keys": "Ctrl+Shift+H", "action": "显示 / 隐藏选中项" },
-        { "keys": "Ctrl+Shift+K", "action": "放置图片" },
-        { "keys": "Ctrl+Shift+E", "action": "导出选中项" }
+        {
+          "keys": "Ctrl+D",
+          "action": "复制选中项"
+        },
+        {
+          "keys": "Ctrl+G",
+          "action": "编组"
+        },
+        {
+          "keys": "Ctrl+Shift+G",
+          "action": "取消编组"
+        },
+        {
+          "keys": "Ctrl+Alt+G",
+          "action": "创建组件"
+        },
+        {
+          "keys": "Shift+A",
+          "action": "添加自动布局"
+        },
+        {
+          "keys": "Ctrl+Shift+H",
+          "action": "显示 / 隐藏选中项"
+        },
+        {
+          "keys": "Ctrl+Shift+K",
+          "action": "放置图片"
+        },
+        {
+          "keys": "Ctrl+Shift+E",
+          "action": "导出选中项"
+        }
       ]
     },
     {
       "name": "导航",
       "items": [
-        { "keys": "Ctrl+/", "action": "搜索快捷操作" },
-        { "keys": "Shift+1", "action": "缩放到适应画布" },
-        { "keys": "Shift+2", "action": "缩放到选中项" },
-        { "keys": "Ctrl+Shift+?", "action": "显示所有快捷键" }
+        {
+          "keys": "Ctrl+/",
+          "action": "搜索快捷操作"
+        },
+        {
+          "keys": "Shift+1",
+          "action": "缩放到适应画布"
+        },
+        {
+          "keys": "Shift+2",
+          "action": "缩放到选中项"
+        },
+        {
+          "keys": "Ctrl+Shift+?",
+          "action": "显示所有快捷键"
+        }
       ]
     }
   ]

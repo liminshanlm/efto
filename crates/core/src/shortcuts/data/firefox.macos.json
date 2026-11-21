@@ -1,0 +1,118 @@
+{
+  "app": {
+    "exe": [
+      "Firefox"
+    ],
+    "name": "Firefox"
+  },
+  "os": "darwin",
+  "groups": [
+    {
+      "name": "标签页与窗口",
+      "items": [
+        {
+          "keys": "Cmd+T",
+          "action": "新建标签页"
+        },
+        {
+          "keys": "Cmd+W",
+          "action": "关闭标签页"
+        },
+        {
+          "keys": "Cmd+Shift+W",
+          "action": "关闭窗口"
+        },
+        {
+          "keys": "Cmd+Shift+T",
+          "action": "重新打开已关闭的标签页"
+        },
+        {
+          "keys": "Cmd+1 … Cmd+8",
+          "action": "切换到第 N 个标签页"
+        },
+        {
+          "keys": "Cmd+9",
+          "action": "切换到最后一个标签页"
+        },
+        {
+          "keys": "Cmd+N",
+          "action": "新建窗口"
+        },
+        {
+          "keys": "Cmd+Shift+P",
+          "action": "新建隐私浏览窗口"
+        }
+      ]
+    },
+    {
+      "name": "地址栏与书签",
+      "items": [
+        {
+          "keys": "Cmd+L",
+          "action": "聚焦地址栏"
+        },
+        {
+          "keys": "Cmd+K",
+          "action": "聚焦搜索栏"
+        },
+        {
+          "keys": "Cmd+D",
+          "action": "将当前页加入书签"
+        },
+        {
+          "keys": "Cmd+Shift+O",
+          "action": "书签管理器"
+        },
+        {
+          "keys": "Cmd+Shift+H",
+          "action": "历史记录"
+        },
+        {
+          "keys": "Cmd+[ / Cmd+]",
+          "action": "后退 / 前进"
+        }
+      ]
+    },
+    {
+      "name": "页面",
+      "items": [
+        {
+          "keys": "Cmd+R",
+          "action": "重新加载"
+        },
+        {
+          "keys": "Cmd+Shift+R",
+          "action": "硬性重新加载（忽略缓存）"
+        },
+        {
+          "keys": "Cmd+P",
+          "action": "打印"
+        },
+        {
+          "keys": "Cmd+S",
+          "action": "保存页面"
+        },
+        {
+          "keys": "Cmd+F",
+          "action": "在页面中查找"
+        },
+        {
+          "keys": "Cmd+G / Cmd+Shift+G",
+          "action": "查找下一个 / 上一个"
+        },
+        {
+          "keys": "Cmd+= / Cmd+- / Cmd+0",
+          "action": "放大 / 缩小 / 重置缩放"
+        },
+        {
+          "keys": "Cmd+Option+I",
+          "action": "开发者工具"
+        },
+        {
+          "keys": "Space / Shift+Space",
+          "action": "向下 / 向上翻页"
+        }
+      ]
+    }
+  ]
+}

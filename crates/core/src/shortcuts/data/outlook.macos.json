@@ -1,0 +1,53 @@
+{
+  "app": {
+    "exe": [
+      "Microsoft Outlook"
+    ],
+    "name": "Microsoft Outlook"
+  },
+  "os": "darwin",
+  "groups": [
+    {
+      "name": "邮件",
+      "items": [
+        {
+          "keys": "Cmd+N",
+          "action": "新建邮件"
+        },
+        {
+          "keys": "Cmd+R",
+          "action": "回复"
+        },
+        {
+          "keys": "Cmd+Shift+R",
+          "action": "全部回复"
+        },
+        {
+          "keys": "Cmd+Shift+F",
+          "action": "转发"
+        },
+        {
+          "keys": "Cmd+S",
+          "action": "保存草稿"
+        },
+        {
+          "keys": "Cmd+F",
+          "action": "搜索"
+        }
+      ]
+    },
+    {
+      "name": "切换视图",
+      "items": [
+        {
+          "keys": "Cmd+1 / Cmd+2 / Cmd+3 / Cmd+4",
+          "action": "邮件 / 日历 / 联系人 / 任务"
+        },
+        {
+          "keys": "Cmd+Shift+A",
+          "action": "新建约会"
+        }
+      ]
+    }
+  ]
+}

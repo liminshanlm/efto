@@ -1,46 +1,122 @@
 {
   "app": {
-    "exe": ["idea64.exe", "idea.exe"],
+    "exe": [
+      "idea64.exe",
+      "idea.exe"
+    ],
     "name": "JetBrains IntelliJ IDEA"
   },
+  "os": "win32",
   "groups": [
     {
       "name": "搜索与导航",
       "items": [
-        { "keys": "Shift+Shift", "action": "搜索到处" },
-        { "keys": "Ctrl+Shift+A", "action": "查找操作" },
-        { "keys": "Ctrl+N", "action": "查找类" },
-        { "keys": "Ctrl+Shift+N", "action": "查找文件" },
-        { "keys": "Ctrl+E", "action": "最近打开的文件" },
-        { "keys": "Ctrl+B", "action": "跳转到声明" },
-        { "keys": "Ctrl+Alt+B", "action": "跳转到实现" },
-        { "keys": "Alt+F7", "action": "查找用法" },
-        { "keys": "Ctrl+Shift+F", "action": "在路径中查找" },
-        { "keys": "Ctrl+Shift+R", "action": "在路径中替换" }
+        {
+          "keys": "Shift+Shift",
+          "action": "搜索到处"
+        },
+        {
+          "keys": "Ctrl+Shift+A",
+          "action": "查找操作"
+        },
+        {
+          "keys": "Ctrl+N",
+          "action": "查找类"
+        },
+        {
+          "keys": "Ctrl+Shift+N",
+          "action": "查找文件"
+        },
+        {
+          "keys": "Ctrl+E",
+          "action": "最近打开的文件"
+        },
+        {
+          "keys": "Ctrl+B",
+          "action": "跳转到声明"
+        },
+        {
+          "keys": "Ctrl+Alt+B",
+          "action": "跳转到实现"
+        },
+        {
+          "keys": "Alt+F7",
+          "action": "查找用法"
+        },
+        {
+          "keys": "Ctrl+Shift+F",
+          "action": "在路径中查找"
+        },
+        {
+          "keys": "Ctrl+Shift+R",
+          "action": "在路径中替换"
+        }
       ]
     },
     {
       "name": "编辑",
       "items": [
-        { "keys": "Ctrl+/", "action": "注释 / 取消注释行" },
-        { "keys": "Ctrl+Shift+/", "action": "注释 / 取消注释块" },
-        { "keys": "Ctrl+Alt+L", "action": "格式化代码" },
-        { "keys": "Ctrl+D", "action": "复制当前行" },
-        { "keys": "Ctrl+Y", "action": "删除当前行" },
-        { "keys": "Shift+F6", "action": "重命名" },
-        { "keys": "F5", "action": "复制类 / 文件" },
-        { "keys": "Alt+Enter", "action": "显示快速修复与意图操作" }
+        {
+          "keys": "Ctrl+/",
+          "action": "注释 / 取消注释行"
+        },
+        {
+          "keys": "Ctrl+Shift+/",
+          "action": "注释 / 取消注释块"
+        },
+        {
+          "keys": "Ctrl+Alt+L",
+          "action": "格式化代码"
+        },
+        {
+          "keys": "Ctrl+D",
+          "action": "复制当前行"
+        },
+        {
+          "keys": "Ctrl+Y",
+          "action": "删除当前行"
+        },
+        {
+          "keys": "Shift+F6",
+          "action": "重命名"
+        },
+        {
+          "keys": "F5",
+          "action": "复制类 / 文件"
+        },
+        {
+          "keys": "Alt+Enter",
+          "action": "显示快速修复与意图操作"
+        }
       ]
     },
     {
       "name": "运行与调试",
       "items": [
-        { "keys": "Ctrl+F9", "action": "构建项目" },
-        { "keys": "Shift+F10", "action": "运行" },
-        { "keys": "Shift+F9", "action": "调试" },
-        { "keys": "Ctrl+Shift+F10", "action": "运行当前上下文配置" },
-        { "keys": "F8", "action": "单步跳过" },
-        { "keys": "F7", "action": "单步进入" }
+        {
+          "keys": "Ctrl+F9",
+          "action": "构建项目"
+        },
+        {
+          "keys": "Shift+F10",
+          "action": "运行"
+        },
+        {
+          "keys": "Shift+F9",
+          "action": "调试"
+        },
+        {
+          "keys": "Ctrl+Shift+F10",
+          "action": "运行当前上下文配置"
+        },
+        {
+          "keys": "F8",
+          "action": "单步跳过"
+        },
+        {
+          "keys": "F7",
+          "action": "单步进入"
+        }
       ]
     }
   ]

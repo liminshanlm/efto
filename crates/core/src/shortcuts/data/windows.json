@@ -1,53 +1,149 @@
 {
   "app": {
-    "exe": ["explorer.exe"],
+    "exe": [
+      "explorer.exe"
+    ],
     "name": "Windows / 文件资源管理器"
   },
+  "os": "win32",
   "groups": [
     {
       "name": "系统",
       "items": [
-        { "keys": "Win", "action": "打开开始菜单" },
-        { "keys": "Win+D", "action": "显示 / 隐藏桌面" },
-        { "keys": "Win+E", "action": "打开文件资源管理器" },
-        { "keys": "Win+I", "action": "打开设置" },
-        { "keys": "Win+L", "action": "锁定电脑" },
-        { "keys": "Win+R", "action": "打开“运行”对话框" },
-        { "keys": "Win+S", "action": "打开系统搜索" },
-        { "keys": "Win+Tab", "action": "打开任务视图" },
-        { "keys": "Win+V", "action": "打开剪贴板历史" },
-        { "keys": "Alt+Tab", "action": "切换窗口" },
-        { "keys": "Alt+F4", "action": "关闭当前窗口" },
-        { "keys": "Ctrl+Shift+Esc", "action": "打开任务管理器" },
-        { "keys": "Win+Shift+S", "action": "屏幕截图" }
+        {
+          "keys": "Win",
+          "action": "打开开始菜单"
+        },
+        {
+          "keys": "Win+D",
+          "action": "显示 / 隐藏桌面"
+        },
+        {
+          "keys": "Win+E",
+          "action": "打开文件资源管理器"
+        },
+        {
+          "keys": "Win+I",
+          "action": "打开设置"
+        },
+        {
+          "keys": "Win+L",
+          "action": "锁定电脑"
+        },
+        {
+          "keys": "Win+R",
+          "action": "打开“运行”对话框"
+        },
+        {
+          "keys": "Win+S",
+          "action": "打开系统搜索"
+        },
+        {
+          "keys": "Win+Tab",
+          "action": "打开任务视图"
+        },
+        {
+          "keys": "Win+V",
+          "action": "打开剪贴板历史"
+        },
+        {
+          "keys": "Alt+Tab",
+          "action": "切换窗口"
+        },
+        {
+          "keys": "Alt+F4",
+          "action": "关闭当前窗口"
+        },
+        {
+          "keys": "Ctrl+Shift+Esc",
+          "action": "打开任务管理器"
+        },
+        {
+          "keys": "Win+Shift+S",
+          "action": "屏幕截图"
+        }
       ]
     },
     {
       "name": "窗口与虚拟桌面",
       "items": [
-        { "keys": "Win+←/→", "action": "贴靠到屏幕左 / 右半屏" },
-        { "keys": "Win+↑", "action": "最大化窗口" },
-        { "keys": "Win+↓", "action": "还原 / 最小化窗口" },
-        { "keys": "Win+Ctrl+D", "action": "新建虚拟桌面" },
-        { "keys": "Win+Ctrl+←/→", "action": "切换虚拟桌面" },
-        { "keys": "Win+Ctrl+F4", "action": "关闭当前虚拟桌面" },
-        { "keys": "Win+1..9", "action": "启动 / 切换任务栏第 N 个应用" },
-        { "keys": "Win+Shift+1..9", "action": "以新实例打开任务栏第 N 个应用" }
+        {
+          "keys": "Win+←/→",
+          "action": "贴靠到屏幕左 / 右半屏"
+        },
+        {
+          "keys": "Win+↑",
+          "action": "最大化窗口"
+        },
+        {
+          "keys": "Win+↓",
+          "action": "还原 / 最小化窗口"
+        },
+        {
+          "keys": "Win+Ctrl+D",
+          "action": "新建虚拟桌面"
+        },
+        {
+          "keys": "Win+Ctrl+←/→",
+          "action": "切换虚拟桌面"
+        },
+        {
+          "keys": "Win+Ctrl+F4",
+          "action": "关闭当前虚拟桌面"
+        },
+        {
+          "keys": "Win+1..9",
+          "action": "启动 / 切换任务栏第 N 个应用"
+        },
+        {
+          "keys": "Win+Shift+1..9",
+          "action": "以新实例打开任务栏第 N 个应用"
+        }
       ]
     },
     {
       "name": "文件资源管理器",
       "items": [
-        { "keys": "Ctrl+N", "action": "新建窗口" },
-        { "keys": "Ctrl+W", "action": "关闭当前窗口" },
-        { "keys": "Ctrl+Shift+N", "action": "新建文件夹" },
-        { "keys": "Alt+↑", "action": "返回上一级" },
-        { "keys": "Alt+←/→", "action": "后退 / 前进" },
-        { "keys": "Backspace", "action": "返回上一级" },
-        { "keys": "F2", "action": "重命名" },
-        { "keys": "F5", "action": "刷新" },
-        { "keys": "Alt+Enter", "action": "打开属性" },
-        { "keys": "Ctrl+Shift+E", "action": "展开到当前文件夹的导航树" }
+        {
+          "keys": "Ctrl+N",
+          "action": "新建窗口"
+        },
+        {
+          "keys": "Ctrl+W",
+          "action": "关闭当前窗口"
+        },
+        {
+          "keys": "Ctrl+Shift+N",
+          "action": "新建文件夹"
+        },
+        {
+          "keys": "Alt+↑",
+          "action": "返回上一级"
+        },
+        {
+          "keys": "Alt+←/→",
+          "action": "后退 / 前进"
+        },
+        {
+          "keys": "Backspace",
+          "action": "返回上一级"
+        },
+        {
+          "keys": "F2",
+          "action": "重命名"
+        },
+        {
+          "keys": "F5",
+          "action": "刷新"
+        },
+        {
+          "keys": "Alt+Enter",
+          "action": "打开属性"
+        },
+        {
+          "keys": "Ctrl+Shift+E",
+          "action": "展开到当前文件夹的导航树"
+        }
       ]
     }
   ]

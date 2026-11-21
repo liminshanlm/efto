@@ -1,50 +1,138 @@
 {
   "app": {
-    "exe": ["code.exe", "code - insiders.exe"],
+    "exe": [
+      "code.exe",
+      "code - insiders.exe"
+    ],
     "name": "Visual Studio Code"
   },
+  "os": "win32",
   "groups": [
     {
       "name": "命令与导航",
       "items": [
-        { "keys": "Ctrl+Shift+P", "action": "打开命令面板" },
-        { "keys": "Ctrl+P", "action": "快速打开文件" },
-        { "keys": "Ctrl+G", "action": "跳转到行" },
-        { "keys": "Ctrl+Shift+O", "action": "跳转到符号" },
-        { "keys": "Ctrl+Tab", "action": "切换编辑器" },
-        { "keys": "Ctrl+Shift+E", "action": "显示资源管理器" },
-        { "keys": "Ctrl+Shift+F", "action": "在文件中搜索" },
-        { "keys": "Ctrl+Shift+G", "action": "显示源代码管理" },
-        { "keys": "Ctrl+Shift+D", "action": "显示运行和调试" },
-        { "keys": "Ctrl+B", "action": "显示 / 隐藏侧边栏" },
-        { "keys": "Ctrl+`", "action": "显示 / 隐藏终端" }
+        {
+          "keys": "Ctrl+Shift+P",
+          "action": "打开命令面板"
+        },
+        {
+          "keys": "Ctrl+P",
+          "action": "快速打开文件"
+        },
+        {
+          "keys": "Ctrl+G",
+          "action": "跳转到行"
+        },
+        {
+          "keys": "Ctrl+Shift+O",
+          "action": "跳转到符号"
+        },
+        {
+          "keys": "Ctrl+Tab",
+          "action": "切换编辑器"
+        },
+        {
+          "keys": "Ctrl+Shift+E",
+          "action": "显示资源管理器"
+        },
+        {
+          "keys": "Ctrl+Shift+F",
+          "action": "在文件中搜索"
+        },
+        {
+          "keys": "Ctrl+Shift+G",
+          "action": "显示源代码管理"
+        },
+        {
+          "keys": "Ctrl+Shift+D",
+          "action": "显示运行和调试"
+        },
+        {
+          "keys": "Ctrl+B",
+          "action": "显示 / 隐藏侧边栏"
+        },
+        {
+          "keys": "Ctrl+`",
+          "action": "显示 / 隐藏终端"
+        }
       ]
     },
     {
       "name": "编辑",
       "items": [
-        { "keys": "Ctrl+/", "action": "切换行注释" },
-        { "keys": "Shift+Alt+A", "action": "切换块注释" },
-        { "keys": "Alt+↑", "action": "上移当前行" },
-        { "keys": "Alt+↓", "action": "下移当前行" },
-        { "keys": "Shift+Alt+↑", "action": "向上复制当前行" },
-        { "keys": "Shift+Alt+↓", "action": "向下复制当前行" },
-        { "keys": "Ctrl+Shift+K", "action": "删除当前行" },
-        { "keys": "Ctrl+D", "action": "选中下一个相同项" },
-        { "keys": "Ctrl+Shift+L", "action": "选中所有相同项" },
-        { "keys": "F2", "action": "重命名符号" },
-        { "keys": "Ctrl+K Ctrl+S", "action": "打开键盘快捷方式" }
+        {
+          "keys": "Ctrl+/",
+          "action": "切换行注释"
+        },
+        {
+          "keys": "Shift+Alt+A",
+          "action": "切换块注释"
+        },
+        {
+          "keys": "Alt+↑",
+          "action": "上移当前行"
+        },
+        {
+          "keys": "Alt+↓",
+          "action": "下移当前行"
+        },
+        {
+          "keys": "Shift+Alt+↑",
+          "action": "向上复制当前行"
+        },
+        {
+          "keys": "Shift+Alt+↓",
+          "action": "向下复制当前行"
+        },
+        {
+          "keys": "Ctrl+Shift+K",
+          "action": "删除当前行"
+        },
+        {
+          "keys": "Ctrl+D",
+          "action": "选中下一个相同项"
+        },
+        {
+          "keys": "Ctrl+Shift+L",
+          "action": "选中所有相同项"
+        },
+        {
+          "keys": "F2",
+          "action": "重命名符号"
+        },
+        {
+          "keys": "Ctrl+K Ctrl+S",
+          "action": "打开键盘快捷方式"
+        }
       ]
     },
     {
       "name": "调试",
       "items": [
-        { "keys": "F5", "action": "启动 / 继续调试" },
-        { "keys": "Shift+F5", "action": "停止调试" },
-        { "keys": "F9", "action": "切换断点" },
-        { "keys": "F10", "action": "单步跳过" },
-        { "keys": "F11", "action": "单步进入" },
-        { "keys": "Shift+F11", "action": "单步跳出" }
+        {
+          "keys": "F5",
+          "action": "启动 / 继续调试"
+        },
+        {
+          "keys": "Shift+F5",
+          "action": "停止调试"
+        },
+        {
+          "keys": "F9",
+          "action": "切换断点"
+        },
+        {
+          "keys": "F10",
+          "action": "单步跳过"
+        },
+        {
+          "keys": "F11",
+          "action": "单步进入"
+        },
+        {
+          "keys": "Shift+F11",
+          "action": "单步跳出"
+        }
       ]
     }
   ]

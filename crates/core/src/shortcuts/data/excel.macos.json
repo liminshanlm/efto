@@ -1,0 +1,74 @@
+{
+  "app": {
+    "exe": [
+      "Microsoft Excel"
+    ],
+    "name": "Microsoft Excel"
+  },
+  "os": "darwin",
+  "groups": [
+    {
+      "name": "文件与编辑",
+      "items": [
+        {
+          "keys": "Cmd+N / Cmd+O / Cmd+S",
+          "action": "新建 / 打开 / 保存"
+        },
+        {
+          "keys": "Cmd+P",
+          "action": "打印"
+        },
+        {
+          "keys": "Cmd+W",
+          "action": "关闭工作簿"
+        },
+        {
+          "keys": "Cmd+Z / Cmd+Shift+Z",
+          "action": "撤销 / 重做"
+        },
+        {
+          "keys": "Cmd+A / Cmd+X / Cmd+C / Cmd+V",
+          "action": "全选 / 剪切 / 拷贝 / 粘贴"
+        },
+        {
+          "keys": "Cmd+F / Cmd+H",
+          "action": "查找 / 替换"
+        },
+        {
+          "keys": "Cmd+K",
+          "action": "插入超链接…"
+        },
+        {
+          "keys": "Cmd+;",
+          "action": "插入当前日期"
+        },
+        {
+          "keys": "F4",
+          "action": "重复上一步操作",
+          "note": "需配合 fn 键"
+        }
+      ]
+    },
+    {
+      "name": "单元格与行",
+      "items": [
+        {
+          "keys": "Cmd+1",
+          "action": "设置单元格格式…"
+        },
+        {
+          "keys": "Cmd+Shift+= / Cmd+-",
+          "action": "插入 / 删除单元格"
+        },
+        {
+          "keys": "Cmd+9 / Cmd+Shift+9",
+          "action": "隐藏行 / 取消隐藏行"
+        },
+        {
+          "keys": "Cmd+B / Cmd+I / Cmd+U",
+          "action": "加粗 / 斜体 / 下划线"
+        }
+      ]
+    }
+  ]
+}

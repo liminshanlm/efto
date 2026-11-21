@@ -1,0 +1,101 @@
+{
+  "app": {
+    "exe": [
+      "Adobe Photoshop",
+      "Adobe Photoshop 2025",
+      "Adobe Photoshop 2024",
+      "Adobe Photoshop 2023"
+    ],
+    "name": "Adobe Photoshop"
+  },
+  "os": "darwin",
+  "groups": [
+    {
+      "name": "文件与编辑",
+      "items": [
+        {
+          "keys": "Cmd+N / Cmd+O / Cmd+S",
+          "action": "新建 / 打开 / 保存"
+        },
+        {
+          "keys": "Cmd+Shift+S",
+          "action": "存储为…"
+        },
+        {
+          "keys": "Cmd+W",
+          "action": "关闭文档"
+        },
+        {
+          "keys": "Cmd+Z / Cmd+Shift+Z",
+          "action": "重做 / 还原（单步）"
+        },
+        {
+          "keys": "Option+Cmd+Z",
+          "action": "后退一步"
+        },
+        {
+          "keys": "Cmd+A / Cmd+D",
+          "action": "全选 / 取消选择"
+        },
+        {
+          "keys": "Cmd+Shift+D",
+          "action": "重新选择"
+        },
+        {
+          "keys": "Cmd+Shift+I",
+          "action": "反选"
+        },
+        {
+          "keys": "Cmd+X / Cmd+C / Cmd+V",
+          "action": "剪切 / 拷贝 / 粘贴"
+        }
+      ]
+    },
+    {
+      "name": "图层与变换",
+      "items": [
+        {
+          "keys": "Cmd+T",
+          "action": "自由变换"
+        },
+        {
+          "keys": "Cmd+Shift+N",
+          "action": "新建图层…"
+        },
+        {
+          "keys": "Cmd+J",
+          "action": "通过拷贝新建图层"
+        },
+        {
+          "keys": "Cmd+E",
+          "action": "向下合并"
+        },
+        {
+          "keys": "Cmd+Shift+E",
+          "action": "合并可见图层"
+        }
+      ]
+    },
+    {
+      "name": "工具与视图",
+      "items": [
+        {
+          "keys": "D / X",
+          "action": "默认前景背景色 / 交换前景背景色"
+        },
+        {
+          "keys": "[ / ]",
+          "action": "减小 / 增大画笔"
+        },
+        {
+          "keys": "Cmd+R",
+          "action": "显示 / 隐藏标尺"
+        },
+        {
+          "keys": "Cmd+= / Cmd+- / Cmd+0",
+          "action": "放大 / 缩小 / 适合屏幕"
+        }
+      ]
+    }
+  ]
+}

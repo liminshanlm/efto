@@ -79,10 +79,10 @@ Built-in sources appear only when the input matches their rules, so they never h
 
 > On macOS today: search/launch apps, calculator & time, command source, plugins, clipboard
 > history, snippets, lock screen, window tiling/half-screen/minimize/restore, Universal Actions,
-> file buffer, system commands (sleep/restart/log out/empty trash/screensaver), file search
-> (Spotlight), System Settings search, the hosts plugin, and window list/focus. Window tiling and
-> keyboard simulation need Accessibility in Settings → Permissions; screenshot and the shortcut
-> guide are not yet available.
+> file buffer, the shortcut guide, system commands (sleep/restart/log out/empty trash/
+> screensaver), file search (Spotlight), System Settings search, the hosts plugin, and window
+> list/focus. Window tiling and keyboard simulation need Accessibility in Settings → Permissions;
+> screenshot is not yet available.
 
 The default panel (empty input) contains "Recent" and "Favorite tools":
 

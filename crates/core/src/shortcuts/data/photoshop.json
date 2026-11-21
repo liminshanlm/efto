@@ -1,50 +1,137 @@
 {
   "app": {
-    "exe": ["photoshop.exe"],
+    "exe": [
+      "photoshop.exe"
+    ],
     "name": "Adobe Photoshop"
   },
+  "os": "win32",
   "groups": [
     {
       "name": "文件",
       "items": [
-        { "keys": "Ctrl+N", "action": "新建文档" },
-        { "keys": "Ctrl+O", "action": "打开文档" },
-        { "keys": "Ctrl+S", "action": "保存" },
-        { "keys": "Ctrl+Shift+S", "action": "另存为" },
-        { "keys": "Ctrl+Alt+S", "action": "存储副本" },
-        { "keys": "Ctrl+Shift+E", "action": "合并可见图层并导出" }
+        {
+          "keys": "Ctrl+N",
+          "action": "新建文档"
+        },
+        {
+          "keys": "Ctrl+O",
+          "action": "打开文档"
+        },
+        {
+          "keys": "Ctrl+S",
+          "action": "保存"
+        },
+        {
+          "keys": "Ctrl+Shift+S",
+          "action": "另存为"
+        },
+        {
+          "keys": "Ctrl+Alt+S",
+          "action": "存储副本"
+        },
+        {
+          "keys": "Ctrl+Shift+E",
+          "action": "合并可见图层并导出"
+        }
       ]
     },
     {
       "name": "编辑与图层",
       "items": [
-        { "keys": "Ctrl+Z", "action": "撤销" },
-        { "keys": "Ctrl+Shift+Z", "action": "重做" },
-        { "keys": "Ctrl+J", "action": "复制当前图层" },
-        { "keys": "Ctrl+Shift+N", "action": "新建图层" },
-        { "keys": "Ctrl+G", "action": "编组图层" },
-        { "keys": "Ctrl+E", "action": "合并图层" },
-        { "keys": "Ctrl+T", "action": "自由变换" },
-        { "keys": "Ctrl+Alt+T", "action": "复制并变换" },
-        { "keys": "Ctrl+D", "action": "取消选区" },
-        { "keys": "Ctrl+Shift+D", "action": "重新选择" },
-        { "keys": "Ctrl+I", "action": "反相" }
+        {
+          "keys": "Ctrl+Z",
+          "action": "撤销"
+        },
+        {
+          "keys": "Ctrl+Shift+Z",
+          "action": "重做"
+        },
+        {
+          "keys": "Ctrl+J",
+          "action": "复制当前图层"
+        },
+        {
+          "keys": "Ctrl+Shift+N",
+          "action": "新建图层"
+        },
+        {
+          "keys": "Ctrl+G",
+          "action": "编组图层"
+        },
+        {
+          "keys": "Ctrl+E",
+          "action": "合并图层"
+        },
+        {
+          "keys": "Ctrl+T",
+          "action": "自由变换"
+        },
+        {
+          "keys": "Ctrl+Alt+T",
+          "action": "复制并变换"
+        },
+        {
+          "keys": "Ctrl+D",
+          "action": "取消选区"
+        },
+        {
+          "keys": "Ctrl+Shift+D",
+          "action": "重新选择"
+        },
+        {
+          "keys": "Ctrl+I",
+          "action": "反相"
+        }
       ]
     },
     {
       "name": "工具",
       "items": [
-        { "keys": "V", "action": "移动工具" },
-        { "keys": "M", "action": "选框工具" },
-        { "keys": "L", "action": "套索工具" },
-        { "keys": "W", "action": "快速选择工具" },
-        { "keys": "B", "action": "画笔工具" },
-        { "keys": "E", "action": "橡皮擦工具" },
-        { "keys": "T", "action": "文字工具" },
-        { "keys": "D", "action": "恢复默认前景 / 背景色" },
-        { "keys": "X", "action": "交换前景色与背景色" },
-        { "keys": "[", "action": "减小笔刷" },
-        { "keys": "]", "action": "增大笔刷" }
+        {
+          "keys": "V",
+          "action": "移动工具"
+        },
+        {
+          "keys": "M",
+          "action": "选框工具"
+        },
+        {
+          "keys": "L",
+          "action": "套索工具"
+        },
+        {
+          "keys": "W",
+          "action": "快速选择工具"
+        },
+        {
+          "keys": "B",
+          "action": "画笔工具"
+        },
+        {
+          "keys": "E",
+          "action": "橡皮擦工具"
+        },
+        {
+          "keys": "T",
+          "action": "文字工具"
+        },
+        {
+          "keys": "D",
+          "action": "恢复默认前景 / 背景色"
+        },
+        {
+          "keys": "X",
+          "action": "交换前景色与背景色"
+        },
+        {
+          "keys": "[",
+          "action": "减小笔刷"
+        },
+        {
+          "keys": "]",
+          "action": "增大笔刷"
+        }
       ]
     }
   ]

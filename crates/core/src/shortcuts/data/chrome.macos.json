@@ -1,0 +1,143 @@
+{
+  "app": {
+    "exe": [
+      "Google Chrome",
+      "Chrome"
+    ],
+    "name": "Google Chrome"
+  },
+  "os": "darwin",
+  "groups": [
+    {
+      "name": "标签页与窗口",
+      "items": [
+        {
+          "keys": "Cmd+T",
+          "action": "新建标签页"
+        },
+        {
+          "keys": "Cmd+W",
+          "action": "关闭标签页"
+        },
+        {
+          "keys": "Cmd+Shift+W",
+          "action": "关闭窗口"
+        },
+        {
+          "keys": "Cmd+Shift+T",
+          "action": "重新打开已关闭的标签页"
+        },
+        {
+          "keys": "Cmd+1 … Cmd+8",
+          "action": "切换到第 N 个标签页"
+        },
+        {
+          "keys": "Cmd+9",
+          "action": "切换到最后一个标签页"
+        },
+        {
+          "keys": "Ctrl+Tab / Ctrl+Shift+Tab",
+          "action": "下一个 / 上一个标签页"
+        },
+        {
+          "keys": "Cmd+N",
+          "action": "新建窗口"
+        },
+        {
+          "keys": "Cmd+Shift+N",
+          "action": "新建无痕窗口"
+        },
+        {
+          "keys": "Cmd+Shift+D",
+          "action": "将所有标签页加入书签"
+        }
+      ]
+    },
+    {
+      "name": "地址栏与书签",
+      "items": [
+        {
+          "keys": "Cmd+L",
+          "action": "聚焦地址栏"
+        },
+        {
+          "keys": "Cmd+D",
+          "action": "将当前页加入书签"
+        },
+        {
+          "keys": "Cmd+Shift+B",
+          "action": "显示 / 隐藏书签栏"
+        },
+        {
+          "keys": "Cmd+Shift+O",
+          "action": "书签管理器"
+        },
+        {
+          "keys": "Cmd+Shift+J",
+          "action": "下载内容"
+        },
+        {
+          "keys": "Cmd+[ / Cmd+]",
+          "action": "后退 / 前进"
+        }
+      ]
+    },
+    {
+      "name": "页面",
+      "items": [
+        {
+          "keys": "Cmd+R",
+          "action": "重新加载"
+        },
+        {
+          "keys": "Cmd+Shift+R",
+          "action": "硬性重新加载（忽略缓存）"
+        },
+        {
+          "keys": "Cmd+P",
+          "action": "打印"
+        },
+        {
+          "keys": "Cmd+S",
+          "action": "保存网页"
+        },
+        {
+          "keys": "Cmd+F",
+          "action": "在页面中查找"
+        },
+        {
+          "keys": "Cmd+G / Cmd+Shift+G",
+          "action": "查找下一个 / 上一个"
+        },
+        {
+          "keys": "Cmd+= / Cmd+- / Cmd+0",
+          "action": "放大 / 缩小 / 重置缩放"
+        },
+        {
+          "keys": "Cmd+U",
+          "action": "查看网页源代码"
+        },
+        {
+          "keys": "Cmd+Y",
+          "action": "历史记录"
+        },
+        {
+          "keys": "Space / Shift+Space",
+          "action": "向下 / 向上翻页"
+        },
+        {
+          "keys": "Cmd+Option+I",
+          "action": "开发者工具"
+        },
+        {
+          "keys": "Cmd+Option+J",
+          "action": "开发者工具控制台"
+        },
+        {
+          "keys": "Cmd+Shift+Delete",
+          "action": "清除浏览数据…"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "app": {
+    "exe": [
+      "Code",
+      "Visual Studio Code"
+    ],
+    "name": "Visual Studio Code"
+  },
+  "os": "darwin",
+  "groups": [
+    {
+      "name": "全局",
+      "items": [
+        {
+          "keys": "Cmd+Shift+P",
+          "action": "命令面板"
+        },
+        {
+          "keys": "Cmd+P",
+          "action": "转到文件…"
+        },
+        {
+          "keys": "Cmd+Shift+N",
+          "action": "新建窗口"
+        },
+        {
+          "keys": "Cmd+W",
+          "action": "关闭编辑器"
+        },
+        {
+          "keys": "Cmd+,",
+          "action": "设置"
+        },
+        {
+          "keys": "Cmd+K Cmd+S",
+          "action": "键盘快捷方式"
+        },
+        {
+          "keys": "Cmd+Shift+X",
+          "action": "扩展面板"
+        },
+        {
+          "keys": "Cmd+B",
+          "action": "显示 / 隐藏主侧栏"
+        },
+        {
+          "keys": "Cmd+\\",
+          "action": "拆分编辑器"
+        }
+      ]
+    },
+    {
+      "name": "视图与终端",
+      "items": [
+        {
+          "keys": "Cmd+Shift+E",
+          "action": "资源管理器"
+        },
+        {
+          "keys": "Cmd+Shift+F",
+          "action": "搜索"
+        },
+        {
+          "keys": "Cmd+Shift+G",
+          "action": "源代码管理"
+        },
+        {
+          "keys": "Cmd+Shift+D",
+          "action": "运行和调试"
+        },
+        {
+          "keys": "Cmd+`",
+          "action": "切换终端"
+        },
+        {
+          "keys": "Cmd+Shift+`",
+          "action": "新建终端"
+        },
+        {
+          "keys": "Cmd+= / Cmd+-",
+          "action": "放大 / 缩小"
+        }
+      ]
+    },
+    {
+      "name": "编辑",
+      "items": [
+        {
+          "keys": "Cmd+Z / Cmd+Shift+Z",
+          "action": "撤销 / 重做"
+        },
+        {
+          "keys": "Cmd+/",
+          "action": "切换行注释"
+        },
+        {
+          "keys": "Option+Up / Option+Down",
+          "action": "上移 / 下移当前行"
+        },
+        {
+          "keys": "Shift+Option+Up / Shift+Option+Down",
+          "action": "向上 / 向下复制当前行"
+        },
+        {
+          "keys": "Cmd+Shift+K",
+          "action": "删除当前行"
+        },
+        {
+          "keys": "Cmd+Enter / Cmd+Shift+Enter",
+          "action": "在下方 / 上方插入行"
+        },
+        {
+          "keys": "Cmd+D",
+          "action": "选择下一个匹配项"
+        },
+        {
+          "keys": "Cmd+Shift+L",
+          "action": "选择所有匹配项"
+        },
+        {
+          "keys": "Cmd+U",
+          "action": "撤销上一次光标操作"
+        },
+        {
+          "keys": "Cmd+Shift+\\",
+          "action": "跳转到匹配的括号"
+        }
+      ]
+    },
+    {
+      "name": "查找与导航",
+      "items": [
+        {
+          "keys": "Cmd+F / Cmd+H",
+          "action": "查找 / 替换"
+        },
+        {
+          "keys": "Cmd+G / Cmd+Shift+G",
+          "action": "查找下一个 / 上一个"
+        },
+        {
+          "keys": "Cmd+Left / Cmd+Right",
+          "action": "移到行首 / 行尾"
+        },
+        {
+          "keys": "Option+Left / Option+Right",
+          "action": "按词移动"
+        },
+        {
+          "keys": "F2",
+          "action": "重命名符号"
+        },
+        {
+          "keys": "Cmd+.",
+          "action": "快速修复"
+        },
+        {
+          "keys": "F12 / Shift+F12",
+          "action": "转到定义 / 查找所有引用"
+        },
+        {
+          "keys": "Option+F12",
+          "action": "速览定义"
+        }
+      ]
+    }
+  ]
+}

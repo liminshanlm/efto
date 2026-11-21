@@ -1,45 +1,117 @@
 {
   "app": {
-    "exe": ["powerpnt.exe"],
+    "exe": [
+      "powerpnt.exe"
+    ],
     "name": "Microsoft PowerPoint"
   },
+  "os": "win32",
   "groups": [
     {
       "name": "文件与放映",
       "items": [
-        { "keys": "Ctrl+N", "action": "新建演示文稿" },
-        { "keys": "Ctrl+O", "action": "打开演示文稿" },
-        { "keys": "Ctrl+S", "action": "保存" },
-        { "keys": "Ctrl+P", "action": "打印" },
-        { "keys": "F5", "action": "从头开始放映" },
-        { "keys": "Shift+F5", "action": "从当前页开始放映" },
-        { "keys": "Esc", "action": "结束放映" }
+        {
+          "keys": "Ctrl+N",
+          "action": "新建演示文稿"
+        },
+        {
+          "keys": "Ctrl+O",
+          "action": "打开演示文稿"
+        },
+        {
+          "keys": "Ctrl+S",
+          "action": "保存"
+        },
+        {
+          "keys": "Ctrl+P",
+          "action": "打印"
+        },
+        {
+          "keys": "F5",
+          "action": "从头开始放映"
+        },
+        {
+          "keys": "Shift+F5",
+          "action": "从当前页开始放映"
+        },
+        {
+          "keys": "Esc",
+          "action": "结束放映"
+        }
       ]
     },
     {
       "name": "编辑",
       "items": [
-        { "keys": "Ctrl+Z", "action": "撤销" },
-        { "keys": "Ctrl+Y", "action": "重做" },
-        { "keys": "Ctrl+C", "action": "复制" },
-        { "keys": "Ctrl+X", "action": "剪切" },
-        { "keys": "Ctrl+V", "action": "粘贴" },
-        { "keys": "Ctrl+Shift+C", "action": "复制格式" },
-        { "keys": "Ctrl+Shift+V", "action": "粘贴格式" },
-        { "keys": "Delete", "action": "删除选中对象" }
+        {
+          "keys": "Ctrl+Z",
+          "action": "撤销"
+        },
+        {
+          "keys": "Ctrl+Y",
+          "action": "重做"
+        },
+        {
+          "keys": "Ctrl+C",
+          "action": "复制"
+        },
+        {
+          "keys": "Ctrl+X",
+          "action": "剪切"
+        },
+        {
+          "keys": "Ctrl+V",
+          "action": "粘贴"
+        },
+        {
+          "keys": "Ctrl+Shift+C",
+          "action": "复制格式"
+        },
+        {
+          "keys": "Ctrl+Shift+V",
+          "action": "粘贴格式"
+        },
+        {
+          "keys": "Delete",
+          "action": "删除选中对象"
+        }
       ]
     },
     {
       "name": "幻灯片与对象",
       "items": [
-        { "keys": "Ctrl+M", "action": "新建幻灯片" },
-        { "keys": "Ctrl+D", "action": "复制选中对象 / 幻灯片" },
-        { "keys": "Alt+Shift+↑", "action": "上移幻灯片" },
-        { "keys": "Alt+Shift+↓", "action": "下移幻灯片" },
-        { "keys": "Ctrl+G", "action": "组合对象" },
-        { "keys": "Ctrl+Shift+G", "action": "取消组合" },
-        { "keys": "Tab", "action": "选择下一个对象" },
-        { "keys": "Ctrl+Shift+方向键", "action": "微调对象大小" }
+        {
+          "keys": "Ctrl+M",
+          "action": "新建幻灯片"
+        },
+        {
+          "keys": "Ctrl+D",
+          "action": "复制选中对象 / 幻灯片"
+        },
+        {
+          "keys": "Alt+Shift+↑",
+          "action": "上移幻灯片"
+        },
+        {
+          "keys": "Alt+Shift+↓",
+          "action": "下移幻灯片"
+        },
+        {
+          "keys": "Ctrl+G",
+          "action": "组合对象"
+        },
+        {
+          "keys": "Ctrl+Shift+G",
+          "action": "取消组合"
+        },
+        {
+          "keys": "Tab",
+          "action": "选择下一个对象"
+        },
+        {
+          "keys": "Ctrl+Shift+方向键",
+          "action": "微调对象大小"
+        }
       ]
     }
   ]

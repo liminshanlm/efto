@@ -1,0 +1,130 @@
+{
+  "app": {
+    "exe": [
+      "IntelliJ IDEA",
+      "idea",
+      "IntelliJ IDEA CE"
+    ],
+    "name": "IntelliJ IDEA"
+  },
+  "os": "darwin",
+  "groups": [
+    {
+      "name": "查找",
+      "items": [
+        {
+          "keys": "双击 Shift",
+          "action": "Search Everywhere"
+        },
+        {
+          "keys": "Cmd+Shift+A",
+          "action": "查找操作…"
+        },
+        {
+          "keys": "Cmd+O",
+          "action": "转到类…"
+        },
+        {
+          "keys": "Cmd+Shift+O",
+          "action": "转到文件…"
+        },
+        {
+          "keys": "Cmd+Option+O",
+          "action": "转到符号…"
+        },
+        {
+          "keys": "Cmd+E",
+          "action": "最近使用的文件"
+        },
+        {
+          "keys": "Cmd+F / Cmd+R",
+          "action": "查找 / 替换"
+        },
+        {
+          "keys": "Cmd+Shift+F / Cmd+Shift+R",
+          "action": "在路径中查找 / 替换"
+        }
+      ]
+    },
+    {
+      "name": "编辑",
+      "items": [
+        {
+          "keys": "Cmd+D",
+          "action": "复制当前行"
+        },
+        {
+          "keys": "Cmd+Y",
+          "action": "删除当前行"
+        },
+        {
+          "keys": "Cmd+/",
+          "action": "注释 / 取消注释"
+        },
+        {
+          "keys": "Cmd+Option+L",
+          "action": "格式化代码"
+        },
+        {
+          "keys": "Option+Enter",
+          "action": "显示意图操作 / 快速修复"
+        },
+        {
+          "keys": "F2 / Shift+F2",
+          "action": "下一个 / 上一个错误"
+        },
+        {
+          "keys": "Cmd+N",
+          "action": "生成代码…"
+        }
+      ]
+    },
+    {
+      "name": "导航与重构",
+      "items": [
+        {
+          "keys": "Cmd+B",
+          "action": "转到声明"
+        },
+        {
+          "keys": "Option+F7",
+          "action": "查找用法"
+        },
+        {
+          "keys": "Cmd+Option+Left / Cmd+Option+Right",
+          "action": "后退 / 前进"
+        },
+        {
+          "keys": "Shift+F6",
+          "action": "重命名"
+        },
+        {
+          "keys": "Ctrl+Option+Shift+T",
+          "action": "重构此（Refactor This）"
+        }
+      ]
+    },
+    {
+      "name": "运行与调试",
+      "items": [
+        {
+          "keys": "Ctrl+R",
+          "action": "运行",
+          "note": "macOS 键位是 Control，不是 Cmd"
+        },
+        {
+          "keys": "Ctrl+D",
+          "action": "调试"
+        },
+        {
+          "keys": "Ctrl+F2",
+          "action": "停止"
+        },
+        {
+          "keys": "F8 / F7 / Shift+F8",
+          "action": "步过 / 步入 / 步出"
+        }
+      ]
+    }
+  ]
+}
