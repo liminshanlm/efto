@@ -1455,3 +1455,16 @@ log:error 事件、线程回收），**全部通过、零报错**：
 - **没验证**：指南窗口实际展示与"识别唤起前的应用"命中链路（需 GUI 交互）；
   Office/Photoshop 等细节点位来自公开文档与使用经验，用户可在
   `~/.efto/shortcuts/<exe>.json` 覆盖修正（合并规则：同名分组按 keys、用户优先）。
+
+
+## 截图工具 macOS 捕获层（2026-11-21）
+
+- 实现：CGWindowListCreateImage + 位图上下文归一（RGBA 自顶向下）；坐标沿用
+  "虚拟桌面物理像素"口径（点 × 主屏 scale）；缺屏幕录制权限明确报错 + 触发授权引导。
+- **真机实测**（本机有屏幕录制权限）：整屏捕获非全黑、区域捕获 64×48 尺寸精确、
+  crop 正确、alpha 全 255；`mac_capture_errors_without_permission` 反向路径 skip。
+- 单测 app 144 / core 241 / jsrt 48 全绿；GUI 冒烟 `Ctrl+Alt+1 -> screenshot`，
+  mac 工具 7 项与 Windows 完全对齐。
+- **没验证**（人工清单新增）：截图交互全链路（框选/标注/复制/保存/钉图）与
+  长截图滚动拼接；混合缩放多屏的取景精度；CGWindowListCreateImage 已 deprecated
+  （macOS 14 仍工作），后续可换 ScreenCaptureKit。

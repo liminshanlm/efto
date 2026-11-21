@@ -190,10 +190,187 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Shot, S
     }
 }
 
-#[cfg(not(windows))]
+/// macOS 捕获层（CGWindowListCreateImage，C 接口）。
+///
+/// 坐标口径与 Windows 版一致：**虚拟桌面的物理像素**（全局坐标，原点在主屏左上、
+/// Y 向下）。CG 的全局显示坐标是"点"，按主屏 backing scale 换算成物理像素——
+/// 单屏/同缩放多屏精确；混合缩放多屏按主屏缩放统一采样（v1 取舍）。
+/// 10.15+ 捕获需要屏幕录制权限；缺权限时明确报错并触发一次系统授权引导，
+/// 不返回空白图（硬性约定 3）。
+#[cfg(target_os = "macos")]
+mod ffi {
+    #![allow(non_camel_case_types)]
+    use std::ffi::c_void;
+
+    pub type CGImageRef = *mut c_void;
+    pub type CGContextRef = *mut c_void;
+    pub type CGColorSpaceRef = *mut c_void;
+    pub type CGDisplayModeRef = *mut c_void;
+    pub type CGDirectDisplayID = u32;
+    pub type CGWindowID = u32;
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    pub struct CGPoint {
+        pub x: f64,
+        pub y: f64,
+    }
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    pub struct CGSize {
+        pub width: f64,
+        pub height: f64,
+    }
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    pub struct CGRect {
+        pub origin: CGPoint,
+        pub size: CGSize,
+    }
+
+    pub const kCGWindowListOptionOnScreenOnly: u32 = 1 << 0;
+    pub const kCGNullWindowID: CGWindowID = 0;
+    pub const kCGWindowImageDefault: u32 = 0;
+    /// 位图上下文的内存序：R、G、B、A（premultipliedLast + 32Big）
+    pub const BITMAP_RGBA: u32 = 1 | (4 << 12);
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        pub fn CGGetActiveDisplayList(max: u32, ids: *mut CGDirectDisplayID, count: *mut u32) -> i32;
+        pub fn CGDisplayBounds(id: CGDirectDisplayID) -> CGRect;
+        pub fn CGMainDisplayID() -> CGDirectDisplayID;
+        pub fn CGDisplayCopyDisplayMode(id: CGDirectDisplayID) -> CGDisplayModeRef;
+        pub fn CGDisplayModeGetPixelWidth(mode: CGDisplayModeRef) -> usize;
+        pub fn CGDisplayModeGetWidth(mode: CGDisplayModeRef) -> usize;
+        pub fn CGDisplayModeRelease(mode: CGDisplayModeRef);
+        pub fn CGWindowListCreateImage(
+            rect: CGRect,
+            option: u32,
+            window: CGWindowID,
+            opts: u32,
+        ) -> CGImageRef;
+        pub fn CGImageRelease(img: CGImageRef);
+        pub fn CGColorSpaceCreateDeviceRGB() -> CGColorSpaceRef;
+        pub fn CGColorSpaceRelease(space: CGColorSpaceRef);
+        pub fn CGBitmapContextCreate(
+            data: *mut u8,
+            w: usize,
+            h: usize,
+            bpc: usize,
+            bytes_per_row: usize,
+            space: CGColorSpaceRef,
+            bitmap_info: u32,
+        ) -> CGContextRef;
+        pub fn CGContextRelease(ctx: CGContextRef);
+        pub fn CGContextTranslateCTM(ctx: CGContextRef, tx: f64, ty: f64);
+        pub fn CGContextScaleCTM(ctx: CGContextRef, sx: f64, sy: f64);
+        pub fn CGContextDrawImage(ctx: CGContextRef, rect: CGRect, img: CGImageRef);
+    }
+}
+
+/// 主屏 backing scale（Retina 为 2.0）。CGDisplayMode 的 像素宽 / 点宽。
+#[cfg(target_os = "macos")]
+fn display_scale() -> f64 {
+    unsafe {
+        let mode = ffi::CGDisplayCopyDisplayMode(ffi::CGMainDisplayID());
+        if mode.is_null() {
+            return 1.0;
+        }
+        let pixel = ffi::CGDisplayModeGetPixelWidth(mode) as f64;
+        let point = ffi::CGDisplayModeGetWidth(mode) as f64;
+        ffi::CGDisplayModeRelease(mode);
+        if point > 0.0 && pixel > 0.0 {
+            (pixel / point).clamp(0.5, 4.0)
+        } else {
+            1.0
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Shot, String> {
+    let width = width.max(1);
+    let height = height.max(1);
+    if !crate::permissions::screen_recording_allowed() {
+        crate::permissions::request_screen_recording();
+        return Err(
+            "缺少屏幕录制（Screen Recording）权限：请在 系统设置 → 隐私与安全性 → 屏幕录制 中勾选 efto"
+                .into(),
+        );
+    }
+    let s = display_scale();
+    let rect = ffi::CGRect {
+        origin: ffi::CGPoint {
+            x: x as f64 / s,
+            y: y as f64 / s,
+        },
+        size: ffi::CGSize {
+            width: width as f64 / s,
+            height: height as f64 / s,
+        },
+    };
+    unsafe {
+        let img = ffi::CGWindowListCreateImage(
+            rect,
+            ffi::kCGWindowListOptionOnScreenOnly,
+            ffi::kCGNullWindowID,
+            ffi::kCGWindowImageDefault,
+        );
+        if img.is_null() {
+            return Err("屏幕捕获失败（CGWindowListCreateImage 返回空）".into());
+        }
+        let mut rgba = vec![0u8; (width * height * 4) as usize];
+        let space = ffi::CGColorSpaceCreateDeviceRGB();
+        let ctx = ffi::CGBitmapContextCreate(
+            rgba.as_mut_ptr(),
+            width as usize,
+            height as usize,
+            8,
+            width as usize * 4,
+            space,
+            ffi::BITMAP_RGBA,
+        );
+        if ctx.is_null() {
+            ffi::CGColorSpaceRelease(space);
+            ffi::CGImageRelease(img);
+            return Err("创建位图上下文失败".into());
+        }
+        // 位图上下文原点在左下；翻转成自顶向下（与 Windows 版同口径）
+        ffi::CGContextTranslateCTM(ctx, 0.0, height as f64);
+        ffi::CGContextScaleCTM(ctx, 1.0, -1.0);
+        // SAFETY: img 非空且由本函数持有；ctx 有效；目标矩形 = 整个缓冲区
+        ffi::CGContextDrawImage(
+            ctx,
+            ffi::CGRect {
+                origin: ffi::CGPoint { x: 0.0, y: 0.0 },
+                size: ffi::CGSize {
+                    width: width as f64,
+                    height: height as f64,
+                },
+            },
+            img,
+        );
+        ffi::CGContextRelease(ctx);
+        ffi::CGColorSpaceRelease(space);
+        ffi::CGImageRelease(img);
+        // 屏幕内容不透明；premultiplied 的 alpha 恒 255
+        for px in rgba.chunks_exact_mut(4) {
+            px[3] = 255;
+        }
+        Ok(Shot {
+            width,
+            height,
+            origin_x: x,
+            origin_y: y,
+            rgba,
+        })
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn capture_region(_x: i32, _y: i32, width: u32, height: u32) -> Result<Shot, String> {
     let _ = (width, height);
-    Err("截图仅支持 Windows".into())
+    Err("截图仅支持 Windows / macOS".into())
 }
 
 /// 捕获整个虚拟桌面（所有显示器拼成的矩形）。
@@ -243,9 +420,36 @@ pub fn capture_virtual_screen() -> Result<Shot, String> {
     capture_region(x, y, (right - x).max(1) as u32, (bottom - y).max(1) as u32)
 }
 
-#[cfg(not(windows))]
+/// macOS：所有活动显示器的包围盒（点）× 主屏缩放 = 虚拟桌面物理像素。
+#[cfg(target_os = "macos")]
 pub fn capture_virtual_screen() -> Result<Shot, String> {
-    Err("截图仅支持 Windows".into())
+    let mut ids = [0u32; 16];
+    let mut count = 0u32;
+    let status =
+        unsafe { ffi::CGGetActiveDisplayList(ids.len() as u32, ids.as_mut_ptr(), &mut count) };
+    if status != 0 || count == 0 {
+        return Err("无法读取显示器信息".into());
+    }
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for id in &ids[..count as usize] {
+        let b = unsafe { ffi::CGDisplayBounds(*id) };
+        min_x = min_x.min(b.origin.x);
+        min_y = min_y.min(b.origin.y);
+        max_x = max_x.max(b.origin.x + b.size.width);
+        max_y = max_y.max(b.origin.y + b.size.height);
+    }
+    let s = display_scale();
+    capture_region(
+        (min_x * s).round() as i32,
+        (min_y * s).round() as i32,
+        ((max_x - min_x) * s).round().max(1.0) as u32,
+        ((max_y - min_y) * s).round().max(1.0) as u32,
+    )
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+pub fn capture_virtual_screen() -> Result<Shot, String> {
+    Err("截图仅支持 Windows / macOS".into())
 }
 
 /// 估计两帧之间内容向上滚动的行数。
@@ -403,5 +607,41 @@ mod tests {
         let prev = frame(80, 200, 0);
         let next = frame(80, 200, 7_000);
         assert_eq!(scroll_delta(&prev, &next, 80, 200), None);
+    }
+
+    /// macOS 真机捕获：无屏幕录制权限时优雅 skip；有权限时断言尺寸/非全黑。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_capture_real_screen_or_skip() {
+        if !crate::permissions::screen_recording_allowed() {
+            println!("skip: 无屏幕录制权限，真机捕获未验证");
+            return;
+        }
+        let shot = capture_virtual_screen().expect("应能抓到屏幕");
+        assert!(shot.width > 0 && shot.height > 0);
+        assert_eq!(shot.rgba.len(), (shot.width * shot.height * 4) as usize);
+        assert!(
+            shot.rgba.chunks_exact(4).any(|px| px[..3] != [0, 0, 0]),
+            "全黑说明捕获没有内容"
+        );
+        assert!(shot.rgba.chunks_exact(4).all(|px| px[3] == 255), "屏幕内容应不透明");
+        // 区域捕获与整屏同口径：抓中间一小块，尺寸精确、origin 原样
+        let r = capture_region(shot.origin_x + 8, shot.origin_y + 8, 64, 48).expect("区域捕获");
+        assert_eq!((r.width, r.height), (64, 48));
+        assert_eq!(r.rgba.len(), 64 * 48 * 4);
+        let c = r.crop(0, 0, 32, 24).expect("裁剪");
+        assert_eq!((c.width(), c.height()), (32, 24));
+    }
+
+    /// 缺权限必须明确报错，绝不静默给空白图（硬性约定 3）。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_capture_errors_without_permission() {
+        if crate::permissions::screen_recording_allowed() {
+            println!("skip: 有权限，缺权限报错路径未验证");
+            return;
+        }
+        let e = capture_virtual_screen().expect_err("无权限必须报错");
+        assert!(e.contains("屏幕录制"), "{e}");
     }
 }

@@ -81,8 +81,8 @@ Built-in sources appear only when the input matches their rules, so they never h
 > history, snippets, lock screen, window tiling/half-screen/minimize/restore, Universal Actions,
 > file buffer, the shortcut guide, system commands (sleep/restart/log out/empty trash/
 > screensaver), file search (Spotlight), System Settings search, the hosts plugin, and window
-> list/focus. Window tiling and keyboard simulation need Accessibility in Settings → Permissions;
-> screenshot is not yet available.
+> list/focus. Window tiling and keyboard simulation and screenshots need Accessibility / Screen Recording in
+> Settings → Permissions.
 
 The default panel (empty input) contains "Recent" and "Favorite tools":
 

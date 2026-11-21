@@ -497,7 +497,26 @@ pub fn exclude_from_capture(w: &tauri::WebviewWindow) {
     }
 }
 
-#[cfg(not(windows))]
+/// 把窗口从屏幕捕获里排除（macOS：NSWindowSharingNone）。
+///
+/// 长截图时覆盖层必须留在屏幕上给用户看边框和提示，但它自己不能被抓进结果图。
+#[cfg(target_os = "macos")]
+pub fn exclude_from_capture(w: &tauri::WebviewWindow) {
+    use objc2::msg_send;
+    match w.ns_window() {
+        Ok(ptr) => {
+            let obj = ptr as *mut objc2::runtime::AnyObject;
+            // SAFETY: ns_window 返回的是有效的 NSWindow*；setSharingType: 是它的公开
+            // setter，NSWindowSharingNone = 0，无副作用可回读（sharingType 可再查）。
+            unsafe {
+                let _: () = msg_send![obj, setSharingType: 0usize];
+            }
+        }
+        Err(e) => tracing::warn!("取 NSWindow 失败，无法排除捕获: {e}"),
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn exclude_from_capture(_w: &tauri::WebviewWindow) {}
 
 /// 打开钉图窗口：无边框、置顶、尺寸等于裁剪尺寸。

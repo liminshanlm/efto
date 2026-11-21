@@ -1,8 +1,8 @@
 # macOS 支持分阶段计划
 
 - **Date**: 2026-11-21
-- **Status**: Phase 0-4 已落地（2026-11-21，截图除外；见 `docs/verification.md` mac 段与
-  `.agents/notes/implemented/feature/` 五条 note）；人手验证清单待走
+- **Status**: Phase 0-4 全部落地（2026-11-21，含截图；见 `docs/verification.md` mac 段与
+  `.agents/notes/implemented/feature/` 七条 note）；人手验证清单待走
 - **相关**: `docs/architecture.md`、`docs/roadmap.md`、`docs/verification.md`、`docs/plugin-development.md`
 
 本文件是 macOS 移植的唯一计划来源。实现过程中的判据、踩坑与实测记录分别进
@@ -230,7 +230,7 @@ exec/shell 与插件清单 `platforms` 差异；`roadmap.md` 挂本计划；`ver
 7. 书签（mac 浏览器路径）、快捷键指南 macOS 数据集（`shortcuts/data/` 新增）。
 
 ### Phase 4 · 重量级 ✅ 2026-11-21 部分落地：窗口平铺/撤销、通用动作放出、权限引导、
-发布工程脚手架已做；**截图按用户决定跳过**（两次子代理均未落盘，独立立项）；
+发布工程脚手架已做；**截图捕获层已补**（2026-11-21 真机实测）；
 快捷键指南 macOS 数据集已补（2026-11-21）
 
 - 截图 / 长截图 / 标注（ScreenCaptureKit + 权限引导 UI）

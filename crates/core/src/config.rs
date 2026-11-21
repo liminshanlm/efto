@@ -268,21 +268,10 @@ pub struct Settings {
     pub tool_hotkeys_seeded: bool,
 }
 
-/// efto 自带工具的 id，顺序即设置页的基础顺序。按平台取子集：
-/// 平台没实现的工具不进列表（设置页不展示、`normalize_tools` 丢弃、热键不占位），
-/// 调用到不支持的工具仍会明确报错兜底（硬性约定 3），见 docs/macos-support-plan.md。
-#[cfg(windows)]
+/// efto 自带工具的 id，顺序即设置页的基础顺序。当前 Windows / macOS 提供同一批；
+/// 未来出现平台差异再按平台拆分（`normalize_tools` 会丢弃本表之外的内置 id）。
 pub const KNOWN_TOOLS: &[&str] = &[
     "screenshot",
-    "clipboard",
-    "lock_screen",
-    "tile_windows",
-    "shortcut_guide",
-    "snippets",
-    "file_buffer",
-];
-#[cfg(not(windows))]
-pub const KNOWN_TOOLS: &[&str] = &[
     "clipboard",
     "lock_screen",
     "tile_windows",
@@ -840,13 +829,10 @@ mod tests {
             assert_eq!(s.command_shell, CommandShell::Custom);
             assert_eq!(s.command_shell_path, Some("/bin/sh".into()));
         }
-        // 工具列表里的平台外 id 要被丢掉（screenshot 在非 Windows 未提供）
-        s.tools = vec!["screenshot".into(), "snippets".into()];
+        // 工具列表里的未知 id 要被丢掉（KNOWN_TOOLS 之外的内置 id）
+        s.tools = vec!["bogus_tool".into(), "snippets".into()];
         s.normalize_for_platform();
-        #[cfg(not(windows))]
-        assert_eq!(s.tools, vec!["snippets"]);
-        #[cfg(windows)]
-        assert_eq!(s.tools, vec!["screenshot", "snippets"]);
+        assert_eq!(s.tools, vec!["snippets"]);;
     }
 
     #[test]

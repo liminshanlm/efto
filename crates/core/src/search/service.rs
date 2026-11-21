@@ -52,11 +52,8 @@ impl BuiltinAction {
     /// 平台支持判定：不支持的动作**不进搜索**（宁可不出，不可乱出——硬性约定 2）。
     /// 执行层仍有明确报错兜底（硬性约定 3），平台清单见 docs/macos-support-plan.md。
     pub fn supported_on_platform(self) -> bool {
-        match self {
-            // 截图的 mac 捕获层落地前保持收口（用户决定跳过，独立立项）
-            Self::Screenshot => cfg!(windows),
-            _ => true,
-        }
+        // mac 的捕获层（CGWindowListCreateImage）已落地并真机验证；不再有平台限定动作
+        true
     }
 
     pub fn name(&self) -> &'static str {
