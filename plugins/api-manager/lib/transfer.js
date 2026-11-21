@@ -78,10 +78,10 @@ function postmanAuth(auth) {
   return { type: 'noauth' };
 }
 
-function toRequest(item, prefix) {
+function toRequest(item, folderPath) {
   var src = u.isObj(item.request) ? item.request : {};
   var name = u.trim(item.name) || '未命名请求';
-  if (prefix) name = prefix + ' / ' + name;
+  var path = Array.isArray(folderPath) ? folderPath.slice() : [];
 
   var params = [];
   if (u.isObj(src.url) && Array.isArray(src.url.query)) {
@@ -128,6 +128,7 @@ function toRequest(item, prefix) {
 
   return {
     name: name,
+    folderPath: path,
     method: String(src.method || 'GET').toUpperCase(),
     url: postmanUrl(src.url),
     params: params,
@@ -139,15 +140,15 @@ function toRequest(item, prefix) {
   };
 }
 
-function walk(items, prefix, sink) {
+function walk(items, folderPath, sink) {
   for (var i = 0; i < items.length; i++) {
     var item = items[i];
     if (!u.isObj(item)) continue;
     if (u.isObj(item.request)) {
-      sink.push(toRequest(item, prefix));
+      sink.push(toRequest(item, folderPath));
     } else if (Array.isArray(item.item)) {
-      var next = prefix ? prefix + ' / ' + u.trim(item.name) : u.trim(item.name);
-      walk(item.item, next, sink);
+      var name = u.trim(item.name);
+      walk(item.item, name ? folderPath.concat([name]) : folderPath, sink);
     }
   }
 }
@@ -182,9 +183,28 @@ function parseImport(raw) {
     raw.collections.forEach(function (c) {
       if (!u.isObj(c)) return;
       var requests = [];
+      var folderMap = {};
+      if (Array.isArray(c.folders)) {
+        c.folders.forEach(function (f) {
+          if (u.isObj(f) && f.id) folderMap[String(f.id)] = f;
+        });
+      }
       if (Array.isArray(c.requests)) {
         c.requests.forEach(function (r) {
-          if (u.isObj(r)) requests.push(u.clone(r));
+          if (!u.isObj(r)) return;
+          var copy = u.clone(r);
+          if (copy.folderId) {
+            var names = [];
+            var fid = String(copy.folderId);
+            var guard = 0;
+            while (fid && folderMap[fid] && guard++ < 32) {
+              names.unshift(String(folderMap[fid].name || ''));
+              fid = String(folderMap[fid].parentId || '');
+            }
+            if (names.length) copy.folderPath = names;
+          }
+          delete copy.folderId;
+          requests.push(copy);
         });
       }
       out.collections.push({
@@ -211,7 +231,7 @@ function parseImport(raw) {
   // Postman Collection
   if (raw.info || Array.isArray(raw.item)) {
     var requests = [];
-    walk(Array.isArray(raw.item) ? raw.item : [], '', requests);
+    walk(Array.isArray(raw.item) ? raw.item : [], [], requests);
     out.collections.push({
       name: u.trim(raw.info && raw.info.name) || u.trim(raw.name) || '导入的集合',
       description: String((raw.info && raw.info.description) || ''),
@@ -290,6 +310,27 @@ function toPostmanRequest(req) {
   };
 }
 
+function buildPostmanItems(col) {
+  var folderNodes = {};
+  var roots = [];
+  (col.folders || []).forEach(function (f) {
+    if (!f || !f.id) return;
+    folderNodes[f.id] = { name: f.name || '未命名分组', item: [] };
+  });
+  (col.folders || []).forEach(function (f) {
+    if (!f || !f.id) return;
+    var node = folderNodes[f.id];
+    var parent = f.parentId ? folderNodes[f.parentId] : null;
+    (parent ? parent.item : roots).push(node);
+  });
+  (col.requests || []).forEach(function (req) {
+    var node = toPostmanRequest(req);
+    var folder = req.folderId ? folderNodes[req.folderId] : null;
+    (folder ? folder.item : roots).push(node);
+  });
+  return roots;
+}
+
 function exportPostmanCollection(col) {
   return {
     info: {
@@ -297,7 +338,7 @@ function exportPostmanCollection(col) {
       description: col.description || '',
       schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'
     },
-    item: (col.requests || []).map(toPostmanRequest)
+    item: buildPostmanItems(col)
   };
 }
 

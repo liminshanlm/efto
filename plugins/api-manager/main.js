@@ -7,6 +7,7 @@ var commands = require('./lib/commands');
 var request = require('./lib/request');
 var transfer = require('./lib/transfer');
 var http = require('./lib/http');
+var swagger = require('./lib/swagger');
 var format = require('./lib/format');
 
 var workspace = null;
@@ -32,7 +33,8 @@ function syncSearchItems() {
     for (var j = 0; j < col.requests.length; j++) {
       if (items.length >= 200) break;
       var req = col.requests[j];
-      var title = (req.name || '未命名请求') + ' · ' + req.method;
+      var folder = model.folderPath(col, req.folderId);
+      var title = (folder ? folder + ' / ' : '') + (req.name || '未命名请求') + ' · ' + req.method;
       if (title.length > 64) title = title.slice(0, 64);
       var cmd = 'api:open:' + req.id;
       if (cmd.length > 128) continue;
@@ -140,6 +142,11 @@ function handleSaveRequest(data) {
   );
   var existing = findAnyRequest(input.id);
   var normed = model.normRequest(input);
+  normed.folderId = '';
+  var wantedFolder = String((data && data.folderId) || input.folderId || '');
+  if (wantedFolder && (targetCol.folders || []).some(function (f) { return f.id === wantedFolder; })) {
+    normed.folderId = wantedFolder;
+  }
 
   if (existing) {
     normed.id = existing.request.id;
@@ -161,12 +168,13 @@ function handleSaveRequest(data) {
   targetCol.updatedAt = new Date().toISOString();
   persist();
   pushState();
-  efto.ipcMessage('saved', { id: normed.id, collectionId: targetCol.id });
+  efto.ipcMessage('saved', { id: normed.id, collectionId: targetCol.id, folderId: normed.folderId || '' });
 }
 
 function collectExistingRequestIds() {
   var ids = {};
   workspace.collections.forEach(function (col) {
+    (col.folders || []).forEach(function (f) { ids[f.id] = true; });
     col.requests.forEach(function (req) { ids[req.id] = true; });
   });
   return ids;
@@ -215,6 +223,67 @@ function handleDeleteCollection(data) {
   efto.ipcMessage('deleted', { collectionId: col.id });
 }
 
+function findFolderById(col, id) {
+  if (!id) return null;
+  for (var i = 0; i < (col.folders || []).length; i++) {
+    if (col.folders[i].id === id) return col.folders[i];
+  }
+  return null;
+}
+
+function handleSaveFolder(data) {
+  var col = findCollectionById(data && data.collectionId);
+  if (!col) {
+    efto.ipcMessage('error', { message: '集合不存在' });
+    return;
+  }
+  var name = String((data && data.name) || '').trim();
+  if (!name) {
+    efto.ipcMessage('error', { message: '分组名称不能为空' });
+    return;
+  }
+  var existing = findFolderById(col, data && data.folderId);
+  var parentId = existing ? String(existing.parentId || '') : String((data && data.parentId) || '');
+  if (parentId && !findFolderById(col, parentId)) parentId = '';
+  var dup = (col.folders || []).some(function (f) {
+    return f !== existing && String(f.parentId || '') === parentId && f.name.toLowerCase() === name.toLowerCase();
+  });
+  if (dup) {
+    efto.ipcMessage('error', { message: '同级已存在同名分组: ' + name });
+    return;
+  }
+  if (existing) {
+    existing.name = name;
+  } else {
+    existing = model.normFolder({ name: name, parentId: parentId });
+    col.folders.push(existing);
+  }
+  col.updatedAt = new Date().toISOString();
+  persist();
+  pushState();
+  efto.ipcMessage('folder-saved', { id: existing.id, collectionId: col.id });
+}
+
+function handleDeleteFolder(data) {
+  var col = findCollectionById(data && data.collectionId);
+  if (!col) {
+    efto.ipcMessage('error', { message: '集合不存在' });
+    return;
+  }
+  var folder = findFolderById(col, data && data.id);
+  if (!folder) {
+    efto.ipcMessage('error', { message: '分组不存在' });
+    return;
+  }
+  var ids = model.descendantFolderIds(col, folder.id);
+  col.requests = col.requests.filter(function (r) { return !ids[r.folderId]; });
+  col.folders = col.folders.filter(function (f) { return !ids[f.id]; });
+  col.updatedAt = new Date().toISOString();
+  persist();
+  pushState();
+  efto.ipcMessage('deleted', { folderId: folder.id, collectionId: col.id });
+}
+
 function handleSaveEnvironments(data) {
   var list = data && Array.isArray(data.environments) ? data.environments : [];
   var next = list.map(function (e) { return model.normEnvironment(e); });
@@ -253,6 +322,13 @@ function uiContext() {
   };
 }
 
+function importTargetOf(data) {
+  return {
+    collection: String((data && data.collection) || '').trim(),
+    collectionId: String((data && data.collectionId) || '')
+  };
+}
+
 function handleUiImport(data) {
   var text = String((data && data.text) || '');
   var obj;
@@ -262,7 +338,7 @@ function handleUiImport(data) {
     efto.ipcMessage('import-result', { ok: false, error: 'JSON 解析失败: ' + errorText(e) });
     return;
   }
-  var res = commands.importData(uiContext(), obj);
+  var res = commands.importData(uiContext(), obj, importTargetOf(data));
   if (!res.result.ok) {
     efto.ipcMessage('import-result', { ok: false, error: res.result.error });
     return;
@@ -280,7 +356,23 @@ function handleUiImportFile(data) {
     } catch (e) {
       throw new Error('文件不是合法 JSON: ' + errorText(e));
     }
-    var res = commands.importData(uiContext(), obj);
+    var res = commands.importData(uiContext(), obj, importTargetOf(data));
+    if (!res.result.ok) throw new Error(res.result.error);
+    pushState();
+    efto.ipcMessage('import-result', { ok: true, data: res.result.data });
+  }).catch(function (e) {
+    efto.ipcMessage('import-result', { ok: false, error: errorText(e) });
+  });
+}
+
+function handleUiImportUrl(data) {
+  var url = String((data && data.url) || '').trim();
+  if (!url) {
+    efto.ipcMessage('import-result', { ok: false, error: '请输入 Swagger 地址' });
+    return;
+  }
+  swagger.importFromUrl(url).then(function (parsed) {
+    var res = commands.applyParsed(uiContext(), parsed, importTargetOf(data));
     if (!res.result.ok) throw new Error(res.result.error);
     pushState();
     efto.ipcMessage('import-result', { ok: true, data: res.result.data });
@@ -336,6 +428,12 @@ function handleUiMessage(msg) {
     case 'delete-collection':
       handleDeleteCollection(data);
       break;
+    case 'save-folder':
+      handleSaveFolder(data);
+      break;
+    case 'delete-folder':
+      handleDeleteFolder(data);
+      break;
     case 'env-save-all':
       handleSaveEnvironments(data);
       break;
@@ -347,6 +445,9 @@ function handleUiMessage(msg) {
       break;
     case 'import-file':
       handleUiImportFile(data);
+      break;
+    case 'import-url':
+      handleUiImportUrl(data);
       break;
     case 'export':
       handleUiExport(data);

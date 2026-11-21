@@ -13,7 +13,8 @@
     respTab: 'body',
     response: null,
     respRaw: '',
-    busy: false
+    busy: false,
+    collapsed: {}
   };
 
   var el = {};
@@ -98,7 +99,7 @@
     return state.ws.collections[0].id;
   }
 
-  function blankRequest(collectionId) {
+  function blankRequest(collectionId, folderId) {
     return {
       id: '',
       name: '',
@@ -109,11 +110,77 @@
       body: { mode: 'none', raw: '', form: [] },
       auth: { type: 'none', token: '', username: '', password: '' },
       timeoutMs: 30000,
+      folderId: folderId || '',
       _collectionId: collectionId || defaultCollectionId()
     };
   }
 
   // ---------- rendering ----------
+
+  function folderChildren(col, parentId) {
+    return (col.folders || []).filter(function (f) {
+      return String(f.parentId || '') === String(parentId || '');
+    });
+  }
+
+  function folderRequests(col, folderId) {
+    return col.requests.filter(function (r) {
+      return String(r.folderId || '') === String(folderId || '');
+    });
+  }
+
+  function countFolderRequests(col, folderId) {
+    var ids = {};
+    var stack = [String(folderId || '')];
+    while (stack.length) {
+      var cur = stack.pop();
+      if (!cur || ids[cur]) continue;
+      ids[cur] = true;
+      (col.folders || []).forEach(function (f) {
+        if (String(f.parentId || '') === cur) stack.push(f.id);
+      });
+    }
+    return col.requests.filter(function (r) { return ids[r.folderId]; }).length;
+  }
+
+  function renderRequestRow(box, col, req, depth) {
+    var active = state.draft && state.draft.id && state.draft.id === req.id;
+    var item = h('div', 'req-item' + (active ? ' active' : ''));
+    if (depth) item.style.paddingLeft = (10 + depth * 14) + 'px';
+    item.appendChild(h('span', 'method ' + String(req.method || 'GET').toLowerCase(), req.method || 'GET'));
+
+    var text = h('div', 'req-text');
+    text.appendChild(h('span', 'req-name', req.name || '未命名请求'));
+    text.appendChild(h('span', 'req-url', req.url || '(空 URL)'));
+    item.appendChild(text);
+    item.appendChild(iconButton('×', '删除请求', function () { deleteRequest(req); }));
+    item.addEventListener('click', function () { loadRequest(req.id); });
+    box.appendChild(item);
+  }
+
+  function renderFolderNode(box, col, folder, depth) {
+    var key = col.id + ':' + folder.id;
+    var collapsed = !!state.collapsed[key];
+    var head = h('div', 'folder-head');
+    head.style.paddingLeft = (8 + depth * 14) + 'px';
+    head.appendChild(h('span', 'folder-caret', collapsed ? '▸' : '▾'));
+    head.appendChild(h('span', 'folder-name', folder.name));
+    head.appendChild(h('span', 'folder-count', String(countFolderRequests(col, folder.id))));
+    head.appendChild(iconButton('＋', '在这个分组里新建请求', function () { startNewRequest(col.id, folder.id); }));
+    head.appendChild(iconButton('⊞', '新建子分组', function () { createFolder(col, folder.id); }));
+    head.appendChild(iconButton('✎', '重命名分组', function () { renameFolder(col, folder); }));
+    head.appendChild(iconButton('×', '删除分组及其请求', function () { deleteFolder(col, folder); }));
+    head.addEventListener('click', function () {
+      if (collapsed) delete state.collapsed[key];
+      else state.collapsed[key] = true;
+      renderSidebar();
+    });
+    box.appendChild(head);
+
+    if (collapsed) return;
+    folderChildren(col, folder.id).forEach(function (sub) { renderFolderNode(box, col, sub, depth + 1); });
+    folderRequests(col, folder.id).forEach(function (req) { renderRequestRow(box, col, req, depth + 1); });
+  }
 
   function renderSidebar() {
     var box = el.sideList;
@@ -133,24 +200,14 @@
     state.ws.collections.forEach(function (col) {
       var head = h('div', 'col-head');
       head.appendChild(h('span', 'col-name', col.name + ' · ' + col.requests.length));
-      head.appendChild(iconButton('＋', '在这个集合里新建请求', function () { startNewRequest(col.id); }));
+      head.appendChild(iconButton('＋', '在这个集合里新建请求', function () { startNewRequest(col.id, ''); }));
+      head.appendChild(iconButton('⊞', '新建分组', function () { createFolder(col, ''); }));
       head.appendChild(iconButton('✎', '重命名集合', function () { renameCollection(col); }));
       head.appendChild(iconButton('×', '删除集合', function () { deleteCollection(col); }));
       box.appendChild(head);
 
-      col.requests.forEach(function (req) {
-        var active = state.draft && state.draft.id && state.draft.id === req.id;
-        var item = h('div', 'req-item' + (active ? ' active' : ''));
-        item.appendChild(h('span', 'method ' + String(req.method || 'GET').toLowerCase(), req.method || 'GET'));
-
-        var text = h('div', 'req-text');
-        text.appendChild(h('span', 'req-name', req.name || '未命名请求'));
-        text.appendChild(h('span', 'req-url', req.url || '(空 URL)'));
-        item.appendChild(text);
-        item.appendChild(iconButton('×', '删除请求', function () { deleteRequest(req); }));
-        item.addEventListener('click', function () { loadRequest(req.id); });
-        box.appendChild(item);
-      });
+      folderChildren(col, '').forEach(function (folder) { renderFolderNode(box, col, folder, 0); });
+      folderRequests(col, '').forEach(function (req) { renderRequestRow(box, col, req, 0); });
     });
   }
 
@@ -443,9 +500,9 @@
     toast('历史记录已填入编辑器，保存后会进入集合');
   }
 
-  function startNewRequest(collectionId) {
+  function startNewRequest(collectionId, folderId) {
     if (state.dirty && !confirm('当前请求有未保存修改，新建会丢失。继续？')) return;
-    state.draft = blankRequest(collectionId || defaultCollectionId());
+    state.draft = blankRequest(collectionId || defaultCollectionId(), folderId || '');
     state.selectedId = '';
     state.dirty = false;
     state.reqTab = 'params';
@@ -461,6 +518,7 @@
     input._collectionId = state.draft._collectionId;
     efto.ipcMessage('save-request', {
       collectionId: input._collectionId,
+      folderId: input.folderId || '',
       request: input
     });
   }
@@ -505,6 +563,31 @@
   function deleteCollection(col) {
     if (!confirm('删除集合「' + col.name + '」及其中 ' + col.requests.length + ' 个请求？')) return;
     efto.ipcMessage('delete-collection', { id: col.id });
+  }
+
+  function createFolder(col, parentId) {
+    var name = prompt('新分组名称');
+    if (name === null) return;
+    name = name.trim();
+    if (!name) {
+      toast('分组名称不能为空');
+      return;
+    }
+    efto.ipcMessage('save-folder', { collectionId: col.id, parentId: parentId || '', name: name });
+  }
+
+  function renameFolder(col, folder) {
+    var name = prompt('分组名称', folder.name);
+    if (name === null) return;
+    name = name.trim();
+    if (!name || name === folder.name) return;
+    efto.ipcMessage('save-folder', { collectionId: col.id, folderId: folder.id, name: name });
+  }
+
+  function deleteFolder(col, folder) {
+    var n = countFolderRequests(col, folder.id);
+    if (!confirm('删除分组「' + folder.name + '」及其中 ' + n + ' 个请求？')) return;
+    efto.ipcMessage('delete-folder', { collectionId: col.id, id: folder.id });
   }
 
   function deleteRequest(req) {
@@ -571,6 +654,7 @@
     if (!data || !state.draft) return;
     state.draft.id = data.id;
     state.draft._collectionId = data.collectionId || state.draft._collectionId;
+    if (data.folderId !== undefined) state.draft.folderId = data.folderId;
     state.selectedId = data.id;
     state.dirty = false;
     var found = findRequestById(data.id);
@@ -585,11 +669,17 @@
 
   function onDeleted(data) {
     renderSidebar();
-    if (data && data.collectionId) toast('集合已删除');
+    if (data && data.folderId) toast('分组已删除');
+    else if (data && data.collectionId) toast('集合已删除');
   }
 
   function onImportResult(data) {
     if (!data || !data.ok) {
+      var retry = el.modalRoot.querySelector('.import-url button');
+      if (retry) {
+        retry.disabled = false;
+        retry.textContent = '从 Swagger 导入';
+      }
       toast('导入失败: ' + ((data && data.error) || '未知错误'));
       return;
     }
@@ -622,7 +712,63 @@
   function openImportModal() {
     var card = h('div', 'modal-card');
     card.appendChild(h('h2', '', '导入 API'));
-    card.appendChild(h('p', 'modal-sub', '支持 Postman Collection v2.1、Postman 环境，以及本插件导出的 JSON。'));
+    card.appendChild(h('p', 'modal-sub', '支持 Postman Collection v2.1、Postman 环境、本插件导出的 JSON，以及 Swagger/OpenAPI 地址（含 knife4j 的 doc.html）。'));
+
+    var targetRow = h('div', 'import-target');
+    var targetSelect = document.createElement('select');
+    var autoOpt = document.createElement('option');
+    autoOpt.value = '';
+    autoOpt.textContent = '自动：按来源创建/合并集合';
+    targetSelect.appendChild(autoOpt);
+    (state.ws ? state.ws.collections : []).forEach(function (col) {
+      var opt = document.createElement('option');
+      opt.value = col.id;
+      opt.textContent = '导入到：' + col.name;
+      targetSelect.appendChild(opt);
+    });
+    var newOpt = document.createElement('option');
+    newOpt.value = '__new__';
+    newOpt.textContent = '＋ 新建集合…';
+    targetSelect.appendChild(newOpt);
+    targetRow.appendChild(targetSelect);
+    var newNameInput = textInput('', '新集合名称');
+    newNameInput.hidden = true;
+    targetRow.appendChild(newNameInput);
+    targetSelect.addEventListener('change', function () {
+      newNameInput.hidden = targetSelect.value !== '__new__';
+      if (!newNameInput.hidden) newNameInput.focus();
+    });
+    card.appendChild(targetRow);
+
+    function targetPayload() {
+      if (targetSelect.value === '__new__') {
+        var name = newNameInput.value.trim();
+        if (!name) { toast('请输入新集合名称'); newNameInput.focus(); return null; }
+        return { collection: name };
+      }
+      return targetSelect.value ? { collectionId: targetSelect.value } : {};
+    }
+
+    var urlRow = h('div', 'import-url');
+    var urlInput = textInput('', 'Swagger 地址，如 http://10.10.58.153:32300/doc.html');
+    urlRow.appendChild(urlInput);
+    var urlBtn = button('从 Swagger 导入', 'primary');
+    urlBtn.addEventListener('click', function () {
+      var url = urlInput.value.trim();
+      if (!url) { toast('请输入 Swagger 地址'); urlInput.focus(); return; }
+      var target = targetPayload();
+      if (!target) return;
+      urlBtn.disabled = true;
+      urlBtn.textContent = '抓取中…';
+      toast('正在读取 Swagger…');
+      efto.ipcMessage('import-url', {
+        url: url,
+        collection: target.collection,
+        collectionId: target.collectionId
+      });
+    });
+    urlRow.appendChild(urlBtn);
+    card.appendChild(urlRow);
 
     var area = document.createElement('textarea');
     area.placeholder = '把 Postman Collection / Environment 或本插件导出的 JSON 粘贴到这里…';
@@ -632,11 +778,17 @@
     var fileBtn = button('选择文件…', 'ghost left');
     fileBtn.addEventListener('click', function () {
       if (!efto.pickFiles) { toast('当前宿主不支持选择文件'); return; }
+      var target = targetPayload();
+      if (!target) return;
       efto.pickFiles().then(function (paths) {
         var path = paths && paths[0];
         if (!path) return;
         toast('正在读取文件…');
-        efto.ipcMessage('import-file', { path: path });
+        efto.ipcMessage('import-file', {
+          path: path,
+          collection: target.collection,
+          collectionId: target.collectionId
+        });
       }).catch(function (e) {
         toast('选择文件失败: ' + (e && e.message ? e.message : e));
       });
@@ -650,7 +802,13 @@
     var ok = button('导入', 'primary');
     ok.addEventListener('click', function () {
       if (!area.value.trim()) { toast('请粘贴 JSON 或选择文件'); return; }
-      efto.ipcMessage('import', { text: area.value });
+      var target = targetPayload();
+      if (!target) return;
+      efto.ipcMessage('import', {
+        text: area.value,
+        collection: target.collection,
+        collectionId: target.collectionId
+      });
     });
     foot.appendChild(ok);
     card.appendChild(foot);
@@ -963,6 +1121,7 @@
     efto.onMessage('import-result', onImportResult);
     efto.onMessage('export-result', onExportResult);
     efto.onMessage('collection-saved', function () { toast('集合已保存'); });
+    efto.onMessage('folder-saved', function () { toast('分组已保存'); });
     efto.onMessage('env-saved', function (data) {
       if (data) state.ws.activeEnvId = data.activeEnvId;
       closeModal();

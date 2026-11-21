@@ -1220,6 +1220,44 @@ UI + 命令双通道）。HTTP 走 `efto.node.run`，命令机器可读结果以
 未验证：窗口尺寸是否严格为 1180x780（真机为独立大窗，未做像素级测量）；
 `efto://` 在 WebView2 里实际落到 `http://efto.localhost/`，与文档协议名不同但行为一致。
 
+### 2026-11-21：集合分组 + Swagger URL 导入
+
+- CLI（真实工作区，验证后已清理测试集合）：
+  - `collection add` → `folder add / folder list`：`folder list` 返回
+    `{total:1, items:[{name:"用户接口", path:"用户接口", requestCount:0}]}`；
+  - `--json-file` 执行 `{cmd:"add", collection:"导入验证", folder:"用户接口", ...}`，
+    返回 `folder:"用户接口"`、`folderId:"fld-…"`，请求确实落在分组内；
+  - `folder delete` 级联：`removedFolders:1, removedRequests:1`；
+  - `export 导入验证`：Postman v2.1 的 `item` 为嵌套结构
+    （`{name:"组A", item:[{name:"导出检查", request:{...}}]}`）；
+  - Postman 导入：两层 `item` 导入后 `list` 显示 `folder:"用户 / 子组"`。
+- Swagger（真实地址 `http://10.10.58.153:32300/doc.html`，SpringDoc/knife4j）：
+  - `import --url .../doc.html` 自动发现 `/v3/api-docs/swagger-config`，导入 3 个分组集合
+    （开放接口 / 服务间接口 / 运营平台管理接口），共 68 个请求；
+  - `folder list 开放接口` 显示按 tag 建的 5 个分组；
+  - `show sendSmsCode` 的 body 为按 schema 生成的 `{"mobile": ""}`，URL 为
+    `{{baseUrl}}/open/personal/sms-code`；
+  - `env` 显示自动新建并激活的环境 `10.10.58.153:32300`
+    （`baseUrl = http://10.10.58.153:32300`），三个分组共用同一个 `baseUrl`；
+  - `list` 中路径参数已转成 `{{id}}`（如 `/inner/personal/users/{{id}}`）。
+- 导入到指定集合（同上真实地址）：
+  - `import --url ... --collection 导入目标测试`：只生成 1 个集合，`addedRequests:68`；
+    `folder list` 显示 20 个分组，Swagger 分组名（开放接口 / 服务间接口 / 运营平台管理接口）
+    为一级分组、tag 为二级分组（如 `服务间接口 / 内网认证`）。
+  - `import --url ... --collection-id col-…`：追加进同一集合，`addedRequests:68`，
+    未新建集合。
+  - 验证后已把插件数据恢复为测试前状态（`市场` + `示例环境`）。
+- UI（Node + playwright-core + 本机 Edge 无头，注入 `window.efto` 桩）：
+  - 集合头 `⊞` 建「分组A」，分组内 `⊞` 建「分组B」，缩进 `8px → 22px`；
+  - 分组内 `＋` 新建并保存，`save-request` 携带 `folderId:"fld-1"`，保存后请求行缩进 24px；
+  - 删除分组发出 `delete-folder`；导入弹窗填写 doc.html 后发出 `import-url`；无 `pageerror`。
+  - 导入弹窗「导入到」下拉：默认「自动」时 payload 无目标字段；选现有集合发
+    `collectionId:"col-1"`；选「＋ 新建集合…」出现名称输入框，发出
+    `collection:"导入集合"`；三组均无 `pageerror`。
+
+未验证：YAML 规范、OAuth2 等需要在请求前换取 token 的鉴权流程；Swagger 的
+`servers[].variables` 未做替换（按字面生成 URL）。
+
 
 
 

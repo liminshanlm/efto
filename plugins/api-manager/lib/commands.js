@@ -7,14 +7,16 @@ var model = require('./model');
 var request = require('./request');
 var transfer = require('./transfer');
 var http = require('./http');
+var swagger = require('./swagger');
 var format = require('./format');
 
-var ALLOWED_PATCH = ['name', 'method', 'url', 'params', 'headers', 'body', 'auth', 'timeoutMs'];
+var ALLOWED_PATCH = ['name', 'method', 'url', 'params', 'headers', 'body', 'auth', 'timeoutMs', 'folderId'];
 
 function collectIds(ws) {
   var ids = {};
   ws.collections.forEach(function (c) {
     ids[c.id] = true;
+    (c.folders || []).forEach(function (f) { ids[f.id] = true; });
     c.requests.forEach(function (r) { ids[r.id] = true; });
   });
   ws.environments.forEach(function (e) { ids[e.id] = true; });
@@ -29,6 +31,8 @@ function requestSummary(req, col) {
     url: req.url,
     collection: col.name,
     collectionId: col.id,
+    folder: model.folderPath(col, req.folderId),
+    folderId: req.folderId || '',
     headerCount: req.headers.filter(function (h) { return h.enabled !== false && h.key; }).length,
     paramCount: req.params.filter(function (p) { return p.enabled !== false && p.key; }).length,
     bodyMode: req.body.mode
@@ -97,6 +101,10 @@ function doHelp() {
     '  api delete <id>            删除请求',
     '  api collections            列出集合',
     '  api collection add <名称>  新建集合',
+    '  api folder list <集合>     列出集合内的分组',
+    '  api folder add <集合> <名称>  新建分组（JSON 可用 parent 指定父分组）',
+    '  api folder rename <集合> <分组> <新名>  重命名分组',
+    '  api folder delete <集合> <分组>         删除分组及其请求',
     '  api env                    列出环境',
     '  api env use <名称>         切换当前环境',
     '  api env add <名称>         新建环境',
@@ -104,6 +112,8 @@ function doHelp() {
     '  api history [n]            最近请求',
     '  api import {postman}       导入 Postman / 本插件 JSON',
     '  api import --file <path>   从文件导入',
+    '  api import --url <swagger> 从 Swagger/OpenAPI 地址导入（如 knife4j 的 doc.html）',
+    '  api import ... --collection <集合>  导入到指定集合（不存在则新建）',
     '  api --json-file <path>     从文件读取 JSON 命令（规避 Windows 引号转义）',
     '  api export [集合]          导出（指定集合时是 Postman v2.1）',
     '  api help                   本帮助',
@@ -119,7 +129,8 @@ function doList(ctx, keyword) {
   var items = [];
   ctx.ws.collections.forEach(function (col) {
     col.requests.forEach(function (req) {
-      var hay = (col.name + ' ' + req.name + ' ' + req.method + ' ' + req.url).toLowerCase();
+      var folder = model.folderPath(col, req.folderId);
+      var hay = (col.name + ' ' + folder + ' ' + req.name + ' ' + req.method + ' ' + req.url).toLowerCase();
       if (kw && hay.indexOf(kw) < 0) return;
       items.push(requestSummary(req, col));
     });
@@ -127,7 +138,7 @@ function doList(ctx, keyword) {
   var rows = items.slice(0, 50).map(function (it) {
     return {
       title: it.method + '  ' + it.name,
-      subtitle: it.collection + ' · ' + (it.url || '(空 URL)'),
+      subtitle: it.collection + (it.folder ? ' / ' + it.folder : '') + ' · ' + (it.url || '(空 URL)'),
       copy: 'api send ' + it.id
     };
   });
@@ -143,18 +154,19 @@ function doShow(ctx, ref) {
   var data = u.clone(m.request);
   data.collection = m.collection.name;
   data.collectionId = m.collection.id;
+  data.folder = model.folderPath(m.collection, m.request.folderId);
   return format.ok('show', data, [
-    { title: m.request.method + '  ' + m.request.name, subtitle: m.collection.name + ' · ' + (m.request.url || '(空 URL)'), copy: JSON.stringify(data) },
+    { title: m.request.method + '  ' + m.request.name, subtitle: m.collection.name + (data.folder ? ' / ' + data.folder : '') + ' · ' + (m.request.url || '(空 URL)'), copy: JSON.stringify(data) },
     { title: '所在集合', subtitle: m.collection.name, copy: m.collection.id }
   ]);
 }
 
 function doCollections(ctx) {
   var items = ctx.ws.collections.map(function (c) {
-    return { id: c.id, name: c.name, count: c.requests.length, description: c.description };
+    return { id: c.id, name: c.name, count: c.requests.length, folderCount: (c.folders || []).length, description: c.description };
   });
   var rows = items.map(function (c) {
-    return { title: c.name, subtitle: c.count + ' 个请求 · ' + c.id, copy: c.id };
+    return { title: c.name, subtitle: c.count + ' 个请求 · ' + c.folderCount + ' 个分组 · ' + c.id, copy: c.id };
   });
   if (!rows.length) rows.push({ title: '还没有集合', subtitle: '输入 api 打开界面新建，或 api collection add <名称>', copy: 'api collection add 我的集合' });
   return format.ok('collections', { total: items.length, items: items }, rows);
@@ -263,7 +275,7 @@ function doRun(ctx, input, opts) {
 
 // ---------- 增删改 ----------
 
-function doAdd(ctx, raw, collectionName) {
+function doAdd(ctx, raw, collectionName, folderRef) {
   var obj = raw;
   if (typeof obj === 'string') {
     try {
@@ -282,16 +294,20 @@ function doAdd(ctx, raw, collectionName) {
   var ids = collectIds(ws);
   var col = model.ensureCollection(ws, collectionName || obj.collection || '');
   var req = model.normRequest(obj, ids);
+  var targetFolder = folderRef || obj.folder || obj.folderPath || '';
+  req.folderId = model.resolveFolder(col, targetFolder);
   col.requests.push(req);
   col.updatedAt = u.nowIso();
   ctx.persist();
+  var folder = model.folderPath(col, req.folderId);
   return format.ok('add', {
     id: req.id,
     collection: col.name,
     collectionId: col.id,
+    folder: folder,
     request: req
   }, [
-    { title: '已新增 ' + req.method + ' ' + req.name, subtitle: col.name + ' · ' + (req.url || '(空 URL)'), copy: req.id },
+    { title: '已新增 ' + req.method + ' ' + req.name, subtitle: col.name + (folder ? ' / ' + folder : '') + ' · ' + (req.url || '(空 URL)'), copy: req.id },
     { title: '复制请求 JSON', subtitle: '便于继续编辑', copy: JSON.stringify(req) }
   ]);
 }
@@ -309,7 +325,14 @@ function doUpdate(ctx, ref, patch) {
       changed.push(key);
     }
   });
-  if (!changed.length) return format.fail('update', '没有可更新字段（支持: ' + ALLOWED_PATCH.join(', ') + '）');
+  if (Object.prototype.hasOwnProperty.call(patch, 'folder')) {
+    merged.folderId = model.resolveFolder(m.collection, patch.folder);
+    changed.push('folder');
+  }
+  if (!changed.length) return format.fail('update', '没有可更新字段（支持: ' + ALLOWED_PATCH.join(', ') + ', folder）');
+  if (merged.folderId && !m.collection.folders.some(function (f) { return f.id === merged.folderId; })) {
+    return format.fail('update', '分组不存在: ' + merged.folderId);
+  }
   merged.updatedAt = u.nowIso();
   var normed = model.normRequest(merged);
   normed.id = m.request.id;
@@ -377,6 +400,106 @@ function doCollectionAction(ctx, action, opts) {
   }
 
   return format.fail('collection', '未知集合操作: ' + action);
+}
+
+function doFolderAction(ctx, action, opts) {
+  action = String(action || 'list').toLowerCase();
+  opts = opts || {};
+  var ws = ctx.ws;
+  var col = model.findCollection(ws, opts.collection || opts.col);
+  if (col.error) return format.fail('folder', col.error);
+
+  if (action === 'list' || action === 'ls') {
+    var items = (col.folders || []).map(function (f) {
+      return {
+        id: f.id,
+        name: f.name,
+        path: model.folderPath(col, f.id),
+        parentId: f.parentId || '',
+        requestCount: model.countFolderRequests(col, f.id)
+      };
+    });
+    var rows = items.map(function (f) {
+      return { title: f.path, subtitle: f.requestCount + ' 个请求 · ' + f.id, copy: 'api folder delete ' + col.id + ' ' + f.id };
+    });
+    if (!rows.length) rows.push({ title: '还没有分组', subtitle: 'api folder add <集合> <名称>', copy: 'api folder add ' + col.id + ' 我的分组' });
+    return format.ok('folder', { action: 'list', collection: col.name, collectionId: col.id, total: items.length, items: items }, rows);
+  }
+
+  if (action === 'add' || action === 'create') {
+    var name = u.trim(opts.name || opts.ref);
+    if (!name) return format.fail('folder', '缺少分组名称');
+    var parentId = '';
+    if (opts.parent) {
+      var parent = model.findFolder(col, opts.parent);
+      if (parent.error) return format.fail('folder', parent.error);
+      parentId = parent.id;
+    }
+    var dup = (col.folders || []).some(function (f) {
+      return String(f.parentId || '') === parentId && f.name.toLowerCase() === name.toLowerCase();
+    });
+    if (dup) return format.fail('folder', '同级已存在同名分组: ' + name);
+    var folder = model.normFolder({ name: name, parentId: parentId });
+    col.folders.push(folder);
+    col.updatedAt = u.nowIso();
+    ctx.persist();
+    return format.ok('folder', {
+      action: 'add',
+      id: folder.id,
+      name: folder.name,
+      path: model.folderPath(col, folder.id),
+      collection: col.name,
+      collectionId: col.id
+    }, [
+      { title: '已新建分组 ' + folder.name, subtitle: col.name + ' / ' + model.folderPath(col, folder.id), copy: folder.id }
+    ]);
+  }
+
+  var target = model.findFolder(col, opts.ref || opts.id || opts.name);
+  if (target.error) return format.fail('folder', target.error);
+
+  if (action === 'rename') {
+    var newName = u.trim(opts.newName || opts.to);
+    if (!newName) return format.fail('folder', '缺少新名称');
+    var clash = (col.folders || []).some(function (f) {
+      return f.id !== target.id && String(f.parentId || '') === String(target.parentId || '') && f.name.toLowerCase() === newName.toLowerCase();
+    });
+    if (clash) return format.fail('folder', '同级已存在同名分组: ' + newName);
+    target.name = newName;
+    col.updatedAt = u.nowIso();
+    ctx.persist();
+    return format.ok('folder', { action: 'rename', id: target.id, name: target.name, path: model.folderPath(col, target.id), collection: col.name }, [
+      { title: '已重命名分组', subtitle: newName, copy: target.id }
+    ]);
+  }
+
+  if (action === 'delete' || action === 'remove') {
+    var ids = model.descendantFolderIds(col, target.id);
+    var removedRequests = 0;
+    col.requests = col.requests.filter(function (r) {
+      if (ids[r.folderId]) { removedRequests++; return false; }
+      return true;
+    });
+    var removedFolders = 0;
+    col.folders = col.folders.filter(function (f) {
+      if (ids[f.id]) { removedFolders++; return false; }
+      return true;
+    });
+    col.updatedAt = u.nowIso();
+    ctx.persist();
+    return format.ok('folder', {
+      action: 'delete',
+      id: target.id,
+      name: target.name,
+      removedFolders: removedFolders,
+      removedRequests: removedRequests,
+      collection: col.name
+    }, [
+      { title: '已删除分组 ' + target.name, subtitle: removedFolders + ' 个分组 · ' + removedRequests + ' 个请求', copy: target.id }
+    ]);
+  }
+
+  return format.fail('folder', '未知分组操作: ' + action);
 }
 
 function doEnvAction(ctx, action, opts) {
@@ -509,18 +632,41 @@ function normalizeVars(input) {
 
 // ---------- 导入导出 ----------
 
-function applyImport(ctx, parsed) {
+/** 导入目标集合：指定 id 用现有集合；指定名称时同名复用、否则新建；都不给则按来源建集合。 */
+function importTarget(ws, ids, opts) {
+  opts = opts || {};
+  var id = u.trim(opts.collectionId);
+  if (id) {
+    for (var i = 0; i < ws.collections.length; i++) {
+      if (ws.collections[i].id === id) return { col: ws.collections[i] };
+    }
+    return { error: '目标集合不存在: ' + id };
+  }
+  var name = u.trim(opts.collection);
+  if (!name) return { col: null };
+  var col = model.ensureCollection(ws, name);
+  ids[col.id] = true;
+  return { col: col };
+}
+
+function applyImport(ctx, parsed, opts) {
   var ws = ctx.ws;
   var ids = collectIds(ws);
   var addedRequests = 0;
   var collectionNames = [];
+  var target = importTarget(ws, ids, opts);
+  if (target.error) return format.fail('import', target.error);
+  var targetCol = target.col;
+  var wrapGroup = targetCol && (parsed.collections || []).length > 1;
 
   (parsed.collections || []).forEach(function (pc) {
-    var col = null;
-    for (var i = 0; i < ws.collections.length; i++) {
-      if (ws.collections[i].name.toLowerCase() === String(pc.name).toLowerCase()) {
-        col = ws.collections[i];
-        break;
+    var col = targetCol || null;
+    if (!col) {
+      for (var i = 0; i < ws.collections.length; i++) {
+        if (ws.collections[i].name.toLowerCase() === String(pc.name).toLowerCase()) {
+          col = ws.collections[i];
+          break;
+        }
       }
     }
     if (!col) {
@@ -529,16 +675,24 @@ function applyImport(ctx, parsed) {
       ws.collections.push(col);
     }
     (pc.requests || []).forEach(function (pr) {
-      var req = model.normRequest(pr, ids);
+      var input = u.clone(pr);
+      var folderPath = Array.isArray(input.folderPath) ? input.folderPath : null;
+      delete input.folderPath;
+      if (wrapGroup) folderPath = [pc.name].concat(folderPath || []);
+      if (folderPath && folderPath.length) {
+        input.folderId = model.ensureFolderPath(col, folderPath);
+      }
+      var req = model.normRequest(input, ids);
       ids[req.id] = true;
       col.requests.push(req);
       addedRequests++;
     });
     col.updatedAt = u.nowIso();
-    collectionNames.push(col.name);
+    if (collectionNames.indexOf(col.name) < 0) collectionNames.push(col.name);
   });
 
   var addedEnvs = 0;
+  var firstEnvId = '';
   (parsed.environments || []).forEach(function (pe) {
     var existing = null;
     for (var i = 0; i < ws.environments.length; i++) {
@@ -563,8 +717,12 @@ function applyImport(ctx, parsed) {
       ws.environments.push(env);
       if (!ws.activeEnvId) ws.activeEnvId = env.id;
     }
+    if (!firstEnvId) firstEnvId = existing ? existing.id : env.id;
     addedEnvs++;
   });
+
+  // Swagger 导入带 activateEnv：请求用的是 {{baseUrl}}，必须切到刚导入的环境才可发送。
+  if (parsed.activateEnv === true && firstEnvId) ws.activeEnvId = firstEnvId;
 
   ctx.persist();
   return format.ok('import', {
@@ -581,8 +739,9 @@ function applyImport(ctx, parsed) {
 }
 
 function doImportInput(ctx, opts) {
+  var target = { collection: opts.collection, collectionId: opts.collectionId };
   if (opts.data !== undefined) {
-    return applyImport(ctx, transfer.parseImport(opts.data));
+    return applyImport(ctx, transfer.parseImport(opts.data), target);
   }
   if (opts.json) {
     var parsed;
@@ -591,7 +750,7 @@ function doImportInput(ctx, opts) {
     } catch (e) {
       return format.fail('import', 'JSON 解析失败: ' + e.message);
     }
-    return applyImport(ctx, transfer.parseImport(parsed));
+    return applyImport(ctx, transfer.parseImport(parsed), target);
   }
   if (opts.file) {
     return http.readJsonText(opts.file).then(function (text) {
@@ -601,10 +760,15 @@ function doImportInput(ctx, opts) {
       } catch (e) {
         throw new Error('文件不是合法 JSON: ' + e.message);
       }
-      return applyImport(ctx, transfer.parseImport(parsed));
+      return applyImport(ctx, transfer.parseImport(parsed), target);
     });
   }
-  return format.fail('import', '需要 JSON 内容或 --file <path>');
+  if (opts.url) {
+    return swagger.importFromUrl(opts.url).then(function (parsed) {
+      return applyImport(ctx, parsed, target);
+    });
+  }
+  return format.fail('import', '需要 JSON 内容、--file <path> 或 --url <swagger 地址>');
 }
 
 function doExport(ctx, opts) {
@@ -714,17 +878,23 @@ function runJson(j, ctx) {
         var copy = u.clone(j);
         delete copy.cmd;
         delete copy.collection;
+        delete copy.folder;
         return copy;
       })();
-      return doAdd(ctx, addBody, j.collection || '');
+      return doAdd(ctx, addBody, j.collection || '', j.folder || '');
     case 'update':
       var patch = j.patch || j.request || j.data || (function () {
         var copy = u.clone(j);
         delete copy.cmd;
         delete copy.id;
         delete copy.ref;
+        delete copy.folder;
         return copy;
       })();
+      if (j.folder && u.isObj(patch) && patch.folder === undefined) {
+        patch = u.clone(patch);
+        patch.folder = j.folder;
+      }
       return doUpdate(ctx, j.id || j.ref || j.name, patch);
     case 'delete':
       return doDelete(ctx, j.id || j.ref || j.name);
@@ -737,6 +907,14 @@ function runJson(j, ctx) {
         newName: j.newName,
         description: j.description
       });
+    case 'folder':
+      return doFolderAction(ctx, j.action || 'list', {
+        collection: j.collection || j.col,
+        ref: j.ref || j.id || j.name,
+        name: j.name,
+        parent: j.parent || j.parentId,
+        newName: j.newName || j.to
+      });
     case 'env':
       return doEnvAction(ctx, j.action || 'list', {
         name: j.name,
@@ -748,7 +926,14 @@ function runJson(j, ctx) {
     case 'history':
       return doHistory(ctx, { limit: j.limit, clear: j.clear });
     case 'import':
-      return doImportInput(ctx, { data: j.data, json: j.json, file: j.file });
+      return doImportInput(ctx, {
+        data: j.data,
+        json: j.json,
+        file: j.file,
+        url: j.url,
+        collection: j.collection,
+        collectionId: j.collectionId
+      });
     case 'export':
       return doExport(ctx, { ref: j.collection || j.ref || j.id, postman: j.postman });
     case 'open':
@@ -877,6 +1062,20 @@ function runText(payload, ctx) {
       }
       return doCollectionAction(ctx, sub, { ref: tokens[1] });
     }
+    case 'folder': {
+      var fsub = String(tokens[0] || 'list').toLowerCase();
+      if (fsub === 'list' || fsub === 'ls') return doFolderAction(ctx, 'list', { collection: tokens[1] });
+      if (fsub === 'add' || fsub === 'create') {
+        return doFolderAction(ctx, 'add', { collection: tokens[1], name: tokens.slice(2).join(' ') });
+      }
+      if (fsub === 'rename') {
+        return doFolderAction(ctx, 'rename', { collection: tokens[1], ref: tokens[2], newName: tokens.slice(3).join(' ') });
+      }
+      if (fsub === 'delete' || fsub === 'remove' || fsub === 'rm') {
+        return doFolderAction(ctx, 'delete', { collection: tokens[1], ref: tokens.slice(2).join(' ') });
+      }
+      return format.fail('folder', '未知分组操作: ' + fsub);
+    }
     case 'env': {
       var esub = String(tokens[0] || 'list').toLowerCase();
       if (esub === 'list' || esub === 'ls') return doEnvAction(ctx, 'list', {});
@@ -913,10 +1112,17 @@ function runText(payload, ctx) {
       return doHistory(ctx, { limit: Number(tokens[0]) || 20 });
     }
     case 'import': {
-      if (tokens[0] === '--file') {
-        return doImportInput(ctx, { file: tokens[1] });
+      var io = { file: '', url: '', collection: '', collectionId: '' };
+      for (var k = 0; k < tokens.length; k++) {
+        var key = tokens[k];
+        if (key === '--file') { io.file = tokens[++k] || ''; }
+        else if (key === '--url') { io.url = tokens[++k] || ''; }
+        else if (key === '--collection' || key === '--col') { io.collection = tokens[++k] || ''; }
+        else if (key === '--collection-id') { io.collectionId = tokens[++k] || ''; }
       }
-      return doImportInput(ctx, { json: restRaw });
+      if (io.file) return doImportInput(ctx, io);
+      if (io.url) return doImportInput(ctx, io);
+      return doImportInput(ctx, { json: restRaw, collection: io.collection, collectionId: io.collectionId });
     }
     case 'export': {
       var eo = parseOptions(tokens);
@@ -950,10 +1156,11 @@ function run(payload, ctx) {
 exports.run = run;
 exports.runJson = runJson;
 exports.runText = runText;
-exports.importData = function (ctx, obj) {
+exports.importData = function (ctx, obj, opts) {
   try {
-    return applyImport(ctx, transfer.parseImport(obj));
+    return applyImport(ctx, transfer.parseImport(obj), opts);
   } catch (e) {
     return format.fail('import', e && e.message ? e.message : String(e));
   }
 };
+exports.applyParsed = applyImport;

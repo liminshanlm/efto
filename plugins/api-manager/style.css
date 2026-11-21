@@ -181,6 +181,36 @@ input:focus, select:focus, textarea:focus {
 }
 .col-head .icon-btn { padding: 2px 6px; font-size: 12px; }
 
+.folder-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+}
+.folder-head:hover { background: var(--panel-2); }
+.folder-head .folder-caret {
+  width: 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.folder-head .folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.folder-head .folder-count {
+  color: var(--muted);
+  font-size: 11px;
+}
+.folder-head .icon-btn { padding: 2px 5px; font-size: 12px; }
+
 .req-item {
   display: flex;
   align-items: center;
@@ -526,6 +556,18 @@ input:focus, select:focus, textarea:focus {
   font-size: 12px;
   margin: 0 0 14px;
 }
+.import-target {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.import-target select, .import-target input { flex: 1; min-width: 0; }
+.import-url {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.import-url input { flex: 1; min-width: 0; }
 .modal-card textarea {
   width: 100%;
   min-height: 260px;

@@ -58,6 +58,7 @@ function normRequest(raw, existingIds) {
   return {
     id: id,
     name: u.trim(raw.name) || '未命名请求',
+    folderId: String(raw.folderId == null ? '' : raw.folderId),
     method: String(raw.method || 'GET').toUpperCase(),
     url: String(raw.url == null ? '' : raw.url),
     params: normKvList(raw.params),
@@ -70,15 +71,48 @@ function normRequest(raw, existingIds) {
   };
 }
 
+function normFolder(raw, existingIds) {
+  raw = u.isObj(raw) ? raw : {};
+  var id = u.trim(raw.id);
+  if (!id || (existingIds && existingIds[id])) id = u.newId('fld');
+  return {
+    id: id,
+    name: u.trim(raw.name) || '未命名分组',
+    parentId: String(raw.parentId == null ? '' : raw.parentId),
+    createdAt: raw.createdAt || u.nowIso()
+  };
+}
+
 function normCollection(raw, existingIds) {
   raw = u.isObj(raw) ? raw : {};
   var id = u.trim(raw.id);
   if (!id || (existingIds && existingIds[id])) id = u.newId('col');
+
+  var folders = [];
+  var folderMap = {};
+  if (Array.isArray(raw.folders)) {
+    for (var f = 0; f < raw.folders.length; f++) {
+      var src = u.isObj(raw.folders[f]) ? raw.folders[f] : {};
+      var folder = normFolder(src, existingIds);
+      if (existingIds) existingIds[folder.id] = true;
+      if (src.id) folderMap[String(src.id)] = folder.id;
+      folders.push(folder);
+    }
+  }
+  var folderIds = {};
+  folders.forEach(function (x) { folderIds[x.id] = true; });
+  folders.forEach(function (x) {
+    if (!x.parentId) return;
+    var mapped = folderMap[x.parentId] || x.parentId;
+    x.parentId = folderIds[mapped] ? mapped : '';
+  });
+
   var requests = [];
   if (Array.isArray(raw.requests)) {
     for (var i = 0; i < raw.requests.length; i++) {
       var req = normRequest(raw.requests[i], existingIds);
       if (existingIds) existingIds[req.id] = true;
+      if (req.folderId) req.folderId = folderMap[req.folderId] || (folderIds[req.folderId] ? req.folderId : '');
       requests.push(req);
     }
   }
@@ -86,6 +120,7 @@ function normCollection(raw, existingIds) {
     id: id,
     name: u.trim(raw.name) || '未命名集合',
     description: String(raw.description == null ? '' : raw.description),
+    folders: folders,
     requests: requests,
     createdAt: raw.createdAt || u.nowIso(),
     updatedAt: raw.updatedAt || u.nowIso()
@@ -136,9 +171,11 @@ function seed() {
       id: u.newId('col'),
       name: '示例',
       description: '开箱即用的示例集合，地址用环境变量 {{baseUrl}} 拼接',
+      folders: [],
       requests: [{
         id: u.newId('req'),
         name: 'Get Todo',
+        folderId: '',
         method: 'GET',
         url: '{{baseUrl}}/todos/1',
         params: [],
@@ -278,6 +315,100 @@ function ensureCollection(ws, name) {
   return col;
 }
 
+/** 分区：集合内的分组（可嵌套），请求通过 folderId 归属，空字符串表示集合根。 */
+
+function folderPath(col, folderId) {
+  var names = [];
+  var guard = 0;
+  var id = String(folderId || '');
+  while (id && guard++ < 32) {
+    var hit = null;
+    for (var i = 0; i < col.folders.length; i++) {
+      if (col.folders[i].id === id) { hit = col.folders[i]; break; }
+    }
+    if (!hit) break;
+    names.unshift(hit.name);
+    id = String(hit.parentId || '');
+  }
+  return names.join(' / ');
+}
+
+/** 按路径创建缺失的分组，返回最末级分组 id（空路径返回 ''）。 */
+function ensureFolderPath(col, path) {
+  if (!col.folders) col.folders = [];
+  var parts = Array.isArray(path) ? path : (path ? [path] : []);
+  var parentId = '';
+  for (var i = 0; i < parts.length; i++) {
+    var name = u.trim(parts[i]);
+    if (!name) continue;
+    var found = null;
+    for (var j = 0; j < col.folders.length; j++) {
+      var f = col.folders[j];
+      if (String(f.parentId || '') === parentId && f.name.toLowerCase() === name.toLowerCase()) {
+        found = f;
+        break;
+      }
+    }
+    if (!found) {
+      found = normFolder({ name: name, parentId: parentId });
+      col.folders.push(found);
+    }
+    parentId = found.id;
+  }
+  return parentId;
+}
+
+/** 找分组：id > 完整路径 > 名称；返回分组对象或 { error }。 */
+function findFolder(col, ref) {
+  var needle = u.trim(ref);
+  if (!needle) return { error: '缺少分组 id 或名称' };
+  var lower = needle.toLowerCase();
+  var hit = (col.folders || []).filter(function (f) { return f.id === needle; });
+  if (hit.length === 1) return hit[0];
+  hit = (col.folders || []).filter(function (f) {
+    return folderPath(col, f.id).toLowerCase() === lower;
+  });
+  if (hit.length === 1) return hit[0];
+  hit = (col.folders || []).filter(function (f) { return f.name.toLowerCase() === lower; });
+  if (hit.length === 1) return hit[0];
+  if (hit.length > 1) return { error: '匹配到多个分组，请用完整路径或 id' };
+  return { error: '没有找到分组: ' + needle };
+}
+
+/** 解析用户给的分组引用：id 直接命中；否则按路径补建。 */
+function resolveFolder(col, ref) {
+  var needle = u.trim(ref);
+  if (!needle) return '';
+  var direct = findFolder(col, needle);
+  if (!direct.error) return direct.id;
+  var parts = needle.split('/').map(function (x) { return u.trim(x); }).filter(Boolean);
+  return ensureFolderPath(col, parts);
+}
+
+/** 分组及其所有子孙分组的 id 集合。 */
+function descendantFolderIds(col, folderId) {
+  var out = {};
+  var stack = [String(folderId || '')];
+  while (stack.length) {
+    var cur = stack.pop();
+    if (!cur || out[cur]) continue;
+    out[cur] = true;
+    for (var i = 0; i < col.folders.length; i++) {
+      if (String(col.folders[i].parentId || '') === cur) stack.push(col.folders[i].id);
+    }
+  }
+  return out;
+}
+
+function countFolderRequests(col, folderId) {
+  var ids = descendantFolderIds(col, folderId);
+  var n = 0;
+  for (var i = 0; i < col.requests.length; i++) {
+    if (ids[col.requests[i].folderId]) n++;
+  }
+  return n;
+}
+
 function pushHistory(ws, entry) {
   var h = {
     id: u.newId('his'),
@@ -305,8 +436,15 @@ exports.seed = seed;
 exports.normalize = normalize;
 exports.normRequest = normRequest;
 exports.normCollection = normCollection;
+exports.normFolder = normFolder;
 exports.normEnvironment = normEnvironment;
 exports.normKvList = normKvList;
+exports.folderPath = folderPath;
+exports.ensureFolderPath = ensureFolderPath;
+exports.findFolder = findFolder;
+exports.resolveFolder = resolveFolder;
+exports.descendantFolderIds = descendantFolderIds;
+exports.countFolderRequests = countFolderRequests;
 exports.findRequest = findRequest;
 exports.findCollection = findCollection;
 exports.findEnvironment = findEnvironment;
