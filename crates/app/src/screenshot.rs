@@ -206,7 +206,6 @@ mod ffi {
     pub type CGImageRef = *mut c_void;
     pub type CGContextRef = *mut c_void;
     pub type CGColorSpaceRef = *mut c_void;
-    pub type CGWindowID = u32;
 
     #[repr(C)]
     #[derive(Clone, Copy)]
@@ -227,21 +226,13 @@ mod ffi {
         pub size: CGSize,
     }
 
-    pub const kCGWindowListOptionOnScreenOnly: u32 = 1 << 0;
-    pub const kCGNullWindowID: CGWindowID = 0;
-    pub const kCGWindowImageDefault: u32 = 0;
     /// 位图上下文的内存序：R、G、B、A（premultipliedLast + 32Big）
     pub const BITMAP_RGBA: u32 = 1 | (4 << 12);
 
     // 显示器枚举 / scale 在 crate::tile::ax（与平铺共用一套 CG 声明，避免符号重复声明）
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {
-        pub fn CGWindowListCreateImage(
-            rect: CGRect,
-            option: u32,
-            window: CGWindowID,
-            opts: u32,
-        ) -> CGImageRef;
+        pub fn CGDisplayCreateImage(display: u32) -> CGImageRef;
         pub fn CGImageRelease(img: CGImageRef);
         pub fn CGColorSpaceCreateDeviceRGB() -> CGColorSpaceRef;
         pub fn CGColorSpaceRelease(space: CGColorSpaceRef);
@@ -255,8 +246,6 @@ mod ffi {
             bitmap_info: u32,
         ) -> CGContextRef;
         pub fn CGContextRelease(ctx: CGContextRef);
-        pub fn CGContextTranslateCTM(ctx: CGContextRef, tx: f64, ty: f64);
-        pub fn CGContextScaleCTM(ctx: CGContextRef, sx: f64, sy: f64);
         pub fn CGContextDrawImage(ctx: CGContextRef, rect: CGRect, img: CGImageRef);
     }
 }
@@ -273,26 +262,7 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Shot, S
         );
     }
     let s = crate::tile::ax::display_scale();
-    let rect = ffi::CGRect {
-        origin: ffi::CGPoint {
-            x: x as f64 / s,
-            y: y as f64 / s,
-        },
-        size: ffi::CGSize {
-            width: width as f64 / s,
-            height: height as f64 / s,
-        },
-    };
     unsafe {
-        let img = ffi::CGWindowListCreateImage(
-            rect,
-            ffi::kCGWindowListOptionOnScreenOnly,
-            ffi::kCGNullWindowID,
-            ffi::kCGWindowImageDefault,
-        );
-        if img.is_null() {
-            return Err("屏幕捕获失败（CGWindowListCreateImage 返回空）".into());
-        }
         let mut rgba = vec![0u8; (width * height * 4) as usize];
         let space = ffi::CGColorSpaceCreateDeviceRGB();
         let ctx = ffi::CGBitmapContextCreate(
@@ -306,27 +276,42 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Shot, S
         );
         if ctx.is_null() {
             ffi::CGColorSpaceRelease(space);
-            ffi::CGImageRelease(img);
             return Err("创建位图上下文失败".into());
         }
-        // 位图上下文原点在左下；翻转成自顶向下（与 Windows 版同口径）
-        ffi::CGContextTranslateCTM(ctx, 0.0, height as f64);
-        ffi::CGContextScaleCTM(ctx, 1.0, -1.0);
-        // SAFETY: img 非空且由本函数持有；ctx 有效；目标矩形 = 整个缓冲区
-        ffi::CGContextDrawImage(
-            ctx,
-            ffi::CGRect {
-                origin: ffi::CGPoint { x: 0.0, y: 0.0 },
-                size: ffi::CGSize {
-                    width: width as f64,
-                    height: height as f64,
+        // 逐屏原生捕获再合成：每块屏的原生像素画进"点矩形 × 主屏 scale"的槽位，
+        // 混合缩放多屏下映射精确（单次 CGWindowListCreateImage 的光栅化不保证
+        // 与统一坐标系一致，实测会让选区映射漂到别的屏）。
+        // 位图上下文的缓冲行序已是自顶向下：直接画，**不要**再翻转（实测翻了会上下颠倒）。
+        let mut captured = 0u32;
+        for (id, r) in crate::tile::ax::displays() {
+            // SAFETY: id 来自 CGGetActiveDisplayList；图非空时由本函数 Release；
+            // 目标槽位矩形可超出画布——上下文自动裁剪（区域捕获即靠这一点）。
+            let img = ffi::CGDisplayCreateImage(id);
+            if img.is_null() {
+                continue;
+            }
+            captured += 1;
+            ffi::CGContextDrawImage(
+                ctx,
+                ffi::CGRect {
+                    origin: ffi::CGPoint {
+                        x: r.x as f64 * s - x as f64,
+                        y: r.y as f64 * s - y as f64,
+                    },
+                    size: ffi::CGSize {
+                        width: r.width as f64 * s,
+                        height: r.height as f64 * s,
+                    },
                 },
-            },
-            img,
-        );
+                img,
+            );
+            ffi::CGImageRelease(img);
+        }
         ffi::CGContextRelease(ctx);
         ffi::CGColorSpaceRelease(space);
-        ffi::CGImageRelease(img);
+        if captured == 0 {
+            return Err("屏幕捕获失败（CGDisplayCreateImage 无输出）".into());
+        }
         // 屏幕内容不透明；premultiplied 的 alpha 恒 255
         for px in rgba.chunks_exact_mut(4) {
             px[3] = 255;
@@ -614,5 +599,21 @@ mod tests {
         }
         let e = capture_virtual_screen().expect_err("无权限必须报错");
         assert!(e.contains("屏幕录制"), "{e}");
+    }
+}
+
+#[cfg(test)]
+mod debug_dump {
+    use super::*;
+
+    #[test]
+    #[ignore]
+    fn dump_virtual_screen() {
+        let disp = crate::tile::ax::displays();
+        eprintln!("displays = {:?}, scale = {}", disp, crate::tile::ax::display_scale());
+        let shot = capture_virtual_screen().expect("capture");
+        eprintln!("shot = {}x{} origin=({}, {})", shot.width, shot.height, shot.origin_x, shot.origin_y);
+        let img = shot.to_image().unwrap();
+        img.save("/tmp/efto-shot.png").unwrap();
     }
 }

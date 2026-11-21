@@ -36,8 +36,8 @@ pub fn resolve(settings: &Settings) -> &'static str {
 
 /// 系统首选语言是否是中文。
 ///
-/// 环境变量优先（CLI/测试可控），Windows 上再询问系统首选 UI 语言；
-/// 其它平台没有可靠信号时按英文处理（与 `auto` 的"非中文回退英文"一致）。
+/// 环境变量优先（CLI/测试可控），Windows 询问系统首选 UI 语言，macOS 走 CFLocale；
+/// 都没有可靠信号时按英文处理（与 `auto` 的"非中文回退英文"一致）。
 pub fn system_is_chinese() -> bool {
     for k in ["LC_ALL", "LC_MESSAGES", "LANG"] {
         if let Ok(v) = std::env::var(k) {
@@ -52,9 +52,53 @@ pub fn system_is_chinese() -> bool {
         let langid = unsafe { windows_sys::Win32::Globalization::GetUserDefaultUILanguage() };
         return (langid & 0x03ff) == 0x04;
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        return macos_prefers_chinese();
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         false
+    }
+}
+
+/// macOS 的语言首选项（CFLocale，"zh-Hans-CN" / "en-US" …）。
+/// GUI 应用不继承 LANG 环境变量，从 Finder/`open` 启动时上面的环境变量检查
+/// 一律落空——CFLocale 是这里的可靠信号（此前误按"无信号"回退英文）。
+#[cfg(target_os = "macos")]
+fn macos_prefers_chinese() -> bool {
+    use std::ffi::{c_char, c_void, CStr};
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFLocaleCopyPreferredLanguages() -> *const c_void;
+        fn CFArrayGetCount(arr: *const c_void) -> isize;
+        fn CFArrayGetValueAtIndex(arr: *const c_void, idx: isize) -> *const c_void;
+        fn CFStringGetCString(str: *const c_void, buf: *mut c_char, size: isize, enc: u32) -> u8;
+        fn CFRelease(cf: *const c_void);
+    }
+    /// kCFStringEncodingUTF8
+    const UTF8: u32 = 0x0800_0100;
+    // SAFETY: CFLocaleCopyPreferredLanguages 返回 +1 引用的 CFArray，用完 Release；
+    // 内部元素由数组持有，只读不释放。
+    unsafe {
+        let langs = CFLocaleCopyPreferredLanguages();
+        if langs.is_null() {
+            return false;
+        }
+        let mut zh = false;
+        if CFArrayGetCount(langs) > 0 {
+            let first = CFArrayGetValueAtIndex(langs, 0);
+            let mut buf = [0u8; 64];
+            if !first.is_null()
+                && CFStringGetCString(first, buf.as_mut_ptr() as *mut c_char, buf.len() as isize, UTF8)
+                    != 0
+            {
+                let s = CStr::from_ptr(buf.as_ptr() as *const c_char).to_string_lossy();
+                zh = s.to_lowercase().starts_with("zh");
+            }
+        }
+        CFRelease(langs);
+        zh
     }
 }
 
@@ -133,6 +177,19 @@ mod tests {
     fn hotkey_syntax_key_is_not_decorated() {
         let zh = tr("zh-CN", "settings.hotkey.desc");
         assert!(zh.contains("Alt+Space"), "语法说明必须保持 Tauri 语法: {zh}");
+    }
+
+    /// macOS 语言探测：环境变量未设时必须走 CFLocale（GUI 不继承 LANG）。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_locale_detection_matches_cfl() {
+        for k in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+            if std::env::var_os(k).map(|v| !v.is_empty()).unwrap_or(false) {
+                println!("skip: {k} 已设置，走环境变量路径");
+                return;
+            }
+        }
+        assert_eq!(system_is_chinese(), macos_prefers_chinese());
     }
 
     #[test]

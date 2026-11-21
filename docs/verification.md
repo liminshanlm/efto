@@ -1459,15 +1459,21 @@ log:error 事件、线程回收），**全部通过、零报错**：
 
 ## 截图工具 macOS 捕获层（2026-11-21）
 
-- 实现：CGWindowListCreateImage + 位图上下文归一（RGBA 自顶向下）；坐标沿用
-  "虚拟桌面物理像素"口径（点 × 主屏 scale）；缺屏幕录制权限明确报错 + 触发授权引导。
+- 实现（v2，修复颠倒/多屏映射后）：逐屏 `CGDisplayCreateImage` 原生捕获再合成
+  （"点矩形 × 主屏 scale"槽位，映射精确）；坐标沿用"虚拟桌面物理像素"口径；
+  缺屏幕录制权限明确报错 + 触发授权引导。首版单次 CGWindowListCreateImage +
+  翻转有上下颠倒与混合缩放映射漂移，见 bug-fix note
+  `2026-11-21-screenshot-flip-multiscreen.md`（dump 实证定位）。
 - **真机实测**（本机有屏幕录制权限）：整屏捕获非全黑、区域捕获 64×48 尺寸精确、
   crop 正确、alpha 全 255；`mac_capture_errors_without_permission` 反向路径 skip。
 - 单测 app 144 / core 241 / jsrt 48 全绿；GUI 冒烟 `Ctrl+Alt+1 -> screenshot`，
   mac 工具 7 项与 Windows 完全对齐。
 - **没验证**（人工清单新增）：截图交互全链路（框选/标注/复制/保存/钉图）与
-  长截图滚动拼接；混合缩放多屏的取景精度；CGWindowListCreateImage 已 deprecated
-  （macOS 14 仍工作），后续可换 ScreenCaptureKit。
+  长截图滚动拼接；覆盖层窗口跨屏显示的实际形态（捕获映射已逐屏精确，若覆盖层
+  只盖一屏则是窗口摆放问题，再报再修）；CGDisplayCreateImage/CGWindowListCreateImage
+  均已 deprecated（macOS 14 仍工作），后续可换 ScreenCaptureKit。
+- **语言修复**：macOS 语言探测改走 CFLocale（GUI 不继承 LANG，原先回退英文）——
+  `env -i` 下插件 locale 实测 `zh-CN`，GUI 界面显示中文留人工确认。
 
 
 ## macOS release 构建（2026-11-21）
