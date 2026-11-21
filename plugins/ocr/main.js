@@ -219,7 +219,8 @@ efto.onMainMessage(function (msg) {
     }
     var ext = state.mode === 'table' ? '.csv' : state.mode === 'formula' ? '.tex' : '.txt';
     var dir = efto.getPathByName('downloads');
-    var outPath = dir + '\\OCR_' + Date.now() + ext;
+    // 用 / 拼接：Node fs 在 Windows 同样接受，避免硬编码 \ 在 macOS 拼出带反斜杠的畸形文件名
+    var outPath = String(dir).replace(/[\\\/]+$/, '') + '/OCR_' + Date.now() + ext;
     efto.node.run({
       code: script.SOURCE,
       args: [JSON.stringify({ op: 'save', outPath: outPath, text: text })],
@@ -235,7 +236,7 @@ efto.onMainMessage(function (msg) {
     }).catch(function (e) {
       var m2 = errText(e);
       if (m2.indexOf('未配置') >= 0 || m2.indexOf('运行时') >= 0) {
-        m2 += '\n保存需要 Node：请到 设置 → 运行时 填写 node.exe 路径并点「检测」。';
+        m2 += '\n保存需要 Node：请到 设置 → 运行时 填写 Node.js 路径并点「检测」。';
       }
       state.error = m2;
       push();

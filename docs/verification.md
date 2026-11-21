@@ -1412,3 +1412,35 @@ mac 新增/改造的测试重点：
 - 快捷键指南 macOS 数据集未做（ShortcutGuide 保持收口）。
 - 真实窗口移动用到 `_AXUIElementGetWindow`（HIServices 长期稳定的私有导出，
   yabai/Hammerspoon 同用）；若未来系统移除该符号是链接期失败，不会静默错乱。
+
+
+## 示例插件 macOS 适配验证（2026-11-21）
+
+11 个示例插件逐个 `cli plugin-run` 冒烟（含事件/定时器通道：output 行、ui→page 消息、
+log:error 事件、线程回收），**全部通过、零报错**：
+
+| 插件 | 冒烟点 | 结果 |
+| --- | --- | --- |
+| hello-js | greet + db 计数 | ✅ |
+| timestamp-ts | ts 双向转换（秒/毫秒/ISO 行） | ✅ |
+| translate | 空载荷提示；真文本无模型时**明确报"未配置模型"** | ✅ |
+| hosts | 真读 /etc/hosts（utf8） | ✅ |
+| file-share | share 状态回传（端口 5421） | ✅ |
+| quickweb | UI 通道 | ✅ |
+| text-beautify | UI seed + **自测套件 19 项/7 文件全过** | ✅ |
+| ai-chat | prefill 通道 | ✅ |
+| ocr | state 回传；save-result 路径修复后正常 | ✅ |
+| api-manager | db/UI 通道 | ✅ |
+| dev-tools | 路由通道（uuid 等工具） | ✅ |
+
+### 修掉的平台问题
+
+- **ocr 保存路径硬编码 `\`**：mac 上拼出 `Downloads\OCR_x.txt` 畸形文件名——改 `/` 拼接
+  （Node fs 两端都接受），见 bug-fix note `2026-11-21-ocr-path-separator.md`。
+- ai-chat 路径分割（`split(/[\\/]/)`）与 file-share 的 `\\?\` 前缀剥离复核无问题。
+
+### 没验证
+
+- 插件 **UI 页面**在 mac Webview 的实点（需 GUI 交互）：dev-tools 的大工具箱、api-manager
+  的集合编辑、ai-chat 的对话流（需配置模型）——后端与通道已冒烟，UI 交互留人工。
+- ai-chat 真实流式回复（事件循环的增量推送）需配置模型后人工验证。
