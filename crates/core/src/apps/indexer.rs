@@ -7,6 +7,8 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use super::model::{AppEntry, AppSource, LaunchTarget};
+#[cfg(target_os = "macos")]
+use super::appbundle;
 use super::{registry, scanner, startmenu};
 use crate::config::Settings;
 use crate::error::Result;
@@ -27,6 +29,9 @@ pub struct ScanReport {
     pub desktop: usize,
     pub registry: usize,
     pub dir_scan: usize,
+    /// macOS 的 .app bundle 数量（Windows 上恒为 0）。旧缓存没有这个字段。
+    #[serde(default)]
+    pub app_bundle: usize,
     pub system: usize,
     pub merged: usize,
     pub dropped_duplicates: usize,
@@ -41,6 +46,7 @@ impl Default for ScanReport {
             desktop: 0,
             registry: 0,
             dir_scan: 0,
+            app_bundle: 0,
             system: 0,
             merged: 0,
             dropped_duplicates: 0,
@@ -230,6 +236,15 @@ impl Indexer {
         report.desktop = desk.len();
         all.append(&mut desk);
 
+        // macOS：.app bundle 是主发现渠道（与开始菜单同级的规范来源）。
+        // scan_roots 只覆盖"裸 exe 目录扫描"，应用目录恒扫，同开始菜单不受设置影响的语义。
+        #[cfg(target_os = "macos")]
+        {
+            let mut bundles = appbundle::collect(&appbundle::app_dirs(), &ignore);
+            report.app_bundle = bundles.len();
+            all.append(&mut bundles);
+        }
+
         if settings.enable_registry {
             let mut rg = registry::collect();
             report.registry = rg.len();
@@ -251,6 +266,16 @@ impl Indexer {
                 e.source = AppSource::Custom;
             }
             sc.append(&mut custom);
+            // 自定义目录里的 .app bundle 同样收（mac 上用户绿色软件常这么放），标 Custom
+            #[cfg(target_os = "macos")]
+            {
+                let mut bundles =
+                    appbundle::collect_limited(&settings.extra_dirs, &ignore, appbundle::MAX_DEPTH);
+                for e in &mut bundles {
+                    e.source = AppSource::Custom;
+                }
+                sc.append(&mut bundles);
+            }
             report.dir_scan = sc.len();
             all.append(&mut sc);
         }
@@ -272,13 +297,14 @@ impl Indexer {
         report.merged = index.len();
         report.dropped_duplicates = index.dropped_duplicates();
         tracing::info!(
-            "索引完成：{} 条（原始 {} 条，合并去重 {} 条；开始菜单 {}，桌面 {}，注册表 {}，目录 {}，系统 {}），用时 {}ms",
+            "索引完成：{} 条（原始 {} 条，合并去重 {} 条；开始菜单 {}，桌面 {}，注册表 {}，bundle {}，目录 {}，系统 {}），用时 {}ms",
             index.len(),
             raw,
             report.dropped_duplicates,
             report.start_menu,
             report.desktop,
             report.registry,
+            report.app_bundle,
             report.dir_scan,
             report.system,
             report.elapsed_ms

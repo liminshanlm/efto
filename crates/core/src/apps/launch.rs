@@ -56,6 +56,12 @@ pub fn launch(target: &LaunchTarget) -> Result<()> {
     if target.path.trim().is_empty() {
         return Err(CoreError::Launch("启动目标为空".into()));
     }
+    // .app bundle 交给 LaunchServices（`open`）：已在运行的应用走激活而不是二次启动，
+    // args 通过 `--args` 透传给应用主入口。
+    #[cfg(target_os = "macos")]
+    if target.kind == TargetKind::AppBundle {
+        return open_app_bundle(&target.path, target.args.as_deref());
+    }
     if needs_shell(target.kind) {
         return shell_open(&target.path, target.args.as_deref());
     }
@@ -66,6 +72,25 @@ pub fn launch(target: &LaunchTarget) -> Result<()> {
             shell_open(&target.path, target.args.as_deref())
         }
     }
+}
+
+/// `.app` bundle 交给 LaunchServices：`open <bundle> [--args …]`。
+#[cfg(target_os = "macos")]
+fn open_app_bundle(path: &str, args: Option<&str>) -> Result<()> {
+    let mut cmd = Command::new("open");
+    cmd.arg(path);
+    if let Some(a) = args {
+        let parts = split_args(a);
+        if !parts.is_empty() {
+            cmd.arg("--args").args(parts);
+        }
+    }
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| CoreError::Launch(format!("open {path}: {e}")))?;
+    Ok(())
 }
 
 fn spawn_exe(target: &LaunchTarget) -> Result<()> {
@@ -156,6 +181,14 @@ pub fn open_with(path: &str) -> Result<()> {
         return Err(CoreError::Launch(format!("打开方式失败（{rc}）: {path}")));
     }
     Ok(())
+}
+
+/// 用系统"打开方式"对话框选择程序打开文件。
+///
+/// macOS / Linux 没有等价的系统对话框，明确报错（不静默成功），见 docs/roadmap.md。
+#[cfg(not(windows))]
+pub fn open_with(_path: &str) -> Result<()> {
+    Err(CoreError::Launch("当前平台不支持「打开方式」".into()))
 }
 
 /// 在资源管理器中定位（选中）某个路径。

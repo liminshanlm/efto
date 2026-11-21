@@ -1,6 +1,6 @@
 # efto Help
 
-efto is a Windows launcher: press `Alt+Space`, type, and press Enter to launch apps or run actions. Version 0.1.0.
+efto is a Windows launcher (macOS support in progress: the CLI and search/launch/plugin chain work today, GUI tracked in `docs/macos-support-plan.md`): press `Alt+Space`, type, and press Enter to launch apps or run actions. Version 0.1.0.
 
 ## 1. Getting Started
 
@@ -189,10 +189,11 @@ Type the command prefix (default `>`) in the search box:
 - Entry rule: only a **line-start prefix** enters the command source; once it matches, app/calculator/file results are all suppressed. The default prefix is `>`, configurable in Settings, but letters, digits, and whitespace are rejected.
 - Output modes:
   - **Inline** (default): the command runs in the background and stdout / stderr come back line by line; click any line to copy, and stderr is shown in red.
-  - **Terminal window**: runs in a separate terminal, for interactive programs.
+  - **Terminal window**: runs in a separate terminal, for interactive programs (not yet on macOS — it errors explicitly; Terminal.app integration is v1.5).
 - Press `Esc` while running to kill the child process immediately.
 - Timeout defaults to 10 seconds (1–60), and also kills the process.
-- Shells: PowerShell, PowerShell 7+, cmd, Git Bash, WSL, and Custom:
+- Shells per platform: Windows offers PowerShell, PowerShell 7+, cmd, Git Bash, WSL, and Custom;
+  macOS offers zsh, bash, fish, and Custom (default zsh). A settings file reused across platforms falls back to the platform default shell at load.
   - WSL accepts a distro name; empty means the default distro.
   - Custom requires an executable path and accepts an argument template (`{cmd}` is replaced by the command).
   - The "Check" button in Settings runs a real `echo` to verify the shell.

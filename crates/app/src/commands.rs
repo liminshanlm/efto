@@ -33,14 +33,29 @@ pub async fn search_files(
     let hits = tauri::async_runtime::spawn_blocking(move || {
         // 命令前缀命中时文件源必须让路，否则 `> ipconfig` 后面会补一串文件；
         // 网页搜索触发词与系统命令同理，保持一屏只有用户要的那类结果。
-        if efto_core::search::command::parse(&query, &settings).is_some()
+        // Windows 分支里要补 win_settings 条件；mac 上不会重新赋值
+        #[allow(unused_mut)]
+        let mut blocked = efto_core::search::command::parse(&query, &settings).is_some()
             || efto_core::websearch::parse(&query, &settings.web_searches).is_some()
-            || efto_core::system::parse(&query).is_some()
-            || efto_core::search::win_settings::is_query(&query)
+            || efto_core::system::parse(&query).is_some();
+        #[cfg(windows)]
         {
+            blocked = blocked || efto_core::search::win_settings::is_query(&query);
+        }
+        if blocked {
             return Vec::new();
         }
-        efto_core::search::everything::hits(&query)
+        // 文件检索源（Everything/es.exe）是 Windows-only；mac 的 mdfind 是 v1.5
+        // （见 docs/macos-support-plan.md），这里返回空而不是报错——搜索源不该出结果
+        // 是"宁可不出"，不是失败。
+        #[cfg(windows)]
+        {
+            efto_core::search::everything::hits(&query)
+        }
+        #[cfg(not(windows))]
+        {
+            Vec::new()
+        }
     })
     .await
     .map_err(|e| format!("文件检索失败: {e}"))?;
@@ -525,9 +540,23 @@ pub(crate) fn lock_workstation() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 pub(crate) fn lock_workstation() -> Result<(), String> {
-    Err("锁屏仅支持 Windows".into())
+    // 显示器睡眠即锁定（"唤醒后立即需要密码"由系统设置保证）。pmset 是系统自带工具，
+    // 固定参数无用户输入，直接 spawn（同 shell_open 的先例），不走 exec 白名单。
+    std::process::Command::new("pmset")
+        .arg("displaysleepnow")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("锁屏失败：pmset displaysleepnow：{e}"))
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+pub(crate) fn lock_workstation() -> Result<(), String> {
+    Err("锁屏仅支持 Windows / macOS".into())
 }
 
 #[tauri::command]

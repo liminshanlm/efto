@@ -16,6 +16,8 @@ pub enum AppSource {
     Registry,
     /// 安装目录裸 exe
     DirScan,
+    /// macOS .app bundle（/Applications 等），与开始菜单同级的规范来源
+    AppBundle,
     /// 设置里自定义索引目录中的 .lnk/.url
     Custom,
     /// 用户手动添加
@@ -23,10 +25,10 @@ pub enum AppSource {
 }
 
 impl AppSource {
-    /// 排序先验：同样分数下，开始菜单 > 桌面 > 注册表 > 手动 > 自定义目录 > 目录扫描。
+    /// 排序先验：同样分数下，开始菜单/.app > 桌面 > 注册表 > 手动 > 自定义目录 > 目录扫描。
     pub fn prior(&self) -> f32 {
         match self {
-            AppSource::StartMenu => 1.00,
+            AppSource::StartMenu | AppSource::AppBundle => 1.00,
             AppSource::Desktop => 0.98,
             AppSource::Registry => 0.92,
             AppSource::Manual => 0.90,
@@ -41,6 +43,7 @@ impl AppSource {
             AppSource::Desktop => "desktop",
             AppSource::Registry => "registry",
             AppSource::DirScan => "dir_scan",
+            AppSource::AppBundle => "app_bundle",
             AppSource::Custom => "custom",
             AppSource::Manual => "manual",
         }
@@ -60,6 +63,8 @@ pub enum TargetKind {
     Uri,
     /// 文件夹
     Folder,
+    /// macOS .app bundle，交给 `open`（LaunchServices）启动
+    AppBundle,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -140,10 +145,10 @@ impl AppEntry {
         }
     }
 
-    /// 快捷方式/裸 exe 背后的真实 exe 路径（用于跨渠道去重与取图标）。
+    /// 快捷方式/裸 exe/.app 背后的真实启动目标路径（用于跨渠道去重与取图标）。
     pub fn exe_hint(&self) -> Option<&str> {
         match self.target.kind {
-            TargetKind::Exe => Some(self.target.path.as_str()),
+            TargetKind::Exe | TargetKind::AppBundle => Some(self.target.path.as_str()),
             TargetKind::Shortcut => self.icon.as_deref(),
             _ => None,
         }

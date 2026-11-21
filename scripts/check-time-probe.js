@@ -17,12 +17,14 @@ const { execFileSync } = require('child_process');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
+// Windows 产物叫 efto.exe，macOS/Linux 叫 efto（对齐 scripts/verify.sh 与 verify.ps1）
+const exeName = process.platform === 'win32' ? 'efto.exe' : 'efto';
 const exe =
   process.argv[2] ||
   process.env.EFTO_EXE ||
   (process.env.CARGO_TARGET_DIR
-    ? path.join(process.env.CARGO_TARGET_DIR, 'debug', 'efto.exe')
-    : path.join(root, 'target', 'debug', 'efto.exe'));
+    ? path.join(process.env.CARGO_TARGET_DIR, 'debug', exeName)
+    : path.join(root, 'target', 'debug', exeName));
 
 const pad = (n) => String(n).padStart(2, '0');
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];

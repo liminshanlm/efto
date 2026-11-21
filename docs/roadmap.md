@@ -39,6 +39,14 @@
 - **多用户/便携模式**：`--portable` 把数据目录放 exe 旁边，方便 U 盘。
 - **发布工程**：MSI/NSIS 安装包（`tauri-bundler`）、代码签名、自动更新（`tauri-plugin-updater`）、崩溃上报。
 
+## macOS 支持
+
+分阶段计划见 `docs/macos-support-plan.md`：v1 只保「唤起 → 搜索 → 启动应用 / 跑插件」，
+窗口平铺 / 通用动作 / 截图等系统集成推迟。**Phase 0/1 已落地（2026-11-21）**：
+mac 工具链脚本（`scripts/*.sh`）、`verify.sh` 端到端全绿、CI 矩阵（`.github/workflows/ci.yml`）、
+`.app` bundle 发现、zsh 命令源、平台化配置回落；实测见 `docs/verification.md` mac 段。
+Phase 2（GUI 宿主）未动工。
+
 ## 已知技术债（不排期，顺手清）
 
 1. `SearchService::search_apps` 是 O(n) 全扫，条目上万需要换成 prefix/trigram 索引。

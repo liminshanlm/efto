@@ -153,22 +153,24 @@ mod imp {
 
 #[cfg(not(windows))]
 mod imp {
+    /// 非 Windows 没有原生确认框；返回 true 让流程继续，不支持的动作会在执行步
+    /// 返回明确错误（硬性约定 3）。不能返回 false——那会把"不支持"吞成"已取消"。
     pub fn confirm(_message: &str) -> bool {
-        false
+        true
     }
     pub fn sleep() -> Result<(), String> {
-        Err("仅支持 Windows".into())
+        Err("当前平台不支持：睡眠".into())
     }
     pub fn restart() -> Result<(), String> {
-        Err("仅支持 Windows".into())
+        Err("当前平台不支持：重启电脑".into())
     }
     pub fn logout() -> Result<(), String> {
-        Err("仅支持 Windows".into())
+        Err("当前平台不支持：注销当前用户".into())
     }
     pub fn empty_trash() -> Result<(), String> {
-        Err("仅支持 Windows".into())
+        Err("当前平台不支持：清空回收站".into())
     }
     pub fn screensaver() -> Result<(), String> {
-        Err("仅支持 Windows".into())
+        Err("当前平台不支持：启动屏幕保护".into())
     }
 }

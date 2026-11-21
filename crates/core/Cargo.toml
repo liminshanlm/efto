@@ -19,6 +19,8 @@ chrono.workspace = true
 # 受限外部执行（es.exe）：摘要校验、zip 解包、下载。都已在依赖树里（tauri/png/ureq 带入）。
 sha2 = "0.10"
 flate2 = "1"
+# macOS .app 的 Info.plist（XML/二进制都能读），纯 Rust 无 C 依赖
+plist = "1"
 ureq = { version = "2", default-features = false, features = ["native-tls", "json", "gzip"] }
 
 # Win32_System_Console: GetConsoleOutputCP；Win32_Globalization: MultiByteToWideChar/GetACP

@@ -128,7 +128,9 @@ efto.output([{ title: '42', copy: '42' }]);
 
 ### efto 扩展：`efto.exec`
 
-让插件执行外部程序。目前白名单里只有 `es`（Everything CLI）。
+让插件执行外部程序。目前白名单里只有 `es`（Everything CLI），**仅 Windows 可执行**——
+macOS/Linux 上调用会明确报"当前平台不支持"（`core/src/exec.rs::run` 的平台门，
+在参数拦截之后，保证边界语义跨平台可测）。
 
 > 现状说明：**目前没有一方插件在用它**。首个使用者（Everything 文件检索）已改成
 > 内置搜索源（结果内联在下拉框），执行器下沉到 `core/src/exec.rs`，内联源与这个能力共用同一套

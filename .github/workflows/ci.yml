@@ -1,0 +1,51 @@
+# CI 矩阵：Windows + macOS 双端 gate。
+#
+# 两个平台的 gate 命令与本地一致（检查清单的唯一事实源是 docs/verification.md，
+# 改一侧必须对齐另一侧）：
+#   Windows: scripts/bootstrap.ps1（可跳过，runner 自带 MSVC）+ test + scripts/verify.ps1
+#   macOS:   scripts/bootstrap.sh  + test + scripts/verify.sh
+#
+# 本仓库托管在 Codeup（git@codeup.aliyun.com:.../efto.git）时本文件不被 Codeup 执行：
+# 云效流水线照此配置两个任务即可——windows-latest 与 macos-latest（arm64）各跑
+# 上面对应的两条命令。V8 预编译库在 vendor/rusty_v8/（离线可用，不依赖下载）。
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  gate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Windows ---
+      - name: bootstrap (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
+      - name: unit tests (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File scripts/cargo.ps1 -Cmd "test --workspace"
+      - name: verify (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
+
+      # --- macOS ---
+      - name: bootstrap (macos)
+        if: runner.os == 'macOS'
+        run: scripts/bootstrap.sh
+      - name: unit tests (macos)
+        if: runner.os == 'macOS'
+        run: scripts/cargo.sh "test --workspace"
+      - name: verify (macos)
+        if: runner.os == 'macOS'
+        run: scripts/verify.sh

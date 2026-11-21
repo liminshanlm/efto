@@ -3,15 +3,18 @@
 pub mod calc;
 pub mod clock;
 pub mod command;
+#[cfg(windows)]
 pub mod everything;
 pub mod fuzzy;
 pub mod pinyin;
 pub mod service;
 pub mod timestamp;
+#[cfg(windows)]
 pub mod win_settings;
 
 pub use calc::{evaluate as evaluate_expression, format_number};
 pub use clock::{clock_hits, is_clock_query};
+#[cfg(windows)]
 pub use everything::hits as everything_hits;
 pub use fuzzy::{MatchKey, MatchReason};
 pub use service::{merge_hits, BuiltinAction, DefaultPanel, SearchService};

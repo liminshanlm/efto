@@ -1339,6 +1339,7 @@ dependencies = [
  "globset",
  "once_cell",
  "pinyin",
+ "plist",
  "serde",
  "serde_json",
  "sha2",

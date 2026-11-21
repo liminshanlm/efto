@@ -224,7 +224,7 @@ if ($text -match '\(everything\)') {
 # entry so agents can exercise it without the GUI.
 Write-Host '==> run-command: dry-run resolves a shell'
 $out = Check 'run-command: dry-run' @('cli', 'run-command', 'echo efto-verify', '--dry-run')
-if ($out -notmatch 'powershell|pwsh|cmd|bash|wsl') {
+if ($out -notmatch 'powershell|pwsh|cmd|bash|wsl|zsh|fish') {
   $fail++; Write-Host '  FAIL: dry-run output does not look like a shell command' -ForegroundColor Red
 }
 Write-Host '==> run-command: echo round-trip'

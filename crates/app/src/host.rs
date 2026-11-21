@@ -694,6 +694,10 @@ mod tests {
         assert!(e.contains("参数"), "{e}");
     }
 
+    /// exec 的 happy path 走完整链路（JSON -> 白名单 -> 摘要校验 -> 子进程 -> 代码页解码）。
+    /// 依赖真实 es.exe（Windows 程序）与控制台代码页语义，macOS 上没有对应物，
+    /// 见 docs/macos-support-plan.md（Everything 检索源 Windows-only）。
+    #[cfg(windows)]
     #[test]
     fn exec_happy_path_returns_decoded_output() {
         // 走完整链路（JSON -> 白名单 -> 摘要校验 -> 子进程 -> 代码页解码）

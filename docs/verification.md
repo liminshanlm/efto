@@ -1258,6 +1258,57 @@ UI + 命令双通道）。HTTP 走 `efto.node.run`，命令机器可读结果以
 未验证：YAML 规范、OAuth2 等需要在请求前换取 token 的鉴权流程；Swagger 的
 `servers[].variables` 未做替换（按字面生成 URL）。
 
+## macOS 验证记录（2026-11-21，Apple Silicon / macOS 14.6.1 / Rust 1.100）
+
+Phase 0/1（见 `docs/macos-support-plan.md`）的实测记录。
+
+### 单元测试：374 通过 / 0 失败
+
+```
+efto-app  104 passed   efto-core  222 passed   efto-jsrt  48 passed（真起 V8）
+```
+
+顺带修掉 `ai::tests::chat_stream_reads_sse_from_http` 的 fake-server RST 竞态
+（server 没读完请求 body 就关连接 → 客户端读响应体偶发 EINVAL），修后单测连跑 8 次全过，
+见 `.agents/notes/implemented/bug-fix/2026-11-21-ai-stream-test-rst-race.md`。
+
+mac 新增/改造的测试重点：
+
+| 模块 | 关键断言 |
+| --- | --- |
+| `apps::appbundle` | Info.plist 名（DisplayName > Name > 目录名）、bundle id 别名、**bundle 内 helper 反例**（`.app` 是叶子）、忽略规则整包吃掉、Utilities 子目录深度内能扫到 |
+| `apps::scanner` | mac 走可执行位判定、`.app` 子树不递归、**系统工具白名单必须为空**（ms-settings: 不得漏进 mac 索引） |
+| `config::*` | `normalize_for_platform` 跨平台回落（shell + 显式路径清理 + 工具 id 丢弃）、默认工具列表取平台子集、`CommandShell::default` 平台化 |
+| `exec::*` | zsh `-lc` 参数拼装、Cmd/PowerShell/WSL 断言仅 Windows、es.exe 端到端仅 Windows、timeout 测试在 es 起不来时 skip 不假绿 |
+| `search::service` | **mac 上 `ms-settings:` 不出设置页**（反例）、工具关键词双向断言（支持的必命中 / 平台不支持的必不出现） |
+| `apps::startmenu` | 忽略规则 fixture 按平台选路径形状（globset 在 Unix 上 `\` 不是分隔符），反向断言在两种形状下都真的过 matcher |
+
+### `scripts/verify.sh` 端到端：ALL CHECKS PASSED
+
+与 `verify.ps1` 同一检查清单（唯一事实源是本文件）；差异点显式 SKIP 不计通过：
+
+- index / plugins（translate 发现）、拼音 e2e（`fy` → 翻译，mac 无 CJK 系统应用，
+  用插件触发词做靶子，与 ps1 的 jsb→记事本 同一目的）、CJK 触发词 `翻译`；
+- 计算器 6 组（含 `chrome` / `1700000000` 不劫持反例）；
+- plugin-run：hello-js / timestamp-ts 双向（epoch 对与机器时区无关）/ translate 空载荷 /
+  未知插件 exit 3；**hosts SKIP（Windows-only）**；
+- everything 内联源 **SKIP（Windows-only，mac 的 mdfind 是 v1.5）**；
+- run-command dry-run（解析出 zsh）+ echo 回环、capabilities --json、files --dry-run、
+  focus 未知 pid exit 3；
+- launch：dry-run 解析出 TextEdit → 真启动 → osascript quit（mac 上 `.app` 走 `open`，
+  pid 日志是 `open` 的 pid，清理只能靠 quit，与 ps1"杀掉那一个 pid"同义）。
+- 时间探针（check-time-probe.js）全量对齐 Node/ICU（含"不劫持"与"计算器让位"边界）。
+
+### 没验证 / 没做
+
+- **Windows 侧回归未跑**：本批改动理论上不碰 Windows 行为，但 `verify.ps1` +
+  `test --workspace` 需要 CI 矩阵或 Windows 机器跑一次才算闭环（`.github/workflows/ci.yml`）。
+- GUI 全部（热键、托盘、图标、插件窗口、设置页）——Phase 2。
+- hosts 保存（无提权路径）、系统动作（睡眠/重启/注销/清空回收站/屏保，明确报不支持）、
+  终端模式执行（明确报不支持）——v1.5。
+- tile / 截图 / 通用动作 / 快捷键指南 / 文件缓冲（mac 不进搜索结果，执行层报错兜底）——Phase 4。
+- `x86_64-apple-darwin`（Intel mac）未构建；vendor 只备了 arm64 产物。
+
 
 
 

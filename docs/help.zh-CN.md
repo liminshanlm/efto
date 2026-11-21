@@ -1,6 +1,6 @@
 # efto 使用帮助
 
-efto 是一个 Windows 桌面启动器：`Alt+Space` 唤起，输入即搜，回车启动应用或执行动作。版本 0.1.0。
+efto 是一个 Windows 桌面启动器（macOS 支持进行中：CLI 与搜索/启动/插件链路已可用，GUI 见 `docs/macos-support-plan.md`）：`Alt+Space` 唤起，输入即搜，回车启动应用或执行动作。版本 0.1.0。
 
 ## 1. 快速开始
 
@@ -188,10 +188,11 @@ efto.exe cli capabilities --json
 - 入口判定：**只有行首前缀**才进入命令源；一旦命中，应用/计算器/文件等结果全部让路。前缀默认为 `>`，可在设置里修改，但不能使用字母、数字或空白。
 - 输出呈现：
   - **内联输出**（默认）：命令在后台执行，stdout / stderr 逐行回到下拉列表；单击任意一行即可复制，stderr 显示为红色。
-  - **终端窗口**：打开独立终端执行，适合需要交互输入的程序。
+  - **终端窗口**：打开独立终端执行，适合需要交互输入的程序（macOS 暂不支持终端模式，会明确报错；v1.5 接 Terminal.app）。
 - 执行中按 `Esc` 会立即杀掉子进程。
 - 超时默认 10 秒（可设 1–60 秒），超时同样会杀掉子进程。
-- Shell 可选 PowerShell、PowerShell 7+、cmd、Git Bash、WSL 与自定义：
+- Shell 按平台取值：Windows 可选 PowerShell、PowerShell 7+、cmd、Git Bash、WSL 与自定义；
+  macOS 可选 zsh、bash、fish 与自定义（默认 zsh）。跨平台复用的配置文件会在加载时回落到平台默认 Shell。
   - WSL 可填写发行版名，留空使用默认发行版。
   - 自定义 Shell 必须填写可执行文件路径，并可写参数模板（`{cmd}` 会被替换成实际命令）。
   - 设置页的“检测”按钮会真跑一条 `echo`，确认 Shell 能启动。

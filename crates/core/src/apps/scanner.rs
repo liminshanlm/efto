@@ -1,6 +1,8 @@
 //! 常见安装目录扫描 + 系统工具白名单。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+#[cfg(windows)]
+use std::path::Path;
 
 use walkdir::WalkDir;
 
@@ -9,28 +11,38 @@ use super::startmenu::IgnoreMatcher;
 use crate::fsutil;
 
 /// 平台默认安装根目录。
+///
+/// macOS 上与 bundle 发现共用同一组应用目录（[`appbundle::app_dirs`]）：
+/// `.app` 由 appbundle 收，这里只捡目录树里的裸可执行文件。
 pub fn default_roots() -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let push = |out: &mut Vec<PathBuf>, v: Option<std::ffi::OsString>, tail: &str| {
-        if let Some(base) = v {
-            let p = Path::new(&base).join(tail);
-            if p.is_dir() {
-                out.push(p);
+    #[cfg(windows)]
+    {
+        let mut out = Vec::new();
+        let push = |out: &mut Vec<PathBuf>, v: Option<std::ffi::OsString>, tail: &str| {
+            if let Some(base) = v {
+                let p = Path::new(&base).join(tail);
+                if p.is_dir() {
+                    out.push(p);
+                }
             }
-        }
-    };
-    push(
-        &mut out,
-        std::env::var_os("ProgramFiles"),
-        "",
-    );
-    push(&mut out, std::env::var_os("ProgramFiles(x86)"), "");
-    push(&mut out, std::env::var_os("programw6432"), "");
-    push(&mut out, std::env::var_os("LOCALAPPDATA"), "Programs");
-    push(&mut out, std::env::var_os("ProgramData"), "Microsoft\\Windows\\Start Menu");
-    out.retain(|p| p.is_dir());
-    out.dedup();
-    out
+        };
+        push(
+            &mut out,
+            std::env::var_os("ProgramFiles"),
+            "",
+        );
+        push(&mut out, std::env::var_os("ProgramFiles(x86)"), "");
+        push(&mut out, std::env::var_os("programw6432"), "");
+        push(&mut out, std::env::var_os("LOCALAPPDATA"), "Programs");
+        push(&mut out, std::env::var_os("ProgramData"), "Microsoft\\Windows\\Start Menu");
+        out.retain(|p| p.is_dir());
+        out.dedup();
+        out
+    }
+    #[cfg(not(windows))]
+    {
+        super::appbundle::app_dirs()
+    }
 }
 
 /// 单文件 exe 扫描的最大深度：Program Files\Foo\bin\app.exe 足够，再深基本是依赖。
@@ -55,6 +67,10 @@ pub fn collect(roots: &[PathBuf], ignore: &IgnoreMatcher) -> Vec<AppEntry> {
                     .to_string_lossy()
                     .to_ascii_lowercase();
                 if name.starts_with('$') || name.starts_with('.') {
+                    return false;
+                }
+                // .app 是应用本体，bundle 由 appbundle 收；内部的 Contents/MacOS 全是 helper
+                if name.ends_with(".app") {
                     return false;
                 }
                 if matches!(
@@ -82,11 +98,28 @@ pub fn collect(roots: &[PathBuf], ignore: &IgnoreMatcher) -> Vec<AppEntry> {
                 continue;
             }
             let path = de.path();
-            let is_exe = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| e.eq_ignore_ascii_case("exe"))
-                .unwrap_or(false);
+            // Windows 只认 .exe；macOS/Linux 的原生二进制一般无扩展名，看可执行位
+            //（保留 .exe 识别：模拟器/测试 fixture 里的 Windows 形状文件仍可被扫到）。
+            let is_exe = {
+                let ext = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.eq_ignore_ascii_case("exe"))
+                    .unwrap_or(false);
+                #[cfg(windows)]
+                {
+                    ext
+                }
+                #[cfg(not(windows))]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let exec_bit = de
+                        .metadata()
+                        .map(|m| m.permissions().mode() & 0o111 != 0)
+                        .unwrap_or(false);
+                    ext || exec_bit
+                }
+            };
             if !is_exe {
                 continue;
             }
@@ -148,6 +181,7 @@ fn prettify_stem(stem: &str) -> String {
 }
 
 /// Windows 自带工具，给出中文名与规范入口，避免只能搜到 notepad.exe。
+#[cfg(windows)]
 pub fn system_tools() -> Vec<AppEntry> {
     const TOOLS: &[(&str, &str, &str, &[&str])] = &[
         ("记事本", "notepad.exe", "C:\\Windows\\System32\\notepad.exe", &["notepad", "文本编辑器"]),
@@ -215,6 +249,14 @@ pub fn system_tools() -> Vec<AppEntry> {
     out
 }
 
+/// macOS/Linux 不需要系统工具白名单：系统应用（终端、活动监视器、系统设置等）
+/// 都在 /System/Applications 一带，bundle 发现已覆盖。ms-settings: 是 Windows URI，
+/// 收进 mac 索引只会得到一条打不开的结果（硬性约定 3：宁可不出，不可乱出）。
+#[cfg(not(windows))]
+pub fn system_tools() -> Vec<AppEntry> {
+    Vec::new()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -244,8 +286,15 @@ mod tests {
     #[test]
     fn system_tools_exist_on_this_machine() {
         let tools = system_tools();
-        // 至少记事本/设置这类一定存在；不存在也不应报错
-        assert!(!tools.is_empty());
-        assert!(tools.iter().any(|t| t.name == "设置"));
+        #[cfg(windows)]
+        {
+            // 至少记事本/设置这类一定存在；不存在也不应报错
+            assert!(!tools.is_empty());
+            assert!(tools.iter().any(|t| t.name == "设置"));
+        }
+        // 反例（硬性约定 2/3）：mac/Linux 上必须为空——ms-settings: 这类 Windows URI
+        // 漏进索引就是一条打不开的结果；系统应用走 bundle 发现，不走白名单。
+        #[cfg(not(windows))]
+        assert!(tools.is_empty(), "mac 不该有系统工具白名单条目：{tools:?}");
     }
 }

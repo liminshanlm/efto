@@ -49,6 +49,19 @@ impl BuiltinAction {
         Self::ALL.iter().copied().find(|a| a.name() == name)
     }
 
+    /// 平台支持判定：不支持的动作**不进搜索**（宁可不出，不可乱出——硬性约定 2）。
+    /// 执行层仍有明确报错兜底（硬性约定 3），平台清单见 docs/macos-support-plan.md。
+    pub fn supported_on_platform(self) -> bool {
+        match self {
+            Self::Screenshot
+            | Self::TileWindows
+            | Self::ShortcutGuide
+            | Self::UniversalActions
+            | Self::FileBuffer => cfg!(windows),
+            _ => true,
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match self {
             BuiltinAction::OpenSettings => "settings",
@@ -237,6 +250,9 @@ impl SearchService {
     pub fn search_actions(query: &str, limit: usize) -> Vec<SearchHit> {
         let mut out: Vec<SearchHit> = Vec::new();
         for action in BuiltinAction::ALL {
+            if !action.supported_on_platform() {
+                continue;
+            }
             if let Some((score, reason)) = action.search_text().best(query) {
                 // 内置动作本身数量少，给固定加成让它们在同分时可见
                 out.push(action.hit(score * 0.85 + 40.0, reason));
@@ -314,6 +330,8 @@ impl SearchService {
         }
         // 冒号后已输入内容：设置页独占结果，避免收藏夹/应用子序列混进来。
         // 只输入 `ms-settings:` 时不短路，仍允许根条目排在列表前面。
+        // `ms-settings:` 是 Windows 专有入口（mac 的系统设置搜索见 docs/macos-support-plan.md v1.5）。
+        #[cfg(windows)]
         if super::win_settings::is_query(q) && q.len() > super::win_settings::PREFIX.len() {
             return super::win_settings::hits(q, limit);
         }
@@ -347,7 +365,8 @@ impl SearchService {
         groups.push(super::clock::clock_hits(q, now));
         // 输入是时间时给出秒级 + 毫秒级两行
         groups.push(super::timestamp::time_hits_at(q, now));
-        // `ms-settings:` 前缀：列出/过滤 Windows 设置页
+        // `ms-settings:` 前缀：列出/过滤 Windows 设置页（仅 Windows）
+        #[cfg(windows)]
         groups.push(super::win_settings::hits(q, limit));
         if let Some(ext) = external_hit(q) {
             groups.push(vec![ext]);
@@ -658,6 +677,8 @@ mod tests {
         }
     }
 
+    /// `ms-settings:` 是 Windows 专有搜索源（模块只在 Windows 编译）。
+    #[cfg(windows)]
     #[test]
     fn ms_settings_prefix_lists_pages() {
         let index = AppIndex::empty();
@@ -678,6 +699,19 @@ mod tests {
         // 不劫持：普通输入不出设置页
         let hits = SearchService::query("显示", &index, &reg, 10);
         assert!(hits.iter().all(|h| h.source != "settings"), "{hits:?}");
+    }
+
+    /// 反例（硬性约定 2）：mac/Linux 上 `ms-settings:` 不该出任何设置页结果——
+    /// 没有实现的搜索源宁可不出，不可乱出。
+    #[cfg(not(windows))]
+    #[test]
+    fn ms_settings_is_not_a_source_on_this_platform() {
+        let index = AppIndex::empty();
+        let reg = PluginRegistry::empty();
+        for q in ["ms-settings:", "ms-settings:bluetooth", "显示"] {
+            let hits = SearchService::query(q, &index, &reg, 10);
+            assert!(hits.iter().all(|h| h.source != "settings"), "{q}: {hits:?}");
+        }
     }
 
     #[test]
@@ -817,12 +851,24 @@ mod tests {
     fn tool_keywords_are_searchable() {
         let index = AppIndex::empty();
         let reg = PluginRegistry::empty();
-        for (q, name) in [("截图", "screenshot"), ("clipboard", "clipboard"), ("锁屏", "lock_screen")] {
+        // 双向断言：支持的动作必须命中，平台不支持的动作必须不出现（宁可不出）
+        for (q, name) in [
+            ("截图", "screenshot"),
+            ("clipboard", "clipboard"),
+            ("锁屏", "lock_screen"),
+        ] {
             let hits = SearchService::query(q, &index, &reg, 10);
-            assert!(
-                hits.iter().any(|h| h.payload == HitPayload::Action { name: name.into() }),
-                "{q} 应命中 {name}：{hits:?}"
-            );
+            let hit = hits
+                .iter()
+                .any(|h| h.payload == HitPayload::Action { name: name.into() });
+            let supported = BuiltinAction::from_name(name)
+                .map(|a| a.supported_on_platform())
+                .unwrap_or(false);
+            if supported {
+                assert!(hit, "{q} 应命中 {name}：{hits:?}");
+            } else {
+                assert!(!hit, "{q} 不该命中 {name}（平台不支持）：{hits:?}");
+            }
         }
     }
 

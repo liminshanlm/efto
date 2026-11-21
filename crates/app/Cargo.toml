@@ -34,6 +34,8 @@ once_cell.workspace = true
 url = "2"
 percent-encoding = "2"
 arboard = "3"
+# HTTP 能力（AI）。native-tls：Windows 走 schannel、macOS 走 Security.framework，不引入 ring/aws-lc。
+ureq = { version = "2", default-features = false, features = ["native-tls", "json", "gzip"] }
 dirs.workspace = true
 chrono.workspace = true
 # 截图裁剪与 PNG 编码；jpeg 仅用于插件里的本地图片预览（缩略图）
@@ -72,10 +74,6 @@ windows-sys = { version = "0.59", features = [
     "Win32_System_Power",
     "Win32_Security",
 ] }
-
-
-# HTTP 能力（AI）。Windows 上走系统 schannel，不引入 ring/aws-lc，避免额外 C 依赖。
-ureq = { version = "2", default-features = false, features = ["native-tls", "json", "gzip"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -59,11 +59,10 @@ impl Default for ThemeMode {
 }
 
 /// 搜索框命令执行使用的 Shell。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CommandShell {
     /// Windows PowerShell 5.1（`powershell.exe`）。
-    #[default]
     Powershell,
     /// PowerShell 7+（`pwsh.exe`）。
     Pwsh,
@@ -73,8 +72,29 @@ pub enum CommandShell {
     GitBash,
     /// WSL 默认发行版的 bash。
     Wsl,
+    /// zsh（macOS 默认 Shell）。
+    Zsh,
+    /// bash。
+    Bash,
+    /// fish。
+    Fish,
     /// 用户自填的可执行文件 + 参数模板。
     Custom,
+}
+
+impl Default for CommandShell {
+    fn default() -> Self {
+        // 平台默认：Windows 用 PowerShell，macOS/Linux 用 zsh。
+        // 加载旧配置时的跨平台回落见 Settings::normalize_for_platform。
+        #[cfg(windows)]
+        {
+            Self::Powershell
+        }
+        #[cfg(not(windows))]
+        {
+            Self::Zsh
+        }
+    }
 }
 
 impl CommandShell {
@@ -86,7 +106,20 @@ impl CommandShell {
             Self::Cmd => "cmd",
             Self::GitBash => "Git Bash",
             Self::Wsl => "WSL",
+            Self::Zsh => "zsh",
+            Self::Bash => "bash",
+            Self::Fish => "fish",
             Self::Custom => "自定义",
+        }
+    }
+
+    /// 该 shell 是否是本平台可执行的选择（设置页下拉与配置归一都用它）。
+    pub fn available_on_platform(self) -> bool {
+        match self {
+            // Windows 系：macOS/Linux 上即使装了 pwsh 也走「自定义」显式配置
+            Self::Powershell | Self::Pwsh | Self::Cmd | Self::GitBash | Self::Wsl => cfg!(windows),
+            Self::Zsh | Self::Bash | Self::Fish => !cfg!(windows),
+            Self::Custom => true,
         }
     }
 }
@@ -235,7 +268,10 @@ pub struct Settings {
     pub tool_hotkeys_seeded: bool,
 }
 
-/// efto 自带工具的 id，顺序即设置页的基础顺序。
+/// efto 自带工具的 id，顺序即设置页的基础顺序。按平台取子集：
+/// 平台没实现的工具不进列表（设置页不展示、`normalize_tools` 丢弃、热键不占位），
+/// 调用到不支持的工具仍会明确报错兜底（硬性约定 3），见 docs/macos-support-plan.md。
+#[cfg(windows)]
 pub const KNOWN_TOOLS: &[&str] = &[
     "screenshot",
     "clipboard",
@@ -245,6 +281,8 @@ pub const KNOWN_TOOLS: &[&str] = &[
     "snippets",
     "file_buffer",
 ];
+#[cfg(not(windows))]
+pub const KNOWN_TOOLS: &[&str] = &["clipboard", "lock_screen", "snippets"];
 
 /// 常用工具里用户自选应用的条目前缀（后接 [`crate::apps::model::AppEntry::id`]）。
 pub const TOOL_APP_PREFIX: &str = "app:";
@@ -286,25 +324,39 @@ pub fn normalize_tools(ids: impl IntoIterator<Item = String>) -> Vec<String> {
     out
 }
 
+/// 默认忽略规则，按平台取不同集合：规则必须"每条都真的能命中"（见 startmenu 的
+/// `every_default_ignore_rule_matches_something`），Windows 专有噪音目录放在 mac
+/// 默认集里就是死规则。用户改过的 settings.json 不受影响，这里只管缺省值。
+pub fn default_ignore_globs() -> Vec<String> {
+    #[cfg(windows)]
+    {
+        vec![
+            "**/WindowsApps/**".into(),
+            "**/$Recycle.Bin/**".into(),
+            "**/WinSxS/**".into(),
+            "**/Temp/**".into(),
+            "**/node_modules/**".into(),
+            "**/.git/**".into(),
+            // .NET/Mono 的依赖目录，与 scanner.rs 的目录名黑名单保持一致。
+            // 这里以前写成 "**/ assemblies/**"（多一个前导空格），
+            // 只能匹配名字真以空格开头的目录 —— 等于一条死规则，且无人发现，
+            // 因为忽略规则当时一条测试都没有。
+            "**/assemblies/**".into(),
+        ]
+    }
+    #[cfg(not(windows))]
+    {
+        vec!["**/node_modules/**".into(), "**/.git/**".into()]
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
             hotkey: "Alt+Space".into(),
             scan_roots: vec![],
             extra_dirs: vec![],
-            ignore_globs: vec![
-                "**/WindowsApps/**".into(),
-                "**/$Recycle.Bin/**".into(),
-                "**/WinSxS/**".into(),
-                "**/Temp/**".into(),
-                "**/node_modules/**".into(),
-                "**/.git/**".into(),
-                // .NET/Mono 的依赖目录，与 scanner.rs 的目录名黑名单保持一致。
-                // 这里以前写成 "**/ assemblies/**"（多一个前导空格），
-                // 只能匹配名字真以空格开头的目录 —— 等于一条死规则，且无人发现，
-                // 因为忽略规则当时一条测试都没有。
-                "**/assemblies/**".into(),
-            ],
+            ignore_globs: default_ignore_globs(),
             plugin_dirs: vec![],
             cmd_aliases: Default::default(),
             disabled_plugins: vec![],
@@ -324,7 +376,7 @@ impl Default for Settings {
             default_model: None,
             command_enabled: true,
             command_prefix: DEFAULT_COMMAND_PREFIX.into(),
-            command_shell: CommandShell::Powershell,
+            command_shell: CommandShell::default(),
             command_shell_path: None,
             command_wsl_distro: None,
             command_custom_args: String::new(),
@@ -355,6 +407,7 @@ impl Settings {
             Some(s) => match serde_json::from_str::<Settings>(&s) {
                 Ok(mut v) => {
                     // 手改 settings.json 可能漏 id / 让默认模型悬空，加载时统一收敛
+                    v.normalize_for_platform();
                     v.seed_tool_hotkeys();
                     v.normalize_models();
                     v.normalize_command();
@@ -392,6 +445,18 @@ impl Settings {
             return Err("命令前缀不能包含空白或字母数字（否则会抢走普通搜索）".into());
         }
         Ok(p.to_string())
+    }
+
+    /// 跨平台回落：同一份 settings.json 可能来自另一个平台（换机复用）。
+    /// 不适用的 shell 回落平台默认，旧 shell 的显式路径/发行版一并清掉
+    /// （留着会被当成新 shell 的路径去启动），失效的工具 id 丢弃。只在加载时调用。
+    pub fn normalize_for_platform(&mut self) {
+        if !self.command_shell.available_on_platform() {
+            self.command_shell = CommandShell::default();
+            self.command_shell_path = None;
+            self.command_wsl_distro = None;
+        }
+        self.tools = normalize_tools(self.tools.clone());
     }
 
     /// 加载与保存时统一收敛命令相关字段，避免手改 settings.json 后状态悬空。
@@ -640,10 +705,10 @@ mod tests {
         let back: Settings = serde_json::from_str(&json).unwrap();
         assert_eq!(back.hotkey, "Alt+Space");
         assert_eq!(back.max_results, 12);
-        // 命令执行默认开启，前缀 `>`，走 PowerShell 内联
+        // 命令执行默认开启，前缀 `>`，走平台默认 shell 内联（Windows PowerShell / mac zsh）
         assert!(back.command_enabled);
         assert_eq!(back.command_prefix, ">");
-        assert_eq!(back.command_shell, CommandShell::Powershell);
+        assert_eq!(back.command_shell, CommandShell::default());
         assert_eq!(back.command_run_mode, CommandRunMode::Inline);
         assert_eq!(back.command_timeout_secs, 10);
     }
@@ -662,20 +727,23 @@ mod tests {
         let s: Settings = serde_json::from_str(r#"{"hotkey":"Ctrl+Shift+P"}"#).unwrap();
         assert!(s.command_enabled);
         assert_eq!(s.command_prefix, ">");
-        assert_eq!(s.command_shell, CommandShell::Powershell);
+        assert_eq!(s.command_shell, CommandShell::default());
         assert_eq!(s.command_timeout().as_secs(), 10);
     }
 
     #[test]
     fn tool_hotkeys_seed_defaults_only_once() {
-        // 老配置（没有标记、表为空）→ 补默认 Ctrl+Alt+1..7
+        // 老配置（没有标记、表为空）→ 补默认 Ctrl+Alt+1..N（N 取平台工具数）
         let mut s = Settings::default();
         s.tool_hotkeys_seeded = false;
         s.tool_hotkeys.clear();
         s.seed_tool_hotkeys();
         assert_eq!(s.tool_hotkeys.len(), KNOWN_TOOLS.len());
-        assert_eq!(s.tool_hotkeys["screenshot"], "Ctrl+Alt+1");
-        assert_eq!(s.tool_hotkeys["file_buffer"], "Ctrl+Alt+7");
+        assert_eq!(s.tool_hotkeys[KNOWN_TOOLS[0]], "Ctrl+Alt+1");
+        assert_eq!(
+            s.tool_hotkeys[KNOWN_TOOLS[KNOWN_TOOLS.len() - 1]],
+            format!("Ctrl+Alt+{}", KNOWN_TOOLS.len())
+        );
 
         // 显式全部解绑后不再回填
         s.tool_hotkeys.clear();
@@ -686,9 +754,9 @@ mod tests {
         let mut t = Settings::default();
         t.tool_hotkeys_seeded = false;
         t.tool_hotkeys.clear();
-        t.tool_hotkeys.insert("screenshot".into(), "Ctrl+Shift+F1".into());
+        t.tool_hotkeys.insert(KNOWN_TOOLS[0].into(), "Ctrl+Shift+F1".into());
         t.seed_tool_hotkeys();
-        assert_eq!(t.tool_hotkeys["screenshot"], "Ctrl+Shift+F1");
+        assert_eq!(t.tool_hotkeys[KNOWN_TOOLS[0]], "Ctrl+Shift+F1");
     }
 
     #[test]
@@ -736,22 +804,53 @@ mod tests {
         assert_eq!(s.command_timeout_secs, MAX_COMMAND_TIMEOUT_SECS);
     }
 
+    /// 跨平台回落：Windows 配置在 mac 上（反向同理）shell 要回落平台默认，
+    /// 旧 shell 的显式路径/发行版不能留着冒充新 shell 的启动路径。
+    #[test]
+    fn normalize_for_platform_falls_back_shell() {
+        let mut s = Settings::default();
+        #[cfg(windows)]
+        {
+            s.command_shell = CommandShell::Zsh;
+            s.command_shell_path = Some("/bin/zsh".into());
+            s.command_wsl_distro = Some("Ubuntu".into());
+            s.normalize_for_platform();
+            assert_eq!(s.command_shell, CommandShell::Powershell);
+            assert_eq!(s.command_shell_path, None);
+            assert_eq!(s.command_wsl_distro, None);
+        }
+        #[cfg(not(windows))]
+        {
+            s.command_shell = CommandShell::Cmd;
+            s.command_shell_path = Some("C:\\Windows\\System32\\cmd.exe".into());
+            s.normalize_for_platform();
+            assert_eq!(s.command_shell, CommandShell::Zsh);
+            assert_eq!(s.command_shell_path, None);
+            // Custom 两个平台都合法：不回落，路径保留
+            s.command_shell = CommandShell::Custom;
+            s.command_shell_path = Some("/bin/sh".into());
+            s.normalize_for_platform();
+            assert_eq!(s.command_shell, CommandShell::Custom);
+            assert_eq!(s.command_shell_path, Some("/bin/sh".into()));
+        }
+        // 工具列表里的平台外 id 要被丢掉
+        s.tools = vec!["screenshot".into(), "snippets".into()];
+        s.normalize_for_platform();
+        #[cfg(not(windows))]
+        assert_eq!(s.tools, vec!["snippets"]);
+        #[cfg(windows)]
+        assert_eq!(s.tools, vec!["screenshot", "snippets"]);
+    }
+
     #[test]
     fn missing_fields_use_defaults() {
         let s: Settings = serde_json::from_str(r#"{"hotkey":"Ctrl+Shift+P"}"#).unwrap();
         assert_eq!(s.hotkey, "Ctrl+Shift+P");
         assert!(s.enable_registry);
+        // 默认工具列表取平台子集（config::KNOWN_TOOLS）
         assert_eq!(
             s.tools,
-            vec![
-                "screenshot",
-                "clipboard",
-                "lock_screen",
-                "tile_windows",
-                "shortcut_guide",
-                "snippets",
-                "file_buffer"
-            ]
+            KNOWN_TOOLS.iter().map(|s| (*s).to_string()).collect::<Vec<_>>()
         );
         // 旧 settings.json 没有运行时字段：默认未配置，而不是空字符串
         assert_eq!(s.node_path, None);
@@ -762,14 +861,15 @@ mod tests {
 
     #[test]
     fn tools_are_normalized_and_unknown_dropped() {
-        // 顺序必须原样保留：卡片顺序和 Alt+1..9 的编号都依赖它
+        // 顺序必须原样保留：卡片顺序和 Alt+1..9 的编号都依赖它。
+        // fixture 用双平台都有"锁屏/片段"，screenshot 之类是平台子集不通用
         let got = normalize_tools(vec![
             "lock_screen".into(),
             "bogus".into(),
-            "screenshot".into(),
-            "screenshot".into(),
+            "snippets".into(),
+            "snippets".into(),
         ]);
-        assert_eq!(got, vec!["lock_screen", "screenshot"]);
+        assert_eq!(got, vec!["lock_screen", "snippets"]);
         assert!(normalize_tools(Vec::new()).is_empty());
     }
 
@@ -780,11 +880,11 @@ mod tests {
             "plugin:timestamp-ts".into(),
             "app:".into(),
             "plugin:  ".into(),
-            "screenshot".into(),
+            "snippets".into(),
         ]);
         assert_eq!(
             got,
-            vec!["app:C:\\p\\code.exe", "plugin:timestamp-ts", "screenshot"]
+            vec!["app:C:\\p\\code.exe", "plugin:timestamp-ts", "snippets"]
         );
     }
 

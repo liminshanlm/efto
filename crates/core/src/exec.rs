@@ -371,6 +371,7 @@ pub fn rejected_arg(args: &[String]) -> Option<String> {
 }
 
 /// 执行白名单程序。
+#[cfg_attr(not(windows), allow(unreachable_code))]
 pub fn run(
     key: &str,
     args: &[String],
@@ -378,6 +379,19 @@ pub fn run(
     settings_hint: Option<&Path>,
 ) -> Result<RunOk, ExecError> {
     let a = lookup(key).ok_or_else(|| ExecError::NotAllowed(key.to_string()))?;
+    if let Some(why) = rejected_arg(args) {
+        return Err(ExecError::DeniedArg(why));
+    }
+    // 白名单目前只有 es（Windows 程序）：macOS/Linux 上执行不了，明确报平台不支持，
+    // 而不是让 spawn 报一个含糊的 EACCES（硬性约定 3）。放在参数拦截之后，
+    // 保证"参数级拒绝"这类边界语义在所有平台都能被测试到；新增跨平台白名单条目时按条目判定。
+    #[cfg(not(windows))]
+    {
+        let _ = a;
+        return Err(ExecError::Spawn(format!(
+            "当前平台不支持：{key}（外部工具白名单目前仅 Windows 可用）"
+        )));
+    }
     if let Some(why) = rejected_arg(args) {
         return Err(ExecError::DeniedArg(why));
     }
@@ -591,7 +605,9 @@ pub fn shell_launch(
             if terminal { "/K".into() } else { "/C".into() },
             command.into(),
         ],
-        CommandShell::GitBash => vec!["-lc".into(), command.into()],
+        CommandShell::GitBash | CommandShell::Zsh | CommandShell::Bash | CommandShell::Fish => {
+            vec!["-lc".into(), command.into()]
+        }
         CommandShell::Wsl => {
             let mut a: Vec<String> = Vec::new();
             if let Some(d) = settings
@@ -663,6 +679,27 @@ fn resolve_shell_program(
         CommandShell::Cmd => (vec![system_root().join("System32\\cmd.exe")], "cmd.exe"),
         CommandShell::GitBash => (git_bash_candidates(), "bash.exe"),
         CommandShell::Wsl => (vec![system_root().join("System32\\wsl.exe")], "wsl.exe"),
+        CommandShell::Zsh => (
+            vec![PathBuf::from("/bin/zsh"), PathBuf::from("/usr/bin/zsh")],
+            "zsh",
+        ),
+        CommandShell::Bash => (
+            vec![
+                PathBuf::from("/bin/bash"),
+                PathBuf::from("/usr/bin/bash"),
+                PathBuf::from("/opt/homebrew/bin/bash"),
+                PathBuf::from("/usr/local/bin/bash"),
+            ],
+            "bash",
+        ),
+        CommandShell::Fish => (
+            vec![
+                PathBuf::from("/opt/homebrew/bin/fish"),
+                PathBuf::from("/usr/local/bin/fish"),
+                PathBuf::from("/usr/bin/fish"),
+            ],
+            "fish",
+        ),
         CommandShell::Custom => {
             return Err(ExecError::ShellMissing {
                 shell: label.to_string(),
@@ -741,17 +778,29 @@ pub fn run_command(
 /// 在独立终端窗口里执行（不等待、不收集输出）。
 pub fn run_command_terminal(settings: &Settings, command: &str) -> Result<(), ExecError> {
     let launch = shell_launch(settings, command, true)?;
-    let mut cmd = Command::new(&launch.program);
-    cmd.args(&launch.args);
+    #[cfg(not(windows))]
+    {
+        // 终端模式 = "打开一个终端窗口执行"：mac 侧要接 Terminal.app，是 v1.5
+        //（见 docs/macos-support-plan.md）。不能就这么 spawn——输出没人接，
+        // 等于静默成功（硬性约定 3）。
+        let _ = launch;
+        Err(ExecError::Spawn(
+            "当前平台不支持：终端模式执行（v1 仅内联模式）".into(),
+        ))
+    }
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
-        // CREATE_NEW_CONSOLE：交互式程序需要自己的窗口
-        cmd.creation_flags(0x0000_0010);
+        let mut cmd = Command::new(&launch.program);
+        cmd.args(&launch.args);
+        {
+            use std::os::windows::process::CommandExt;
+            // CREATE_NEW_CONSOLE：交互式程序需要自己的窗口
+            cmd.creation_flags(0x0000_0010);
+        }
+        cmd.spawn()
+            .map(|_| ())
+            .map_err(|e| ExecError::Spawn(e.to_string()))
     }
-    cmd.spawn()
-        .map(|_| ())
-        .map_err(|e| ExecError::Spawn(e.to_string()))
 }
 
 /// 设置页"检测"按钮：用给定配置跑一条 `echo`，确认真能启动。
@@ -1128,10 +1177,13 @@ mod tests {
         assert!(zip_extract(&zip[..zip.len() / 2], "es.exe").is_err());
     }
 
+    /// 真实端到端：这台机器装了 Everything 且在跑。查不到就跳过，
+    /// 但**不静默通过** —— 会打印原因，避免"测试绿了但其实没测"。
+    /// es.exe 是 Windows 程序（输出还是 GBK 代码页），macOS 上没有对应物，
+    /// 见 docs/macos-support-plan.md（Everything 检索源 Windows-only）。
+    #[cfg(windows)]
     #[test]
     fn runs_es_against_the_local_everything_and_returns_utf8() {
-        // 真实端到端：这台机器装了 Everything 且在跑。查不到就跳过，
-        // 但**不静默通过** —— 会打印原因，避免"测试绿了但其实没测"。
         let a = lookup("es").unwrap();
         let Ok(path) = resolve_verified(a, None) else {
             println!("skip: 没有可用的 es.exe");
@@ -1178,10 +1230,14 @@ mod tests {
             Duration::from_millis(400),
             None,
         );
-        if let Err(e) = e {
-            assert!(matches!(e, ExecError::Timeout(_)), "期望超时，实际 {e}");
+        match e {
+            Err(ExecError::Timeout(_)) => {}
+            // es 根本起不来（没装 Everything / 平台上 es.exe 无法执行）时跳过，
+            // 但打印原因，不静默通过
+            Err(e) => println!("skip: {e}"),
+            // 某些机器上 es 可能不阻塞（无控制台时 -pause 失效），那也是通过
+            Ok(_) => {}
         }
-        // 某些机器上 es 可能不阻塞（无控制台时 -pause 失效），那也是通过
     }
 
     #[test]
@@ -1289,28 +1345,34 @@ mod tests {
 
     #[test]
     fn shell_launch_builds_args_per_shell() {
+        // Cmd / PowerShell / WSL 的参数拼装是 Windows 语义，macOS 上这些 shell
+        // 不存在（见 docs/macos-support-plan.md），只测平台无关的 Custom 与空命令拒绝。
+        #[cfg(windows)]
+        {
+            let mut s = Settings::default();
+            s.command_shell = CommandShell::Cmd;
+            let l = shell_launch(&s, "dir", false).unwrap();
+            assert!(l.program.to_string_lossy().to_lowercase().ends_with("cmd.exe"), "{l:?}");
+            assert_eq!(l.args, vec!["/D", "/C", "dir"]);
+            let l = shell_launch(&s, "dir", true).unwrap();
+            assert_eq!(l.args, vec!["/D", "/K", "dir"]);
+
+            s.command_shell = CommandShell::Powershell;
+            let l = shell_launch(&s, "ipconfig", false).unwrap();
+            assert_eq!(l.args[3], "-Command");
+            // 内联模式必须先把输出编码设成 UTF-8，否则中文输出会乱码
+            assert!(l.args[4].contains("UTF8"), "{}", l.args[4]);
+            assert!(l.args[4].ends_with("ipconfig"));
+            let l = shell_launch(&s, "ipconfig", true).unwrap();
+            assert!(l.args.iter().any(|a| a == "-NoExit"), "{:?}", l.args);
+
+            s.command_shell = CommandShell::Wsl;
+            s.command_wsl_distro = Some("Ubuntu".into());
+            let l = shell_launch(&s, "ls", false).unwrap();
+            assert_eq!(l.args, vec!["-d", "Ubuntu", "-e", "bash", "-lc", "ls"]);
+        }
+
         let mut s = Settings::default();
-        s.command_shell = CommandShell::Cmd;
-        let l = shell_launch(&s, "dir", false).unwrap();
-        assert!(l.program.to_string_lossy().to_lowercase().ends_with("cmd.exe"), "{l:?}");
-        assert_eq!(l.args, vec!["/D", "/C", "dir"]);
-        let l = shell_launch(&s, "dir", true).unwrap();
-        assert_eq!(l.args, vec!["/D", "/K", "dir"]);
-
-        s.command_shell = CommandShell::Powershell;
-        let l = shell_launch(&s, "ipconfig", false).unwrap();
-        assert_eq!(l.args[3], "-Command");
-        // 内联模式必须先把输出编码设成 UTF-8，否则中文输出会乱码
-        assert!(l.args[4].contains("UTF8"), "{}", l.args[4]);
-        assert!(l.args[4].ends_with("ipconfig"));
-        let l = shell_launch(&s, "ipconfig", true).unwrap();
-        assert!(l.args.iter().any(|a| a == "-NoExit"), "{:?}", l.args);
-
-        s.command_shell = CommandShell::Wsl;
-        s.command_wsl_distro = Some("Ubuntu".into());
-        let l = shell_launch(&s, "ls", false).unwrap();
-        assert_eq!(l.args, vec!["-d", "Ubuntu", "-e", "bash", "-lc", "ls"]);
-
         s.command_shell = CommandShell::Custom;
         s.command_shell_path = None;
         assert!(matches!(
@@ -1331,6 +1393,21 @@ mod tests {
             shell_launch(&Settings::default(), "  ", false),
             Err(ExecError::EmptyCommand)
         ));
+    }
+
+    /// POSIX shell（macOS 默认 zsh）：`-lc` 保留用户 PATH，内联/终端同参。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn posix_shell_launch_uses_lc() {
+        let mut s = Settings::default();
+        s.command_shell = CommandShell::Zsh;
+        let l = shell_launch(&s, "echo hi", false).unwrap();
+        assert!(l.program.ends_with("zsh"), "{l:?}");
+        assert_eq!(l.args, vec!["-lc", "echo hi"]);
+        let l = shell_launch(&s, "echo hi", true).unwrap();
+        assert_eq!(l.args, vec!["-lc", "echo hi"]);
+        // 平台默认必须是 zsh（Windows 是 PowerShell）
+        assert_eq!(Settings::default().command_shell, CommandShell::Zsh);
     }
 
     #[test]
@@ -1355,7 +1432,7 @@ mod tests {
     fn run_command_can_be_cancelled() {
         let s = Settings::default();
         if shell_launch(&s, "echo x", false).is_err() {
-            println!("skip: 本机没有 PowerShell");
+            println!("skip: 本机没有平台默认 shell");
             return;
         }
         let token = std::sync::Arc::new(AtomicBool::new(false));
@@ -1365,9 +1442,14 @@ mod tests {
             setter.store(true, Ordering::Relaxed);
         });
         let started = Instant::now();
+        // 阻塞命令按平台 shell 语法写（PowerShell / POSIX 不通用）
         let e = run_command(
             &s,
-            "Start-Sleep -Seconds 10",
+            if cfg!(windows) {
+                "Start-Sleep -Seconds 10"
+            } else {
+                "sleep 10"
+            },
             Duration::from_secs(20),
             Some(&token),
         )

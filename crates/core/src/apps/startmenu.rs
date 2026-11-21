@@ -275,9 +275,20 @@ mod tests {
     #[test]
     fn ignore_matcher() {
         let m = IgnoreMatcher::new(&["**/node_modules/**".to_string()]);
-        assert!(m.is_ignored(Path::new("C:\\a\\node_modules\\b.exe")));
-        assert!(m.is_ignored(Path::new("C:\\x\\WindowsApps\\y")));
-        assert!(!m.is_ignored(Path::new("C:\\Program Files\\a.exe")));
+        // globset 把模式里的 `/` 当分隔符（Windows 上等价匹配 `\`，Unix 上 `\` 是字面量），
+        // 所以 fixture 按平台选形状，两条路径都要能命中各自的噪音目录。
+        #[cfg(windows)]
+        {
+            assert!(m.is_ignored(Path::new("C:\\a\\node_modules\\b.exe")));
+            assert!(m.is_ignored(Path::new("C:\\x\\WindowsApps\\y")));
+            assert!(!m.is_ignored(Path::new("C:\\Program Files\\a.exe")));
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(m.is_ignored(Path::new("/a/node_modules/b.exe")));
+            assert!(m.is_ignored(Path::new("/x/WindowsApps/y")));
+            assert!(!m.is_ignored(Path::new("/Applications/a.app")));
+        }
     }
 
     /// 大小写无关回归。
@@ -290,29 +301,47 @@ mod tests {
     #[test]
     fn ignore_rules_are_case_insensitive() {
         let m = IgnoreMatcher::new(&["**/Steam/**".to_string()]);
-        assert!(
-            m.is_ignored(Path::new(r"C:\Program Files\Steam\steamapps\a.exe")),
-            "用户写的混合大小写规则必须生效"
-        );
-        assert!(
-            m.is_ignored(Path::new(r"c:\program files\steam\a.exe")),
-            "路径本身小写时同样要命中"
-        );
-        // 固定列表里的混合大小写项要真的靠 glob 生效，而不是靠兜底字符串
-        let fixed = IgnoreMatcher::new(&[]);
-        for p in [
-            r"C:\Windows\WinSxS\amd64_microsoft-windows-a\app.exe",
-            r"C:\$Recycle.Bin\S-1-5-21-x\dead.exe",
-            r"C:\Windows\Microsoft.NET\assembly\GAC_64\Foo\app.exe",
-        ] {
-            assert!(fixed.is_ignored(Path::new(p)), "{p} 应被固定噪音目录过滤");
+        #[cfg(windows)]
+        {
+            assert!(
+                m.is_ignored(Path::new(r"C:\Program Files\Steam\steamapps\a.exe")),
+                "用户写的混合大小写规则必须生效"
+            );
+            assert!(
+                m.is_ignored(Path::new(r"c:\program files\steam\a.exe")),
+                "路径本身小写时同样要命中"
+            );
         }
-        // Temp 是"可编辑的默认规则"，不是不可移除的硬规则（见 IgnoreMatcher::new 的注释）
-        let with_defaults = IgnoreMatcher::new(&crate::config::Settings::default().ignore_globs);
-        assert!(
-            with_defaults.is_ignored(Path::new(r"C:\Users\x\AppData\Local\Temp\wix\a.exe")),
-            "默认设置里的 **/Temp/** 必须真的生效"
-        );
+        #[cfg(not(windows))]
+        {
+            assert!(
+                m.is_ignored(Path::new("/Applications/Steam/steamapps/a.exe")),
+                "用户写的混合大小写规则必须生效"
+            );
+            assert!(
+                m.is_ignored(Path::new("/applications/steam/a.app")),
+                "路径本身小写时同样要命中"
+            );
+        }
+        // 固定列表里的混合大小写项要真的靠 glob 生效，而不是靠兜底字符串。
+        // 固定列表是 Windows 噪音目录（WinSxS/$Recycle.Bin/assembly），mac 上是死规则也不碍事；
+        // Temp 是"可编辑的默认规则"，不是不可移除的硬规则（见 IgnoreMatcher::new 的注释）。
+        #[cfg(windows)]
+        {
+            let fixed = IgnoreMatcher::new(&[]);
+            for p in [
+                r"C:\Windows\WinSxS\amd64_microsoft-windows-a\app.exe",
+                r"C:\$Recycle.Bin\S-1-5-21-x\dead.exe",
+                r"C:\Windows\Microsoft.NET\assembly\GAC_64\Foo\app.exe",
+            ] {
+                assert!(fixed.is_ignored(Path::new(p)), "{p} 应被固定噪音目录过滤");
+            }
+            let with_defaults = IgnoreMatcher::new(&crate::config::Settings::default().ignore_globs);
+            assert!(
+                with_defaults.is_ignored(Path::new(r"C:\Users\x\AppData\Local\Temp\wix\a.exe")),
+                "默认设置里的 **/Temp/** 必须真的生效"
+            );
+        }
     }
 
     /// 每条默认规则都必须真的命中一个真实形状的路径。
@@ -323,6 +352,9 @@ mod tests {
     /// 拼写错误变成编译期/测试期失败，而不是"看起来配了、其实没配"。
     #[test]
     fn every_default_ignore_rule_matches_something() {
+        // fixture 按平台选形状：默认规则集本身按平台不同（config::default_ignore_globs），
+        // 每条规则都必须命中一个真实形状的路径，Windows 规则不进 mac 默认集也就不用测。
+        #[cfg(windows)]
         let samples = [
             ("**/WindowsApps/**", r"C:\Program Files\WindowsApps\Vendor.App_1.0\x\app.exe"),
             ("**/$Recycle.Bin/**", r"C:\$Recycle.Bin\S-1-5-21-x\dead.exe"),
@@ -331,6 +363,11 @@ mod tests {
             ("**/node_modules/**", r"C:\x\node_modules\y\cli.exe"),
             ("**/.git/**", r"D:\repo\.git\hooks\pre-push.exe"),
             ("**/assemblies/**", r"C:\Program Files\App\assemblies\lib.exe"),
+        ];
+        #[cfg(not(windows))]
+        let samples = [
+            ("**/node_modules/**", "/x/node_modules/y/cli"),
+            ("**/.git/**", "/repo/.git/hooks/pre-push"),
         ];
         let defaults = crate::config::Settings::default().ignore_globs;
         for (pat, path) in samples {
@@ -352,18 +389,34 @@ mod tests {
     #[test]
     fn defaults_do_not_kill_normal_app_paths() {
         let m = IgnoreMatcher::new(&crate::config::Settings::default().ignore_globs);
-        for p in [
+        // fixture 按平台选形状：反向断言在两种形状下都要真的打过 matcher，
+        // 否则（比如 Unix 上跑 Windows 形状的路径）会"永远不误杀"地空过。
+        #[cfg(windows)]
+        let paths = [
             r"C:\Program Files\Google\Chrome\Application\chrome.exe",
             r"C:\Program Files\Tempero\bin\tempero.exe",
             r"C:\Program Files\Assembly Studio\studio.exe",
             r"D:\Games\SteamWorks\game.exe",
             r"C:\Program Files\Git\cmd\git.exe",
-        ] {
+        ];
+        #[cfg(not(windows))]
+        let paths = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/opt/homebrew/Cellar/tempero/bin/tempero",
+            "/Users/x/Applications/Assembly Studio.app",
+            "/Applications/SteamWorks.app/Contents/MacOS/SteamWorks",
+            "/usr/local/bin/git",
+        ];
+        for p in paths {
             assert!(!m.is_ignored(Path::new(p)), "不该误杀 {p}");
         }
         let steam = IgnoreMatcher::new(&["**/Steam/**".to_string()]);
+        #[cfg(windows)]
+        let steam_ok = r"D:\Games\SteamWorks\game.exe";
+        #[cfg(not(windows))]
+        let steam_ok = "/Applications/SteamWorks.app/Contents/MacOS/SteamWorks";
         assert!(
-            !steam.is_ignored(Path::new(r"D:\Games\SteamWorks\game.exe")),
+            !steam.is_ignored(Path::new(steam_ok)),
             "**/Steam/** 不该吃掉 SteamWorks（整段匹配，不是子串）"
         );
     }

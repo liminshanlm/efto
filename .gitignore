@@ -27,3 +27,4 @@ plugins/*/node_modules/
 /.screenshots/
 /.trae/
 /.trae-html-share-packages/
+.DS_Store

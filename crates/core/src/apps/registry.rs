@@ -5,7 +5,9 @@
 
 use std::path::{Path, PathBuf};
 
-use super::model::{AppEntry, AppSource, LaunchTarget, TargetKind};
+use super::model::AppEntry;
+#[cfg(windows)]
+use super::model::{AppSource, LaunchTarget, TargetKind};
 
 /// 常见噪音：VC 运行库、更新包、驱动组件等。
 fn is_noise(display_name: &str) -> bool {

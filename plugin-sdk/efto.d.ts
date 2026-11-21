@@ -69,7 +69,8 @@ interface EftoKv {
 }
 
 interface EftoExecOptions {
-  /** 白名单里的程序名。目前只有 'es'（Everything 官方命令行） */
+  /** 白名单里的程序名。目前只有 'es'（Everything 官方命令行），仅 Windows 可执行——
+   * macOS/Linux 上调用会明确报"当前平台不支持"，不会静默成功 */
   name: string;
   /** 参数数组，原样交给 CreateProcess —— 不经过任何 shell */
   args?: string[];

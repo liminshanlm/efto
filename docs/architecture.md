@@ -40,6 +40,24 @@ jsrt 不依赖 Tauri，也不需要 core —— 它通过 `ipc::Host` trait 反�
 - **不提供任何第三方兼容层**：不读别的清单文件名当插件清单、不注入兼容全局对象、不注册兼容协议。
   宿主内部命令名（`plugin_*`、`plugin:message`）是 efto 自己的 IPC 契约，不是兼容面。
 
+### 平台层（Windows / macOS）
+
+macOS 支持的总设计见 `docs/macos-support-plan.md`，这里只记施工约定：
+
+- **公共 API 面不动，平台差异收在模块内部**。三种切法按差异大小选：整块不同 → 模块级
+  `#[cfg]`（如 `search/win_settings.rs`、`everything.rs` 只在 Windows 编译）；同职责不同
+  实现 → `mod imp`（`exec` / `system` / `icons`）；配置模型 → 平台变体 + `Settings::
+  normalize_for_platform()`（`CommandShell` 的 zsh/bash/fish、`KNOWN_TOOLS` 平台子集）。
+- **编译全开，接线按平台**：发现源模块（lnk/startmenu/registry/appbundle）不按平台排除
+  编译——`IgnoreMatcher` 等公共件住在那里，fixture 测试跨平台跑有价值；取舍发生在
+  `indexer` 汇总与搜索接线处。例外是 Windows 专有数据表（win_settings/everything）。
+- **宁可不出，不可乱出**：平台不支持的搜索源不接线、平台不支持的内置动作不进搜索结果
+  （`BuiltinAction::supported_on_platform`）；被砍能力的执行路径返回"当前平台不支持：…"
+  （硬性约定 3）。
+- **双端 gate**：平台敏感改动要在两端各跑一次 `scripts/verify.sh` / `scripts/verify.ps1`
+  （检查清单的唯一事实源是 `docs/verification.md`，改一侧必对齐另一侧）；无双机时由
+  `.github/workflows/ci.yml` 的 windows-latest + macos-latest 矩阵兜底。
+
 ## 应用发现（crates/core/src/apps）
 
 来源如下，最后按"真实 exe"归并去重：
@@ -52,6 +70,7 @@ jsrt 不依赖 Tauri，也不需要 core —— 它通过 `ipc::Host` trait 反�
 | DirScan | `Program Files`、`Program Files (x86)`、`%LOCALAPPDATA%\Programs` | 0.78 | 抓绿色软件；深度 ≤ 4、体积 ≥ 64KB、辅助程序名黑名单 |
 | Custom | 设置里「自定义索引目录」下的 `.exe` / `.lnk` / `.url` | 0.80 | 用户自己收藏的工具目录；快捷方式名字优先于同目标裸 exe |
 | 白名单 | 记事本/画图/计算器/设置/任务管理器等 | 0.90（Manual） | 这些没有卸载项、也不一定在开始菜单里，但用户一定会搜 |
+| AppBundle（macOS） | `/Applications`、`/System/Applications`、`~/Applications` 的 `*.app`（Info.plist 取名，bundle id 进别名） | 1.00 | 与开始菜单同级的规范来源；`.app` 是叶子，不递归 `Contents/MacOS` |
 
 去重键是 `resolve_key()`：`.lnk` 会解析出真实目标 exe，所以"开始菜单的微信快捷方式"和"`Tencent\WeChat\WeChat.exe`"合成一条，保留开始菜单的名字，把另一条的文件名并入别名。
 

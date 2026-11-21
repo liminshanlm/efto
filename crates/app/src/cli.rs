@@ -609,19 +609,27 @@ fn cmd_search(settings: &Settings, f: &CliFlags) -> i32 {
     let is_command = hits.first().map(|h| h.kind == ItemKind::Command).unwrap_or(false);
     // 文件检索不再是魔法前缀：Everything 结果补在应用条目之后。
     // 只填空位，绝不挤掉已有结果（`--kind file` 时应用条目已被过滤掉，文件自然填满 limit）。
+    #[cfg(windows)]
+    let win_settings_query = efto_core::search::win_settings::is_query(&query);
+    #[cfg(not(windows))]
+    let win_settings_query = false;
     let wants_files = !is_command
         && !f.exact
-        && !efto_core::search::win_settings::is_query(&query)
+        && !win_settings_query
         && f.kinds
             .as_ref()
             .map_or(true, |k| k.contains(&ItemKind::File));
     if wants_files {
         let room = limit.saturating_sub(hits.len());
+        // 文件检索源（Everything/es.exe）是 Windows-only；mac 的 mdfind 是 v1.5
+        #[cfg(windows)]
         hits.extend(
             efto_core::search::everything::hits(&query)
                 .into_iter()
                 .take(room),
         );
+        #[cfg(not(windows))]
+        let _ = room;
     }
     if f.as_json {
         println!(
