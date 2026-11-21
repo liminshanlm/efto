@@ -920,8 +920,38 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server = thread::spawn(move || {
             let (mut sock, _) = listener.accept().unwrap();
+            // 必须读完整请求（头 + Content-Length 指定的 body）再回包：
+            // 服务端带着未读数据关连接会触发 RST，客户端读响应体会拿到
+            // EINVAL（macOS 实测 3 次挂 1 次，收干净后归零）。
             let mut buf = [0u8; 8192];
-            let _ = sock.read(&mut buf);
+            let mut req = Vec::new();
+            let header_end;
+            loop {
+                match sock.read(&mut buf) {
+                    Ok(0) => return,
+                    Ok(n) => {
+                        req.extend_from_slice(&buf[..n]);
+                        if let Some(pos) = req.windows(4).position(|w| w == b"\r\n\r\n") {
+                            header_end = pos + 4;
+                            break;
+                        }
+                    }
+                    Err(_) => return,
+                }
+            }
+            let headers = String::from_utf8_lossy(&req[..header_end]).to_ascii_lowercase();
+            let content_length: usize = headers
+                .lines()
+                .find_map(|l| l.strip_prefix("content-length:"))
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(0);
+            while req.len() < header_end + content_length {
+                match sock.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => req.extend_from_slice(&buf[..n]),
+                    Err(_) => return,
+                }
+            }
             let body = concat!(
                 "data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}\n\n",
                 "data: {\"choices\":[{\"delta\":{\"content\":\"好\"},\"finish_reason\":\"stop\"}]}\n\n",
