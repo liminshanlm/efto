@@ -36,6 +36,23 @@ $work = Join-Path $root 'target\verify-tmp'
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 $fail = 0
 
+# Plugin smoke test uses a throwaway fixture instead of a repo plugin: a repo
+# plugin can be disabled in ~/.efto/settings.json (hello-js was), and the
+# registry filters disabled plugins, so that check would go red for a reason
+# unrelated to the build. A fixture cannot appear in the user's disabled list.
+$smokeDir = Join-Path $work 'smoke-plugin'
+New-Item -ItemType Directory -Force -Path $smokeDir | Out-Null
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText(
+  (Join-Path $smokeDir 'efto-plugin.json'),
+  '{"name":"verify-smoke","version":"0.0.1","main":"main.js"}',
+  $utf8NoBom)
+[System.IO.File]::WriteAllText(
+  (Join-Path $smokeDir 'main.js'),
+  "efto.onPluginEnter(function (info) { var p = String(info.payload || ''); efto.output([{ title: 'verify-smoke', subtitle: p, copy: p }]); });",
+  $utf8NoBom)
+$env:EFTO_PLUGIN_DIRS = $env:EFTO_PLUGIN_DIRS + ';' + $smokeDir
+
 # "Notepad" in Chinese (U+8BB0 U+4E8B U+672C) from code points;
 # "jsb" is its pinyin-initial query and is pure ASCII.
 $notepad = [string]::Join('', @([char]0x8BB0, [char]0x4E8B, [char]0x672C))
@@ -151,7 +168,7 @@ foreach ($case in @(
   }
 }
 
-Check 'plugin-run: plain JS plugin' @('cli', 'plugin-run', 'hello-js', 'greet', 'hello-efto')
+Check 'plugin-run: plain JS plugin' @('cli', 'plugin-run', 'verify-smoke', 'greet', 'hello-efto')
 
 # timestamp-ts is a bidirectional converter now. A literal that carries its own offset
 # must produce a fixed epoch pair (timezone-independent), and feeding that epoch back

@@ -18,6 +18,18 @@ fail=0
 # 让启动器发现仓库里的示例插件（与 verify.ps1 一致）
 export EFTO_PLUGIN_DIRS="${EFTO_PLUGIN_DIRS:-$root/plugins}"
 
+# 插件冒烟用临时夹具而不是仓库插件：仓库插件可能被用户在 ~/.efto/settings.json
+# 里停用，注册表会过滤停用项，那会让这条检查因与构建无关的原因变红。
+smoke="$work/smoke-plugin"
+mkdir -p "$smoke"
+cat > "$smoke/efto-plugin.json" <<'JSON'
+{"name":"verify-smoke","version":"0.0.1","main":"main.js"}
+JSON
+cat > "$smoke/main.js" <<'JS'
+efto.onPluginEnter(function (info) { var p = String(info.payload || ''); efto.output([{ title: 'verify-smoke', subtitle: p, copy: p }]); });
+JS
+export EFTO_PLUGIN_DIRS="$EFTO_PLUGIN_DIRS:$smoke"
+
 Say() { echo "==> $*"; }
 Step() { echo "--- $*"; }
 
@@ -129,7 +141,7 @@ chrome||1
 1700000000||1
 CASES
 
-Check 'plugin-run: plain JS plugin' 0 cli plugin-run hello-js greet hello-efto
+Check 'plugin-run: plain JS plugin' 0 cli plugin-run verify-smoke greet hello-efto
 
 # timestamp-ts 双向转换：带偏移的字面量必须给出固定 epoch 对（与机器时区无关），
 # 喂回 epoch 必须落回同一历日。（与 verify.ps1 同一契约）
