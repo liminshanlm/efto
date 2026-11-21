@@ -45,7 +45,9 @@
 窗口平铺 / 通用动作 / 截图等系统集成推迟。**Phase 0/1 已落地（2026-11-21）**：
 mac 工具链脚本（`scripts/*.sh`）、`verify.sh` 端到端全绿、CI 矩阵（`.github/workflows/ci.yml`）、
 `.app` bundle 发现、zsh 命令源、平台化配置回落；实测见 `docs/verification.md` mac 段。
-Phase 2（GUI 宿主）未动工。
+**Phase 2（GUI 宿主）已落地（2026-11-21）**：透明窗口（macOSPrivateApi）、NSWorkspace 图标、
+设置页平台化（platform_info 单一事实源）、插件清单 platform 门、hosts 平台报错；
+人手验证清单见 `docs/verification.md`。Phase 3（mdfind 等系统集成）未动工。
 
 ## 已知技术债（不排期，顺手清）
 

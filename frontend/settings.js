@@ -100,6 +100,52 @@
   // 上一次读到的完整工具列表：保存时据此保留 app:/plugin: 条目与用户顺序
   var savedTools = [];
 
+  // 平台适配信息（宿主 platform_info 下发）：工具/Shell/功能入口都按它展示，
+  // 前端不自己猜平台。key = 工具 id，value = 该工具关联的输入控件 id。
+  var platformCaps = null;
+  var TOOL_INPUTS = {
+    screenshot: ['toolScreenshot', 'hkScreenshot'],
+    clipboard: ['toolClipboard', 'hkClipboard'],
+    lock_screen: ['toolLockScreen', 'hkLockScreen'],
+    tile_windows: ['toolTileWindows', 'hkTileWindows'],
+    shortcut_guide: ['toolShortcutGuide', 'hkShortcutGuide'],
+    snippets: ['toolSnippets', 'hkSnippets'],
+    file_buffer: ['toolFileBuffer', 'hkFileBuffer']
+  };
+
+  function applyPlatformCaps(info) {
+    platformCaps = info || {};
+    var tools = platformCaps.tools || [];
+    Object.keys(TOOL_INPUTS).forEach(function (id) {
+      if (tools.indexOf(id) >= 0) return;
+      TOOL_INPUTS[id].forEach(function (inputId) {
+        var el = $(inputId);
+        if (el && el.closest('.row')) el.closest('.row').hidden = true;
+      });
+    });
+    if (!platformCaps.features || !platformCaps.features.universal_actions) {
+      var ua = $('uaEnabled');
+      if (ua && ua.closest('.row')) ua.closest('.row').hidden = true;
+    }
+    var shells = platformCaps.shells || [];
+    var sel = $('commandShell');
+    if (sel) {
+      Array.prototype.forEach.call(sel.options, function (opt) {
+        opt.hidden = shells.length > 0 && shells.indexOf(opt.value) < 0;
+      });
+    }
+    // WSL 发行版只有 wsl 可用时才有意义
+    var wsl = $('commandWslDistro');
+    if (wsl && wsl.closest('.row')) {
+      wsl.closest('.row').hidden = shells.indexOf('wsl') < 0;
+    }
+    // 终端模式非 Windows 未实现（明确报错），入口不展示
+    if (!platformCaps.features || !platformCaps.features.terminal_mode) {
+      var term = document.querySelector('#commandModeSeg .seg-item[data-mode="terminal"]');
+      if (term) term.hidden = true;
+    }
+  }
+
   function paintTheme(mode) {
     document.querySelectorAll('#themeSeg .seg-item').forEach(function (btn) {
       var on = btn.dataset.theme === mode;
@@ -171,7 +217,8 @@
     $('pythonPath').value = s.python_path || '';
     $('commandEnabled').checked = s.command_enabled !== false;
     $('commandPrefix').value = s.command_prefix || '>';
-    $('commandShell').value = s.command_shell || 'powershell';
+    $('commandShell').value =
+      s.command_shell || (platformCaps && platformCaps.default_shell) || 'powershell';
     $('commandShellPath').value = s.command_shell_path || '';
     $('commandWslDistro').value = s.command_wsl_distro || '';
     $('commandCustomArgs').value = s.command_custom_args || '';
@@ -1078,9 +1125,25 @@
 
   // 词典加载完再读设置，避免动态文案先渲染成中文
   i18n.ready.then(function () {
-    loadSettings();
-    loadIndex();
-    loadEverything();
-    loadPlugins();
+    // 先拿平台清单再渲染：工具行/Shell 下拉/终端模式的展示都依赖它
+    invoke('platform_info')
+      .then(applyPlatformCaps)
+      .catch(function (e) {
+        console.warn('[settings] platform_info 失败，按全量展示: ' + e);
+        applyPlatformCaps({ tools: Object.keys(BUILTIN_TOOLS), shells: [], features: {} });
+      })
+      .then(function () {
+        loadSettings();
+        loadIndex();
+        loadEverything();
+        loadPlugins();
+        // 热键占位符是展示文案，按平台装饰（录入/存储仍是 Tauri 语法）
+        if (window.eftoI18n && window.eftoI18n.decorateKeys) {
+          var dk = window.eftoI18n.decorateKeys;
+          document.querySelectorAll('input[id^="hk"]').forEach(function (el) {
+            if (el.placeholder) el.placeholder = dk(el.placeholder);
+          });
+        }
+      });
   });
 })();

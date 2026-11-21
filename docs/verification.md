@@ -1309,6 +1309,42 @@ mac 新增/改造的测试重点：
 - tile / 截图 / 通用动作 / 快捷键指南 / 文件缓冲（mac 不进搜索结果，执行层报错兜底）——Phase 4。
 - `x86_64-apple-darwin`（Intel mac）未构建；vendor 只备了 arm64 产物。
 
+## macOS Phase 2 GUI 验证记录（2026-11-21，Apple Silicon / macOS 14.6.1）
+
+### 已跑过并看到输出
+
+- 单元测试全绿：efto-app 110 / efto-core 222+2 / efto-jsrt 48（含新增：NSWorkspace 图标
+  两条、hosts 能力平台报错、清单 platform 门、registry 平台过滤、decorate_keys、
+  platform_info 形状）。
+- **GUI 冒烟（dev-run.sh 真起）**：启动日志显示索引 111 条 + 插件 11 个 +
+  `全局热键已绑定: Alt+Space` + 单项热键自动收敛为 mac 3 工具
+  （Ctrl+Alt+1..3 → clipboard/lock_screen/snippets）+ `托盘已就绪` + `就绪`；
+  通用动作热键**不再注册**（平台门生效，日志 `通用动作 未启用`）。两次冒烟后进程正常退出。
+- 图标链路真机测试：`Finder.app` 能取到 PNG data URL，不存在的路径报"文件不存在"
+  （对齐 Windows 语义，不让 NSWorkspace 的通用图标充数）。
+- check-i18n / check-frontend / check-time-probe 全过（词典 404 key 双语对齐）。
+
+### 没验证（需要人手在 GUI 里点，按顺序）
+
+1. **按 Option+Space 唤起搜索框**（热键注册成功已证实；实际触发依赖系统权限——
+   若没反应，看 系统设置 → 隐私与安全性 → 辅助功能/输入监控）。风险 4 结论待补。
+2. 输入应用名回车启动 `.app`；输入 `6*7` 看计算器行；输入 `翻译 hello` 唤起插件 UI
+   （验证 WKWebView 下 `efto://` 协议加载插件页面）。
+3. 托盘菜单（打开设置/帮助/退出）；设置页：Shell 下拉应只有 zsh/bash/fish/自定义、
+   工具行只显示 剪贴板/锁屏/片段、无通用动作行、无终端模式选项、热键提示显示
+   Option/Ctrl→Control 装饰后的文案。
+4. 剪贴板窗口历史浏览（文本/图片）；`>echo hi` 命令源内联执行。
+5. 明确报错路径：搜"截图/平铺"应无结果；`cli plugin-run hosts hosts hosts` 应报
+   unsupported_platform；hosts 插件在 `cli plugins` 标注"不支持当前平台"。
+
+### 已知取舍
+
+- 透明窗口走 `macOSPrivateApi`（用户定夺）：dmg 直发无碍，App Store 分发会被拒，
+  Phase 4 再评估。
+- 图标走 NSWorkspace via objc2（用户定夺）；objc2 栈复用 tauri 的 0.6/0.3 版本，
+  无新增 C 工具链。
+- clipboard.html 的 `Ctrl+Enter` 保持 Control 语义（mac 键盘可按，Cmd 适配留待后续）。
+
 
 
 

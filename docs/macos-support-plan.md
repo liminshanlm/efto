@@ -1,8 +1,9 @@
 # macOS 支持分阶段计划
 
 - **Date**: 2026-11-21
-- **Status**: Phase 0/1 已落地（2026-11-21，见 `docs/verification.md` mac 段与
-  `.agents/notes/implemented/feature/2026-11-21-macos-phase0-1.md`）；Phase 2 起未动工
+- **Status**: Phase 0/1/2 已落地（2026-11-21，见 `docs/verification.md` mac 段与
+  `.agents/notes/implemented/feature/2026-11-21-macos-phase0-1.md`、
+  `2026-11-21-macos-phase2-gui.md`）；Phase 2 人手验证清单待走；Phase 3 起未动工
 - **相关**: `docs/architecture.md`、`docs/roadmap.md`、`docs/verification.md`、`docs/plugin-development.md`
 
 本文件是 macOS 移植的唯一计划来源。实现过程中的判据、踩坑与实测记录分别进
@@ -137,11 +138,11 @@ mod imp { pub fn file_bytes(path: &Path) -> Result<Vec<u8>, String> { /* NSWorks
 | `core/config.rs` | (c) 枚举变体 + `normalize_for_platform()` + `KNOWN_TOOLS` 平台子集 | ✅ |
 | `app/winclip.rs`、`winproc.rs` | (a) 已有 `mod imp`；mac 新增 `macclip.rs` / `axproc.rs`（v1.5） | ❌ |
 | `app/tile.rs`、`screenshot.rs`、`universal.rs`、`guide.rs` | 保持 Windows 实现 + 非 Windows 桩（报错） | 不进搜索 |
-| `app/icons.rs` | (b) `mod imp`（Phase 2 补 mac 实现） | ❌ |
+| `app/icons.rs` | (b) `mod imp`（NSWorkspace via objc2，已实现） | ✅ |
 | `app/{hotkey,tray,windows,protocol,pump,share,state,commands,cli}.rs` | 基本不动（补平台桩与文案） | ✅ |
 | `jsrt/*` | 不动（本就无 Windows 依赖） | ✅ |
-| `frontend/` | 不动（i18n 键位文案平台敏感，Phase 2） | ✅ |
-| `plugins/hosts` | manifest `platforms: ["windows"]`（Phase 2） | 暂可被发现 |
+| `frontend/` | `platform_info` 单一事实源 + i18n 键位装饰（已实现） | ✅ |
+| `plugins/hosts` | manifest `platform: [{os:"win32"}]`（插件级平台门，已实现） | 列表标注不支持 |
 | `scripts/*.ps1` | 保留（硬性约定 6），另增 `scripts/*.sh` 四件套 | ✅ |
 
 ### 1.3 插件清单：`platforms` 字段（v1 一并做）
@@ -197,7 +198,7 @@ hosts 插件标记 `["windows"]`。
 **文档（硬性约定 9）**：`architecture.md` 补平台层小节；`plugin-development.md` 写
 exec/shell 与插件清单 `platforms` 差异；`roadmap.md` 挂本计划；`verification.md` 记实测。
 
-### Phase 2 · GUI 宿主（v1 交付）
+### Phase 2 · GUI 宿主（v1 交付）✅ 2026-11-21 代码落地（GUI 冒烟通过；人手验证清单见 verification.md）
 
 1. 热键：默认 `Alt+Space`（Option+Space）；与输入法切换冲突时文档指引改绑。
    实测 tauri-plugin-global-shortcut 在 mac 是否免权限（风险 4）。
@@ -251,8 +252,8 @@ exec/shell 与插件清单 `platforms` 差异；`roadmap.md` 挂本计划；`ver
 
 1. **rusty_v8 darwin 产物**：`vendor/` 现在只有 Windows 静态库；离线构建要补 darwin
    目录，联网构建走官方取用。`bootstrap.sh` 是唯一入口，别让构建路径分叉。
-2. **图标获取**：NSWorkspace 要引入 objc2/cocoa 绑定（C 依赖面变大）；不想引入就用
-   `qlmanage -t` / `sips` 生成 PNG 兜底——多一次 fork，但图标按需提取且有缓存，可接受。
+2. **图标获取**（已定夺 2026-11-21）：NSWorkspace via objc2。tauri 依赖树本就有
+   objc2 0.6/objc2-app-kit 0.3，版本对齐后零新增 C 工具链；`qlmanage`/`sips` 兜底未采用。
 3. **透明窗口**：`macOSPrivateApi: true` 才能透明；若不能接受私有 API，备选是不透明
    背景色 + 圆角素材（视觉降级）。Phase 0 定夺并记入 verification.md。
 4. **热键免权限假设**：tauri-plugin-global-shortcut 在 mac 走 Carbon

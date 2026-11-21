@@ -245,9 +245,7 @@ impl Host for TauriHost {
             }
 
             // ---------------- Windows hosts（原生插件 hosts） ----------------
-            ("hosts", "path") => Ok(Value::String(
-                crate::hosts::target_path().to_string_lossy().to_string(),
-            )),
+            ("hosts", "path") => crate::hosts::path_capability(),
             ("hosts", "read") => crate::hosts::read_capability(),
 
             // ---------------- 大模型（设置 → 模型，OpenAI 兼容） ----------------

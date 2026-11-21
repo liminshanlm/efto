@@ -275,7 +275,8 @@ interface Efto {
   node: { run(opts: EftoScriptOptions): Promise<EftoScriptResult> };
   /** Python 脚本（需在 设置 → 运行时 配置解释器） */
   python: { run(opts: EftoScriptOptions): Promise<EftoScriptResult> };
-  /** Windows hosts 文件 */
+  /** Windows hosts 文件（仅 Windows；macOS/Linux 调用 path/read/save 都会明确报
+   * "当前平台不支持：hosts"） */
   hosts: {
     path(): string;
     read(): EftoHostsRead;

@@ -24,7 +24,7 @@ efto is a Windows launcher (macOS support in progress: the CLI and search/launch
 | `Alt+R` | Rebuild the app index |
 | `Alt+P` | Open Settings |
 
-The Universal Actions hotkey defaults to `Ctrl+Alt+Space` (toggle or change it in Settings → Launcher):
+The Universal Actions hotkey defaults to `Ctrl+Alt+Space` (toggle or change it in Settings → Launcher; not available on macOS):
 select text in any app, press it, then copy, paste back into the foreground window, search the web,
 or open the selected link/path.
 
@@ -76,6 +76,8 @@ Built-in sources appear only when the input matches their rules, so they never h
 - When the preview takes focus, "hide on blur" is suppressed; return to the search box to continue.
 
 ## 6. Favorite Tools
+
+> On macOS today: clipboard, lock screen, and snippets. Screenshot, window tiling, shortcut guide, Universal Actions, and file buffer are not yet available.
 
 The default panel (empty input) contains "Recent" and "Favorite tools":
 
@@ -197,7 +199,7 @@ Type the command prefix (default `>`) in the search box:
   - WSL accepts a distro name; empty means the default distro.
   - Custom requires an executable path and accepts an argument template (`{cmd}` is replaced by the command).
   - The "Check" button in Settings runs a real `echo` to verify the shell.
-- Security: commands run with your Windows account; pipes, redirection, and environment variables depend on the chosen shell. Avoid echoing secrets in shared scripts.
+- Security: commands run with your current account; pipes, redirection, and environment variables depend on the chosen shell. Avoid echoing secrets in shared scripts.
 
 Equivalent CLI:
 

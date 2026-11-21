@@ -12,6 +12,21 @@
   var warned = {};
   var listeners = [];
 
+  // 与 crates/app/src/i18n.rs 的 decorate_keys 同规则（词典共用、出口各装饰一次；
+  // 改一侧对齐另一侧）。热键录入/存储仍是 Tauri 语法（Alt/Ctrl）。
+  var IS_MAC = /mac/i.test(navigator.platform || navigator.userAgent || '');
+  var NO_KEY_DECOR = { 'settings.hotkey.desc': 1 };
+
+  function decorateKeys(s) {
+    if (!IS_MAC) return s;
+    return String(s).replace(
+      /(?<![0-9A-Za-z_])(CmdOrCtrl|Ctrl|Alt|Super)(?![0-9A-Za-z_])/g,
+      function (m) {
+        return m === 'CmdOrCtrl' || m === 'Super' ? 'Command' : m === 'Ctrl' ? 'Control' : 'Option';
+      }
+    );
+  }
+
   function invoke(cmd, payload) {
     if (!I || typeof I.invoke !== 'function') return Promise.reject(new Error('no tauri'));
     return I.invoke(cmd, payload || {});
@@ -39,7 +54,7 @@
       }
       return fb != null ? fb : key;
     }
-    return v;
+    return NO_KEY_DECOR[key] ? v : decorateKeys(v);
   }
 
   // 带占位符的文案：t('a.b', { n: 3 }) → "3 条结果"
@@ -97,6 +112,7 @@
     tf: tf,
     apply: apply,
     ready: ready,
+    decorateKeys: decorateKeys,
     lang: function () { return lang; },
     onChange: function (fn) { listeners.push(fn); }
   };

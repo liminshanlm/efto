@@ -222,9 +222,7 @@ impl Host for CliHost {
                 ));
                 Ok(v)
             }
-            ("hosts", "path") => Ok(Value::String(
-                crate::hosts::target_path().to_string_lossy().to_string(),
-            )),
+            ("hosts", "path") => crate::hosts::path_capability(),
             ("hosts", "read") => crate::hosts::read_capability(),
             ("hosts", "save") => {
                 // 与 GUI 共用同一套校验/编码/提权写入；CLI 下同样会弹 UAC
@@ -856,6 +854,7 @@ fn cmd_plugins(settings: &Settings, f: &CliFlags) -> i32 {
                 "cmds": p.manifest.cmds.iter().map(|c| c.label.clone()).collect::<Vec<_>>(),
                 "problems": p.problems,
                 "enabled": p.enabled,
+                "supported": p.supported_on_this_os(),
             })
         })
         .collect();
@@ -888,6 +887,9 @@ fn cmd_plugins(settings: &Settings, f: &CliFlags) -> i32 {
                 println!("  ! {}", p.as_str().unwrap_or(""));
             }
         }
+        if r["supported"] == serde_json::Value::Bool(false) {
+            println!("  ! 不支持当前平台（清单 platform 未包含本平台）");
+        }
     }
     0
 }
@@ -904,6 +906,19 @@ fn cmd_plugin_run(settings: &Settings, f: &CliFlags) -> i32 {
     let quiet = f.quiet || f.as_json;
 
     let registry = discover_plugins(settings);
+    // 平台不支持的插件：报精确原因，不要混进"未知插件"（registry.get 会把它过滤掉）
+    if let Some(p) = registry
+        .plugins()
+        .iter()
+        .find(|p| p.id().eq_ignore_ascii_case(id) && !p.supported_on_this_os())
+    {
+        return report_error(
+            f.as_json,
+            "unsupported_platform",
+            format!("插件 {} 不支持当前平台", p.id()),
+            EXIT_NOT_FOUND,
+        );
+    }
     let Some(descriptor) = registry.get(id) else {
         return report_error(
             f.as_json,
@@ -1368,6 +1383,13 @@ fn cmd_capabilities(settings: &Settings, f: &CliFlags) -> i32 {
         "ok": true,
         "name": "efto",
         "version": env!("CARGO_PKG_VERSION"),
+        "platform": if cfg!(windows) {
+            "windows"
+        } else if cfg!(target_os = "macos") {
+            "macos"
+        } else {
+            "linux"
+        },
         "subcommands": [
             "search", "launch", "apps", "index", "plugins", "plugin-run", "run-command",
             "files", "action", "ps", "focus", "tile-windows", "import-shortcuts",

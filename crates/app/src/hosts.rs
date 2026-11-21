@@ -42,8 +42,28 @@ fn uac_dir() -> PathBuf {
     fsutil::data_root().join("uac")
 }
 
+/// `efto.hosts` 的 path 查询。非 Windows 明确报平台不支持（同 read/save）。
+pub fn path_capability() -> Result<Value, String> {
+    #[cfg(not(windows))]
+    {
+        Err("当前平台不支持：hosts".into())
+    }
+    #[cfg(windows)]
+    {
+        Ok(Value::String(target_path().to_string_lossy().to_string()))
+    }
+}
+
 /// `efto.hosts.read` 的实现。
+///
+/// 非 Windows 明确报平台不支持（macOS 读 /etc/hosts 与 osascript 提权是 v1.5，
+/// 见 docs/macos-support-plan.md）——不能拿 `C:\Windows\...` 的"文件不存在"糊弄人。
+#[cfg_attr(not(windows), allow(unused_variables, unreachable_code))]
 pub fn read_capability() -> Result<Value, String> {
+    #[cfg(not(windows))]
+    {
+        return Err("当前平台不支持：hosts".into());
+    }
     let path = target_path();
     let bytes = std::fs::read(&path).map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
     let (text, enc) = hosts::decode(&bytes);
@@ -73,11 +93,11 @@ pub fn save_capability(opts: &Value) -> Result<Value, String> {
 }
 
 /// 提权写入入口（阻塞到 UAC 走完）。GUI 与 CLI 共用。
+#[cfg_attr(not(windows), allow(unused_variables, unreachable_code))]
 pub fn save_bytes(bytes: &[u8]) -> Result<Value, String> {
     #[cfg(not(windows))]
     {
-        let _ = bytes;
-        return Err("hosts 编辑仅支持 Windows".into());
+        return Err("当前平台不支持：hosts".into());
     }
     #[cfg(windows)]
     {
@@ -327,6 +347,21 @@ fn shell_execute_runas(_exe: &Path, _params: &str) -> Result<Option<u32>, String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 非 Windows：hosts 能力（path/read/save）必须报"当前平台不支持"，
+    /// 不能拿 `C:\Windows\...` 的"文件不存在"或更糟的静默成功糊弄（硬性约定 3）。
+    #[cfg(not(windows))]
+    #[test]
+    fn hosts_capability_errors_on_this_platform() {
+        for r in [
+            path_capability(),
+            read_capability(),
+            save_capability(&serde_json::json!({"text": "127.0.0.1 x"})),
+        ] {
+            let e = r.expect_err("非 Windows 上 hosts 能力必须报错");
+            assert!(e.contains("当前平台不支持"), "{e}");
+        }
+    }
 
     #[test]
     fn write_bytes_backs_up_then_replaces() {

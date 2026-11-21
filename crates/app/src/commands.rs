@@ -1708,6 +1708,51 @@ pub fn open_url(url: String) -> Result<(), String> {
     efto_core::apps::launch::shell_open(&url, None).map_err(|e| e.to_string())
 }
 
+/// 前端平台适配信息：shell 下拉、工具清单、功能开关都以宿主为单一事实源
+/// （`config::KNOWN_TOOLS` / `CommandShell::available_on_platform` / `BuiltinAction`），
+/// 前端只按这份清单展示或隐藏，不自己猜平台。
+#[tauri::command]
+pub fn platform_info() -> serde_json::Value {
+    use efto_core::config::CommandShell;
+    use efto_core::search::BuiltinAction;
+    let shells: Vec<serde_json::Value> = [
+        CommandShell::Powershell,
+        CommandShell::Pwsh,
+        CommandShell::Cmd,
+        CommandShell::GitBash,
+        CommandShell::Wsl,
+        CommandShell::Zsh,
+        CommandShell::Bash,
+        CommandShell::Fish,
+        CommandShell::Custom,
+    ]
+    .iter()
+    .filter(|s| s.available_on_platform())
+    .map(|s| serde_json::to_value(s).unwrap_or_default())
+    .collect();
+    serde_json::json!({
+        "platform": if cfg!(windows) {
+            "windows"
+        } else if cfg!(target_os = "macos") {
+            "macos"
+        } else {
+            "linux"
+        },
+        "default_shell": serde_json::to_value(CommandShell::default()).unwrap_or_default(),
+        "shells": shells,
+        "tools": efto_core::config::KNOWN_TOOLS,
+        "features": {
+            "screenshot": BuiltinAction::Screenshot.supported_on_platform(),
+            "tile_windows": BuiltinAction::TileWindows.supported_on_platform(),
+            "shortcut_guide": BuiltinAction::ShortcutGuide.supported_on_platform(),
+            "universal_actions": BuiltinAction::UniversalActions.supported_on_platform(),
+            "file_buffer": BuiltinAction::FileBuffer.supported_on_platform(),
+            // 终端模式要接 Terminal.app / 新建控制台窗口，非 Windows 是 v1.5
+            "terminal_mode": cfg!(windows),
+        }
+    })
+}
+
 #[tauri::command]
 pub fn get_settings(data: State<'_, Shared>) -> Settings {
     data.settings.lock().clone()
@@ -2131,6 +2176,30 @@ mod tests {
         let p: SettingsPatch = serde_json::from_str(r#"{"hotkey":"Ctrl+Alt+K"}"#).unwrap();
         assert_eq!(p.hotkey.as_deref(), Some("Ctrl+Alt+K"));
         assert!(p.max_results.is_none());
+    }
+
+    /// platform_info 是前端展示的单一事实源：tools 必须等于平台 KNOWN_TOOLS，
+    /// shells 必须只含当前平台可用的 shell，default_shell 必须在 shells 里。
+    #[test]
+    fn platform_info_is_consistent_with_this_platform() {
+        let v = platform_info();
+        let tools: Vec<String> = v["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| x.as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(tools, efto_core::config::KNOWN_TOOLS);
+        let shells: Vec<String> = v["shells"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| x.as_str().unwrap().to_string())
+            .collect();
+        let default_shell = v["default_shell"].as_str().unwrap();
+        assert!(shells.iter().any(|s| s == default_shell), "{default_shell} 不在 {shells:?}");
+        // 平台名字只能是三种之一
+        assert!(["windows", "macos", "linux"].contains(&v["platform"].as_str().unwrap()));
     }
 
     #[test]

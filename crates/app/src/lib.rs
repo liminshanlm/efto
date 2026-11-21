@@ -80,8 +80,25 @@ fn init_tracing() {
     }
 }
 
+/// macOS：不进 Dock / 菜单栏（等价 Windows 的 skipTaskbar）。
+///
+/// 打包后 Info.plist 的 `LSUIElement` 已经生效；这里是裸 `cargo run` 开发态的兜底——
+/// 没有 bundle 就没有 Info.plist，Dock 图标会冒出来。启动时在主线程切一次即可。
+#[cfg(target_os = "macos")]
+fn adopt_accessory_mode() {
+    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+    let Some(mtm) = objc2::MainThreadMarker::new() else {
+        return;
+    };
+    NSApplication::sharedApplication(mtm).setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+}
+
+#[cfg(not(target_os = "macos"))]
+fn adopt_accessory_mode() {}
+
 pub fn run() {
     init_tracing();
+    adopt_accessory_mode();
     tracing::info!("efto {} 启动", env!("CARGO_PKG_VERSION"));
 
     tauri::Builder::default()
@@ -137,6 +154,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::search,
+            commands::platform_info,
             commands::search_files,
             commands::clear_recent,
             commands::invoke_hit,

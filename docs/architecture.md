@@ -54,6 +54,10 @@ macOS 支持的总设计见 `docs/macos-support-plan.md`，这里只记施工约
 - **宁可不出，不可乱出**：平台不支持的搜索源不接线、平台不支持的内置动作不进搜索结果
   （`BuiltinAction::supported_on_platform`）；被砍能力的执行路径返回"当前平台不支持：…"
   （硬性约定 3）。
+- **前端不猜平台**：`platform_info` command 是前端展示的单一事实源（Shell 下拉、工具行、
+  功能入口都按它显隐）；热键展示文案的平台装饰（`Alt`→`Option` 等）在 i18n 解析出口
+  做（Rust `i18n::decorate_keys` 与前端 `decorateKeys` 同规则，改一侧对齐另一侧），
+  热键录入/存储始终是 Tauri 语法。
 - **双端 gate**：平台敏感改动要在两端各跑一次 `scripts/verify.sh` / `scripts/verify.ps1`
   （检查清单的唯一事实源是 `docs/verification.md`，改一侧必对齐另一侧）；无双机时由
   `.github/workflows/ci.yml` 的 windows-latest + macos-latest 矩阵兜底。

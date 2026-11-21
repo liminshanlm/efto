@@ -39,7 +39,11 @@ pub fn rebind(app: &AppHandle) -> Result<(), String> {
     let (want, ua, items) = {
         let shared = app.state::<Shared>();
         let s = shared.settings.lock();
-        let ua = if s.universal_actions_enabled {
+        // 通用动作在部分平台未实现（见 BuiltinAction::supported_on_platform）：
+        // 不注册热键，免得按下去只有一条报错（宁可不出）。
+        let ua = if s.universal_actions_enabled
+            && efto_core::search::BuiltinAction::UniversalActions.supported_on_platform()
+        {
             Some(s.universal_actions_hotkey.clone())
         } else {
             None

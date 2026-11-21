@@ -371,7 +371,7 @@ pub fn rejected_arg(args: &[String]) -> Option<String> {
 }
 
 /// 执行白名单程序。
-#[cfg_attr(not(windows), allow(unreachable_code))]
+#[cfg_attr(not(windows), allow(unused_variables, unreachable_code))]
 pub fn run(
     key: &str,
     args: &[String],

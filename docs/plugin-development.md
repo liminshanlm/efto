@@ -23,6 +23,7 @@ my-plugin/
   "version": "1.0.0",
   "main": "main.js",
   "ui": "index.html",
+  "platform": [{ "os": "win32" }],
   "cmds": [
     { "type": "input", "label": "我的插件", "cmd": "my" },
     { "type": "over",  "label": "处理文件", "platform": [{ "os": "win32" }] }
@@ -35,9 +36,10 @@ my-plugin/
 | `name` | 插件 id（必填，全局唯一，重复时后加载者被忽略） |
 | `main` | 后端入口。写 `main.js` 但目录里只有 `main.ts` 时，宿主自动回退到 `.ts` 并提示 |
 | `ui` / `index` | UI 页面，默认探测 `index.html` / `dist/index.html` / `ui/index.html`（两个字段等价） |
+| `platform` | 插件级平台限定 `[{ "os": "win32" }]`（`win32` / `darwin` / `linux`），不写表示全平台。不匹配的插件仍出现在 `cli plugins`（标注"不支持当前平台"），但不进搜索、不能被唤起，运行入口报 `unsupported_platform` |
 | `cmds[].type` | `input`（关键字后接输入） / `over`（内容覆盖） / `regex` / `word`；未知值按 `input` 处理，不会报错 |
 | `cmds[].cmd` | 触发词，缺省等于 `label`；两者都可作为搜索关键字 |
-| `cmds[].platform` | `[{ "os": "win32" }]`，不写表示全平台 |
+| `cmds[].platform` | 同插件级 `platform`，只限定这一条 cmd 的可见性 |
 
 ### 没有 UI 时怎么反馈
 
@@ -247,7 +249,7 @@ const r = await efto.hosts.save({ text: doc.text, encoding: doc.encoding });
   不需要 efto 本身以管理员身份运行。用户点"否"会立刻返回"已取消"，不是超时。
 - **安全边界**：提权子进程只接受 `~/.efto/uac/` 下的请求文件，目标固定为系统 hosts，
   请求里没有"写哪个文件"的字段 —— 避免变成"点一下 UAC 就能以管理员写任意文件"。
-- 仅 Windows；非 Windows 上调用会明确报错。
+- 仅 Windows；非 Windows 上调用 `hosts` 的 path/read/save 都会明确报"当前平台不支持：hosts"。
 
 示例插件：`plugins/hosts`（条目编辑 + 原文编辑，保存时自动备份）。
 

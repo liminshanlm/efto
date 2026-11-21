@@ -9,6 +9,7 @@
 //!   "preload": "preload.js",    // UI 页面前置脚本
 //!   "logo": "logo.png",
 //!   "index": "index.html",      // UI 页面
+//!   "platform": [{ "os": "win32" }],   // 插件级平台限定，空/缺省 = 全平台
 //!   "cmds": [
 //!     { "type": "input", "label": "你好", "cmd": "你好", "icon": "icon.png" },
 //!     { "type": "over",  "label": "识别文件", "platform": [{ "os": "win32" }] }
@@ -136,6 +137,8 @@ struct RawManifest {
     #[serde(default)]
     cmds: Vec<PluginCmd>,
     #[serde(default)]
+    platform: Vec<PlatformSpec>,
+    #[serde(default)]
     plugin: Option<PluginSection>,
 }
 
@@ -164,9 +167,18 @@ pub struct PluginManifest {
     pub homepage: Option<String>,
     pub author: Option<String>,
     pub cmds: Vec<PluginCmd>,
+    /// 插件级平台限定（与 cmds[].platform 同一套词汇），空 = 全平台。
+    #[serde(default)]
+    pub platform: Vec<PlatformSpec>,
 }
 
 impl PluginManifest {
+    /// 插件整体在当前平台是否可用。不可用的插件不进搜索、不能被唤起；
+    /// `cli plugins` 仍列出并标注（见 registry），运行入口报"不支持当前平台"。
+    pub fn available_on_this_os(&self) -> bool {
+        self.platform.is_empty() || self.platform.iter().any(|p| p.matches_current())
+    }
+
     pub fn from_json(text: &str) -> Result<Self> {
         let raw: RawManifest = serde_json::from_str(text).map_err(|e| {
             CoreError::InvalidManifest(format!("{NATIVE_MANIFEST} 解析失败: {e}"))
@@ -208,6 +220,7 @@ impl PluginManifest {
             homepage: raw.homepage,
             author,
             cmds,
+            platform: raw.platform,
         })
     }
 }
@@ -256,6 +269,11 @@ impl PluginDescriptor {
 
     pub fn has_ui(&self) -> bool {
         self.ui_entry.is_some()
+    }
+
+    /// 插件整体在当前平台是否可用（清单 `platform` 字段）。
+    pub fn supported_on_this_os(&self) -> bool {
+        self.manifest.available_on_this_os()
     }
 }
 
@@ -378,6 +396,20 @@ fn safe_join(root: &Path, rel: &str) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 插件级 `platform`：缺省/空 = 全平台；不匹配当前 OS 时整插件不可用。
+    #[test]
+    fn plugin_level_platform_gate() {
+        let m = PluginManifest::from_json(r#"{"name":"h"}"#).unwrap();
+        assert!(m.available_on_this_os(), "缺省必须是全平台");
+        let m = PluginManifest::from_json(r#"{"name":"h","platform":[]}"#).unwrap();
+        assert!(m.available_on_this_os(), "空数组必须是全平台");
+        let m = PluginManifest::from_json(r#"{"name":"h","platform":[{"os":"plan9"}]}"#).unwrap();
+        assert!(!m.available_on_this_os());
+        // 与 cmds[].platform 同一套词汇：win32 / darwin / linux
+        let m = PluginManifest::from_json(r#"{"name":"h","platform":[{"os":"win32"},{"os":"darwin"},{"os":"linux"}]}"#).unwrap();
+        assert!(m.available_on_this_os(), "枚举了所有平台就要在任一平台可用");
+    }
 
     fn write_plugin(dir: &std::path::Path, manifest: &str, files: &[(&str, &str)]) {
         std::fs::create_dir_all(dir).unwrap();

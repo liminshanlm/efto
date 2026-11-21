@@ -170,7 +170,8 @@ impl PluginRegistry {
     pub fn get(&self, id: &str) -> Option<&PluginDescriptor> {
         self.plugins
             .iter()
-            .find(|p| p.id().eq_ignore_ascii_case(id) && p.enabled)
+            // 平台不支持的插件和已停用一样"不能被唤起"；要区分报错时用 plugins() 自查
+            .find(|p| p.id().eq_ignore_ascii_case(id) && p.enabled && p.supported_on_this_os())
     }
 
     pub fn is_empty(&self) -> bool {
@@ -200,7 +201,11 @@ impl PluginRegistry {
             return Vec::new();
         }
         let mut hits: Vec<SearchHit> = Vec::new();
-        for plugin in self.plugins.iter().filter(|p| p.enabled) {
+        for plugin in self
+            .plugins
+            .iter()
+            .filter(|p| p.enabled && p.supported_on_this_os())
+        {
             if !plugin.has_backend() && !plugin.has_ui() {
                 continue;
             }
@@ -594,6 +599,42 @@ mod tests {
         // 重新启用后恢复
         reg.set_disabled(&[]);
         assert!(!reg.search("timer", 10).is_empty());
+    }
+
+    /// 平台不支持的插件（清单插件级 `platform` 字段）：列表可见但不能被唤起，
+    /// 与"已停用"同语义；报精确错误的路径见 cli plugin-run（unsupported_platform）。
+    #[test]
+    fn unsupported_platform_plugins_are_listed_but_not_searchable() {
+        let dir = tempfile::tempdir().unwrap();
+        mk_plugin(
+            dir.path(),
+            "hosts",
+            r#"{"name":"hosts","main":"main.js","platform":[{"os":"plan9"}],"cmds":[{"type":"input","label":"修改 hosts","cmd":"hosts"}]}"#,
+            &[("main.js", "")],
+        );
+        mk_plugin(
+            dir.path(),
+            "timer",
+            r#"{"name":"timer","main":"main.js","cmds":[{"type":"input","label":"计时","cmd":"timer"}]}"#,
+            &[("main.js", "")],
+        );
+        let reg = PluginRegistry::discover(&[dir.path().to_path_buf()]);
+
+        assert_eq!(reg.len(), 2);
+        let hosts = reg.plugins().iter().find(|p| p.id() == "hosts").unwrap();
+        assert!(!hosts.supported_on_this_os());
+        assert!(reg
+            .plugins()
+            .iter()
+            .find(|p| p.id() == "timer")
+            .unwrap()
+            .supported_on_this_os());
+
+        // 不支持 = 不进搜索、不能被唤起
+        assert!(reg.search("hosts", 10).is_empty());
+        assert!(reg.get("hosts").is_none());
+        assert!(!reg.search("timer", 10).is_empty());
+        assert!(reg.get("timer").is_some());
     }
 
     #[test]

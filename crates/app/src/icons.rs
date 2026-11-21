@@ -56,9 +56,41 @@ fn shell_icon_data_url(path: &str) -> Result<String, String> {
     }
 }
 
-#[cfg(not(windows))]
+/// 读取 `path` 的系统图标并编码为 `data:image/png;base64,...`（macOS：NSWorkspace）。
+///
+/// NSWorkspace 对不存在的路径只会给一个通用图标，和 Windows 侧
+/// "SHGetFileInfoW 失败即报错"不一致——这里先查存在性，让前端回退首字块，
+/// 而不是拿通用图标充数。AppKit 绑定层不要求主线程（iconForFile / NSBitmapImageRep
+/// 均非 MainThreadOnly），且 icon_for 是同步 command，调用线程安全。
+#[cfg(target_os = "macos")]
+fn shell_icon_data_url(path: &str) -> Result<String, String> {
+    use objc2::runtime::AnyObject;
+    use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSWorkspace};
+    use objc2_foundation::{NSDictionary, NSString};
+
+    if !std::path::Path::new(path).exists() {
+        return Err("文件不存在".into());
+    }
+    unsafe {
+        let ws = NSWorkspace::sharedWorkspace();
+        let image = ws.iconForFile(&NSString::from_str(path));
+        let tiff = image.TIFFRepresentation().ok_or("图标没有 TIFF 表示")?;
+        let rep = NSBitmapImageRep::imageRepWithData(&tiff).ok_or("图标位图解析失败")?;
+        let empty = NSDictionary::<NSString, AnyObject>::new();
+        let png = rep
+            .representationUsingType_properties(NSBitmapImageFileType::PNG, &empty)
+            .ok_or("图标 PNG 编码失败")?;
+        use base64::Engine as _;
+        Ok(format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(png.to_vec())
+        ))
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn shell_icon_data_url(_path: &str) -> Result<String, String> {
-    Err("图标读取仅支持 Windows".into())
+    Err("图标读取仅支持 Windows / macOS".into())
 }
 
 /// 把 HICON 拆成 RGBA 像素。
@@ -193,5 +225,20 @@ mod tests {
     #[test]
     fn missing_file_is_an_error() {
         assert!(data_url(r"C:\Windows\definitely-not-here-xyz.exe").is_err());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn reads_system_icon_for_finder() {
+        let path = "/System/Library/CoreServices/Finder.app";
+        let url = data_url(path).expect("应该能取到 Finder 的图标");
+        assert!(url.starts_with("data:image/png;base64,"));
+        assert!(url.len() > 200, "图标数据太小: {}", url.len());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn missing_file_is_an_error() {
+        assert!(data_url("/definitely/not/here.app").is_err());
     }
 }
