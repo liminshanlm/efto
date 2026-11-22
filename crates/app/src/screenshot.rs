@@ -812,7 +812,7 @@ mod tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 mod debug_dump {
     use super::*;
 
