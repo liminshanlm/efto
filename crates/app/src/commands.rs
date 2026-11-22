@@ -496,51 +496,36 @@ pub(crate) fn run_action(app: &AppHandle, data: &Shared, name: &str) -> Result<S
             windows::hide_main(app);
             Ok("已打开文件缓冲".into())
         }
+        "color_picker" => {
+            windows::close_screenshot_overlays(app);
+            let shot = capture_after_hiding_main(app)?;
+            *data.shot.lock() = Some(shot.clone());
+            if let Err(e) = windows::open_color_picker_overlay(app, &shot) {
+                *data.shot.lock() = None;
+                return Err(e);
+            }
+            Ok("移动光标取色，单击复制色值".into())
+        }
+        "sticky_note" => {
+            let note = {
+                let mut store = data.notes.lock();
+                let note = store.create();
+                store.save();
+                note
+            };
+            windows::open_note(app, &note, true)?;
+            windows::hide_main(app);
+            Ok("已新建便签".into())
+        }
         "command_hint" => Ok("输入要执行的命令".into()),
         "websearch_hint" => Ok("在触发词后加空格和关键词，例如 g rust".into()),
         "screenshot" => {
+            windows::close_color_picker_overlay(app);
             // 上一次长截图还没收尾时先叫停，避免它把新的覆盖层截进结果
             if let Some(lc) = data.long_capture.lock().as_ref() {
                 lc.request_stop();
             }
-            // 先把搜索框收起来，否则它会被截进图里（拍进去就再也去不掉了）。
-            //
-            // 判据必须是**窗口服务器**，不是 `is_visible()`：后者在 `orderOut`
-            // 之后立刻为假，但合成器还要再画一两帧——用户看到的正是"截图里
-            // 带着启动器"。最多等 600ms，之后无条件继续（宁可拍到也不能不响应）。
-            windows::hide_main(app);
-            // `hide_main` 在主线程上同步把窗口挪出屏 + orderOut，随后等 AppKit 确认
-            // 不可见（通常第一次就过）。**不能**按窗口服务器的在屏列表来等：
-            // 实测有环境里 orderOut 之后服务器仍把窗口列在旧位置好几分钟，
-            // 那条记录只是簿记滞后，画面早就不画了——照它等会一直等到超时。
-            for _ in 0..60 {
-                if !windows::main_visible(app) {
-                    break;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-            // orderOut 到合成器真正重绘这块屏之间还有一帧间隙
-            std::thread::sleep(std::time::Duration::from_millis(150));
-            let shot = crate::screenshot::capture_virtual_screen()?;
-            // 窗口服务器仍把主窗口画在画面上时（AppKit 已 orderOut、服务器表面状态
-            // 卡住），普通显示器捕获会把启动器拍进底图。改从"主窗口之下"合成：
-            // 这样拍不到它，代价是同一层之上的系统菜单栏也不在结果里。
-            #[cfg(target_os = "macos")]
-            let shot = if windows::main_on_screen(app) {
-                tracing::warn!("主窗口已收起但窗口服务器仍画着：{}", windows::main_state(app));
-                match windows::main_window_number(app)
-                    .map(crate::screenshot::capture_virtual_screen_below)
-                {
-                    Some(Ok(alt)) => alt,
-                    Some(Err(e)) => {
-                        tracing::warn!("按下层合成重抓失败，退回普通捕获: {e}");
-                        shot
-                    }
-                    None => shot,
-                }
-            } else {
-                shot
-            };
+            let shot = capture_after_hiding_main(app)?;
             // 覆盖层页面会立刻调 screenshot_begin 取图，所以先存再开窗
             *data.shot.lock() = Some(shot.clone());
             windows::open_screenshot_overlay(app, &shot)?;
@@ -571,6 +556,49 @@ pub(crate) fn run_action(app: &AppHandle, data: &Shared, name: &str) -> Result<S
         }
         other => Err(format!("未知指令: {other}")),
     }
+}
+
+/// 收起搜索框并抓一张整屏图（截图与颜色提取器共用）。
+fn capture_after_hiding_main(app: &AppHandle) -> Result<crate::screenshot::Shot, String> {
+    // 先把搜索框收起来，否则它会被截进图里（拍进去就再也去不掉了）。
+    //
+    // 判据必须是**窗口服务器**，不是 `is_visible()`：后者在 `orderOut`
+    // 之后立刻为假，但合成器还要再画一两帧——用户看到的正是"截图里
+    // 带着启动器"。最多等 600ms，之后无条件继续（宁可拍到也不能不响应）。
+    windows::hide_main(app);
+    // `hide_main` 在主线程上同步把窗口挪出屏 + orderOut，随后等 AppKit 确认
+    // 不可见（通常第一次就过）。**不能**按窗口服务器的在屏列表来等：
+    // 实测有环境里 orderOut 之后服务器仍把窗口列在旧位置好几分钟，
+    // 那条记录只是簿记滞后，画面早就不画了——照它等会一直等到超时。
+    for _ in 0..60 {
+        if !windows::main_visible(app) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    // orderOut 到合成器真正重绘这块屏之间还有一帧间隙
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    let shot = crate::screenshot::capture_virtual_screen()?;
+    // 窗口服务器仍把主窗口画在画面上时（AppKit 已 orderOut、服务器表面状态
+    // 卡住），普通显示器捕获会把启动器拍进底图。改从"主窗口之下"合成：
+    // 这样拍不到它，代价是同一层之上的系统菜单栏也不在结果里。
+    #[cfg(target_os = "macos")]
+    let shot = if windows::main_on_screen(app) {
+        tracing::warn!("主窗口已收起但窗口服务器仍画着：{}", windows::main_state(app));
+        match windows::main_window_number(app)
+            .map(crate::screenshot::capture_virtual_screen_below)
+        {
+            Some(Ok(alt)) => alt,
+            Some(Err(e)) => {
+                tracing::warn!("按下层合成重抓失败，退回普通捕获: {e}");
+                shot
+            }
+            None => shot,
+        }
+    } else {
+        shot
+    };
+    Ok(shot)
 }
 
 /// 窗口操作统一入口：先执行再隐藏搜索框。
@@ -873,11 +901,10 @@ fn overlay_mapping(
 /// 与之同源，因此这里是确定性映射而不是读回。
 #[cfg(target_os = "macos")]
 fn display_mapping(label: &str, shot: &crate::screenshot::Shot) -> Option<(i32, i32, u32, u32)> {
-    let idx: usize = label
-        .strip_prefix(crate::windows::SCREENSHOT_LABEL)?
-        .strip_prefix('-')?
-        .parse()
-        .ok()?;
+    let rest = label
+        .strip_prefix(crate::windows::SCREENSHOT_LABEL)
+        .or_else(|| label.strip_prefix(crate::windows::COLOR_PICKER_LABEL))?;
+    let idx: usize = rest.strip_prefix('-')?.parse().ok()?;
     let displays = crate::tile::ax::displays();
     let (_, r) = displays.get(idx)?;
     let s = crate::tile::ax::display_scale();
@@ -973,6 +1000,29 @@ pub fn screenshot_cancel(app: AppHandle, data: State<'_, Shared>) -> Result<(), 
     *data.shot.lock() = None;
     windows::close_screenshot_overlays(&app);
     Ok(())
+}
+
+/// 颜色提取器：把色值写进剪贴板并关掉覆盖层。
+#[tauri::command]
+pub fn color_picker_finish(
+    color: String,
+    app: AppHandle,
+    data: State<'_, Shared>,
+) -> Result<String, String> {
+    let color = color.trim().to_string();
+    if color.is_empty() {
+        return Err("色值为空".into());
+    }
+    crate::host::copy_text(&color).map_err(|e| e.to_string())?;
+    *data.shot.lock() = None;
+    windows::close_color_picker_overlay(&app);
+    Ok(format!("已复制 {color}"))
+}
+
+#[tauri::command]
+pub fn color_picker_cancel(app: AppHandle, data: State<'_, Shared>) {
+    *data.shot.lock() = None;
+    windows::close_color_picker_overlay(&app);
 }
 
 /// 长截图：确认选区后覆盖层继续留在屏幕上（鼠标穿透），后台按固定选区连续抓帧，
@@ -1342,6 +1392,49 @@ pub fn pin_drag(id: String, app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn pin_close(id: String, app: AppHandle) {
     windows::close_window(&app, &windows::pin_label(&id));
+}
+
+#[tauri::command]
+pub fn note_load(id: String, data: State<'_, Shared>) -> Result<String, String> {
+    data.notes
+        .lock()
+        .get(&id)
+        .map(|n| n.text.clone())
+        .ok_or_else(|| "便签不存在".into())
+}
+
+#[tauri::command]
+pub fn note_save(id: String, text: String, app: AppHandle, data: State<'_, Shared>) {
+    let geometry = app.get_webview_window(&windows::note_label(&id)).and_then(|w| {
+        let pos = w.outer_position().ok()?;
+        let size = w.inner_size().ok()?;
+        Some((pos.x, pos.y, size.width, size.height))
+    });
+    let mut store = data.notes.lock();
+    store.set_text(&id, text);
+    if let Some((x, y, w, h)) = geometry {
+        store.set_geometry(&id, x, y, w, h);
+    }
+    store.save();
+}
+
+#[tauri::command]
+pub fn note_close(id: String, app: AppHandle, data: State<'_, Shared>) {
+    {
+        let mut store = data.notes.lock();
+        if store.remove(&id) {
+            store.save();
+        }
+    }
+    windows::close_window(&app, &windows::note_label(&id));
+}
+
+#[tauri::command]
+pub fn note_drag(id: String, app: AppHandle) -> Result<(), String> {
+    let w = app
+        .get_webview_window(&windows::note_label(&id))
+        .ok_or("便签窗口不存在")?;
+    w.start_dragging().map_err(|e| e.to_string())
 }
 
 #[tauri::command]

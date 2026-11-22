@@ -22,6 +22,7 @@ mod host;
 mod http;
 mod i18n;
 mod icons;
+mod notes;
 mod protocol;
 mod pump;
 mod permissions;
@@ -133,6 +134,12 @@ pub fn run() {
             // `search`，此时 `Shared` 还没 manage，命令返回 "state not managed" ——
             // 表现就是刚启动立刻按 Alt+Space，搜索框带着「搜索失败」的 toast 弹出来。
             create_config_windows(app)?;
+            // 恢复上次退出时留在屏幕上的便签（不抢焦点）
+            for note in data.notes.lock().list().to_vec() {
+                if let Err(e) = windows::open_note(&handle, &note, false) {
+                    tracing::warn!("恢复便签失败: {e}");
+                }
+            }
             // 配置里的窗口默认跟随系统；用户在设置里固定过明暗时在这里纠回来
             windows::apply_theme(&handle, data.settings.lock().theme);
             // 原生标题栏按当前语言设置一次（内容区由前端 i18n 自己替换）
@@ -206,6 +213,12 @@ pub fn run() {
             commands::screenshot_cancel,
             commands::screenshot_long_start,
             commands::screenshot_long_status,
+            commands::color_picker_finish,
+            commands::color_picker_cancel,
+            commands::note_load,
+            commands::note_save,
+            commands::note_close,
+            commands::note_drag,
             commands::pin_load,
             commands::pin_drag,
             commands::pin_close,
@@ -326,6 +339,19 @@ pub fn run() {
                 }
                 return;
             }
+            if let Some(id) = window.label().strip_prefix(windows::NOTE_PREFIX) {
+                // 便签窗口关掉即删除该条；宿主退出时保留，下次启动恢复
+                if let WindowEvent::Destroyed = event {
+                    if !windows::app_quitting() {
+                        let data = window.app_handle().state::<Shared>();
+                        let mut store = data.notes.lock();
+                        if store.remove(id) {
+                            store.save();
+                        }
+                    }
+                }
+                return;
+            }
             if window.label() != windows::MAIN_LABEL {
                 return;
             }
@@ -352,6 +378,7 @@ pub fn run() {
         .unwrap_or_else(|e| panic!("构建 efto 失败: {e}"))
         .run(|app, event| match event {
             tauri::RunEvent::ExitRequested { .. } => {
+                windows::mark_quitting();
                 let data = app.state::<Shared>();
                 data.flush_stores();
                 data.runtime.lock().stop_all();

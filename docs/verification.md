@@ -1082,7 +1082,7 @@ node scripts/check-frontend.js                OK
 
 ## 2026-11-20：单项热键默认值与按键录入 / 操作窗口改名 / 网页搜索排版
 
-- 单项热键默认 `Ctrl+Alt+1..7`（顺序同 `KNOWN_TOOLS`）。老配置文件在**整份表为空**时由
+- 单项热键默认 `Ctrl+Alt+1..7`（顺序同 `DEFAULT_TOOLS`）。老配置文件在**整份表为空**时由
   `seed_tool_hotkeys` 补齐；`tool_hotkeys_seeded` 标记区分"从未配置"与"主动全部解绑"，
   设置页保存空表后不再回填。
 - 设置页 7 个单项热键输入框改为按键捕获：`keydown` + `e.code` 归一成 Tauri 写法，
@@ -1761,4 +1761,28 @@ node --check plugins/ipmsg/main.js / ui.js / service.js      OK
   `node scripts/check-i18n.js`（420 keys × 2 语言一致）。
 - **没验证**：真实 GUI 端到端（选中文字 → 热键 → 点「翻译选中文本」看主窗口结果行；
   点「用 AI 追问」看插件窗口预填）需要配置可用模型后手测；翻译请求本身依赖网络与模型。
+
+## 颜色提取器与便签纸（2026-11-22）
+
+- 实现：
+  - 颜色提取器：`BuiltinAction::ColorPicker` / `run_action("color_picker")` 复用截图
+    `capture_after_hiding_main` 抓冻结整屏，存入 `AppData.shot`，打开 `color-picker.html`
+    全屏覆盖层；页面用 `view_w / innerWidth` 还原物理像素坐标，离屏 canvas 取 RGB，
+    15×15 放大镜 + 十字线 + HEX/RGB；单击/`Enter` → `color_picker_finish` 写剪贴板并关窗，
+    `Esc` → `color_picker_cancel`。`display_mapping` 同时识别 `screenshot-*` 与 `color-picker-*`
+    label，macOS 每屏覆盖层可复用同一套坐标换算。
+  - 便签纸：`BuiltinAction::StickyNote` / `run_action("sticky_note")` 每次新建一条，存储
+    `crates/app/src/notes.rs` → `~/.efto/notes.json`；`note.html` 无边框置顶窗口，文本去抖
+    300ms 自动保存 `note_save`（顺带回写窗口几何），标题栏 `note_drag`，`×` / 窗口关闭走
+    `note_close` 删除；setup 时按存储恢复全部便签（不抢焦点），`ExitRequested` 置
+    `QUITTING` 避免退出时被 `Destroyed` 误删。
+  - 默认值：`config::DEFAULT_TOOLS` 与原 7 个工具一致，两个新工具加入 `KNOWN_TOOLS`（设置页
+    可勾选、可手动绑热键），但不进默认常用工具，也不默认占用 `Ctrl+Alt+1..7`。
+- 已跑：`cargo test -p efto-core`（keywords/default tools）；`cargo check -p efto-app`；
+  `node --check frontend/color-picker.js`、`node --check frontend/note.js`；
+  `node scripts/check-frontend.js`；`node scripts/check-i18n.js`。
+- **没验证**：真实 GUI 取色（冻结帧与 DWM 合成/高 DPI/多显示器的像素对应、放大镜观感、
+  点击后剪贴板内容）；便签窗口的实际拖动/缩放/置顶层级、重启恢复位置、退出时是否保留、
+  多条便签同时输入时的落盘时序；macOS 上的覆盖层与便签窗口未构建未实测。
+
 

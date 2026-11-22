@@ -1144,7 +1144,7 @@ fn cmd_action(settings: &Settings, f: &CliFlags) -> i32 {
     };
     match name {
         "reindex" | "open_plugin_dir" | "open_data_dir" | "lock_screen" => {}
-        "settings" | "screenshot" | "clipboard" | "quit" => {
+        "settings" | "screenshot" | "clipboard" | "color_picker" | "sticky_note" | "quit" => {
             return report_error(
                 f.as_json,
                 "needs_gui",
@@ -1421,7 +1421,14 @@ fn cmd_capabilities(settings: &Settings, f: &CliFlags) -> i32 {
         },
         "actions": {
             "headless": ["reindex", "open_plugin_dir", "open_data_dir", "lock_screen"],
-            "gui_only": ["settings", "screenshot", "clipboard", "quit"],
+            "gui_only": [
+                "settings",
+                "screenshot",
+                "clipboard",
+                "color_picker",
+                "sticky_note",
+                "quit"
+            ],
         },
         "file_search": {
             "state": es.state,

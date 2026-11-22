@@ -163,12 +163,12 @@ pub const DEFAULT_COMMAND_PREFIX: &str = ">";
 /// 通用动作的默认热键。
 pub const DEFAULT_UNIVERSAL_ACTIONS_HOTKEY: &str = "Ctrl+Alt+Space";
 
-/// 单项热键默认值：`Ctrl+Alt+1..7` 依次对应 [`KNOWN_TOOLS`]。
+/// 单项热键默认值：`Ctrl+Alt+1..7` 依次对应 [`DEFAULT_TOOLS`]。
 ///
 /// 只作为**字段缺失时**的默认值（`#[serde(default)]`）；用户在设置页清空后
 /// 保存的是显式空表，不会再被补回来，否则"解绑"就永远无效。
 pub fn default_tool_hotkeys() -> std::collections::BTreeMap<String, String> {
-    KNOWN_TOOLS
+    DEFAULT_TOOLS
         .iter()
         .enumerate()
         .map(|(i, tool)| ((*tool).to_string(), format!("Ctrl+Alt+{}", i + 1)))
@@ -278,6 +278,22 @@ pub const KNOWN_TOOLS: &[&str] = &[
     "shortcut_guide",
     "snippets",
     "file_buffer",
+    "color_picker",
+    "sticky_note",
+];
+
+/// 默认进入"常用工具"的内置工具，顺序即面板卡片顺序与默认 `Alt+1..9` 编号。
+///
+/// 与 [`KNOWN_TOOLS`] 分开：颜色提取器、便签纸默认**不进**常用工具，用户可在
+/// 设置页勾选后再加入；默认单项热键也只发给这一组，避免静默占用新的全局热键。
+pub const DEFAULT_TOOLS: &[&str] = &[
+    "screenshot",
+    "clipboard",
+    "lock_screen",
+    "tile_windows",
+    "shortcut_guide",
+    "snippets",
+    "file_buffer",
 ];
 
 /// 常用工具里用户自选应用的条目前缀（后接 [`crate::apps::model::AppEntry::id`]）。
@@ -365,7 +381,7 @@ impl Default for Settings {
             theme: ThemeMode::System,
             hide_on_blur: true,
             always_on_top: true,
-            tools: KNOWN_TOOLS.iter().map(|s| (*s).to_string()).collect(),
+            tools: DEFAULT_TOOLS.iter().map(|s| (*s).to_string()).collect(),
             node_path: None,
             python_path: None,
             models: vec![],
@@ -734,11 +750,11 @@ mod tests {
         s.tool_hotkeys_seeded = false;
         s.tool_hotkeys.clear();
         s.seed_tool_hotkeys();
-        assert_eq!(s.tool_hotkeys.len(), KNOWN_TOOLS.len());
-        assert_eq!(s.tool_hotkeys[KNOWN_TOOLS[0]], "Ctrl+Alt+1");
+        assert_eq!(s.tool_hotkeys.len(), DEFAULT_TOOLS.len());
+        assert_eq!(s.tool_hotkeys[DEFAULT_TOOLS[0]], "Ctrl+Alt+1");
         assert_eq!(
-            s.tool_hotkeys[KNOWN_TOOLS[KNOWN_TOOLS.len() - 1]],
-            format!("Ctrl+Alt+{}", KNOWN_TOOLS.len())
+            s.tool_hotkeys[DEFAULT_TOOLS[DEFAULT_TOOLS.len() - 1]],
+            format!("Ctrl+Alt+{}", DEFAULT_TOOLS.len())
         );
 
         // 显式全部解绑后不再回填
@@ -840,11 +856,12 @@ mod tests {
         let s: Settings = serde_json::from_str(r#"{"hotkey":"Ctrl+Shift+P"}"#).unwrap();
         assert_eq!(s.hotkey, "Ctrl+Shift+P");
         assert!(s.enable_registry);
-        // 默认工具列表取平台子集（config::KNOWN_TOOLS）
+        // 默认工具列表只含 config::DEFAULT_TOOLS（颜色提取器/便签纸默认不加）
         assert_eq!(
             s.tools,
-            KNOWN_TOOLS.iter().map(|s| (*s).to_string()).collect::<Vec<_>>()
+            DEFAULT_TOOLS.iter().map(|s| (*s).to_string()).collect::<Vec<_>>()
         );
+        assert!(!s.tools.iter().any(|t| t == "color_picker" || t == "sticky_note"));
         // 旧 settings.json 没有运行时字段：默认未配置，而不是空字符串
         assert_eq!(s.node_path, None);
         assert_eq!(s.python_path, None);

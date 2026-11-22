@@ -86,7 +86,9 @@
     tile_windows: true,
     shortcut_guide: true,
     snippets: true,
-    file_buffer: true
+    file_buffer: true,
+    color_picker: true,
+    sticky_note: true
   };
   var BUILTIN_ORDER = [
     'screenshot',
@@ -95,7 +97,9 @@
     'tile_windows',
     'shortcut_guide',
     'snippets',
-    'file_buffer'
+    'file_buffer',
+    'color_picker',
+    'sticky_note'
   ];
   // 上一次读到的完整工具列表：保存时据此保留 app:/plugin: 条目与用户顺序
   var savedTools = [];
@@ -110,7 +114,9 @@
     tile_windows: ['toolTileWindows', 'hkTileWindows'],
     shortcut_guide: ['toolShortcutGuide', 'hkShortcutGuide'],
     snippets: ['toolSnippets', 'hkSnippets'],
-    file_buffer: ['toolFileBuffer', 'hkFileBuffer']
+    file_buffer: ['toolFileBuffer', 'hkFileBuffer'],
+    color_picker: ['toolColorPicker', 'hkColorPicker'],
+    sticky_note: ['toolStickyNote', 'hkStickyNote']
   };
 
   function applyPlatformCaps(info) {
@@ -1087,7 +1093,9 @@
     ['tile_windows', 'hkTileWindows'],
     ['shortcut_guide', 'hkShortcutGuide'],
     ['snippets', 'hkSnippets'],
-    ['file_buffer', 'hkFileBuffer']
+    ['file_buffer', 'hkFileBuffer'],
+    ['color_picker', 'hkColorPicker'],
+    ['sticky_note', 'hkStickyNote']
   ];
 
   // 把 KeyboardEvent 转成 Tauri global-shortcut 的写法（Ctrl+Alt+1、Alt+Space）。

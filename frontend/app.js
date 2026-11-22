@@ -63,7 +63,14 @@
     file_buffer:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M4 7.5h6l1.6 2H20v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-11Z"/>' +
-      '<path d="M12 12.5v5M9.6 15h4.8"/></svg>'
+      '<path d="M12 12.5v5M9.6 15h4.8"/></svg>',
+    color_picker:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M14.8 4.4l4.8 4.8M12.9 6.3l4.8 4.8M4.2 19.8l3.2-.7 9.1-9.1a2.1 2.1 0 0 0 0-3l-1.4-1.4a2.1 2.1 0 0 0-3 0l-9.1 9.1-.8 5.1Z"/></svg>',
+    sticky_note:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M5 4.5h14v10.2L13.7 20H5V4.5Z"/>' +
+      '<path d="M19 14.7h-5.3V20"/><path d="M8 9h8M8 12.5h5"/></svg>'
   };
   // 系统图标缓存：path -> data URL，null 表示这次没取到（未到上限时下次重试）
   var iconCache = {};

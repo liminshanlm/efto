@@ -53,6 +53,8 @@ pub struct AppData {
     pub snippets: Mutex<efto_core::snippets::SnippetStore>,
     /// 文件缓冲：待批量处理的文件路径。
     pub file_buffer: Mutex<Vec<String>>,
+    /// 便签纸（`~/.efto/notes.json`）。
+    pub notes: Mutex<crate::notes::NoteStore>,
     /// 通用动作抓取到的选中文本（最近一次）。
     pub selection: Mutex<Option<String>>,
     /// 剪贴板图片缩略图缓存：图片路径 → data URL。
@@ -138,6 +140,7 @@ impl AppData {
             command_cancel: Mutex::new(None),
             snippets: Mutex::new(efto_core::snippets::SnippetStore::load()),
             file_buffer: Mutex::new(Vec::new()),
+            notes: Mutex::new(crate::notes::NoteStore::load()),
             selection: Mutex::new(None),
             clip_thumbs: Mutex::new(std::collections::HashMap::new()),
         }

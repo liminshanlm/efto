@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>efto 便签</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #ffef9a;
+      font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    }
+    #wrap {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(165deg, #fffbd0 0%, #fff09a 52%, #ffe36e 100%);
+      border: 1px solid rgba(122, 102, 30, .22);
+      box-sizing: border-box;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    #bar {
+      height: 32px;
+      flex: 0 0 32px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 6px 0 12px;
+      cursor: move;
+      user-select: none;
+      -webkit-user-select: none;
+      background: rgba(120, 96, 16, .08);
+    }
+    #bar .title {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 600;
+      color: #6f5d1c;
+      letter-spacing: .08em;
+    }
+    #del {
+      width: 24px;
+      height: 24px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #7b6824;
+      font-size: 17px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    #del:hover { background: rgba(120, 96, 16, .14); }
+    #del:active { background: rgba(120, 96, 16, .22); }
+    #text {
+      flex: 1;
+      width: 100%;
+      box-sizing: border-box;
+      border: 0;
+      outline: 0;
+      resize: none;
+      padding: 10px 13px 8px;
+      background: transparent;
+      color: #3d3413;
+      font: 14px/1.6 "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+      word-break: break-word;
+      overflow-y: auto;
+    }
+    #text::placeholder { color: rgba(109, 91, 28, .38); }
+    #foot {
+      flex: 0 0 18px;
+      padding: 0 12px 4px;
+      font-size: 10px;
+      color: rgba(109, 91, 28, .48);
+      text-align: right;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="bar">
+      <span class="title">便签</span>
+      <button id="del" title="删除便签">×</button>
+    </div>
+    <textarea id="text" placeholder="输入便签内容…" spellcheck="false"></textarea>
+    <div id="foot">自动保存 · 关闭即删除</div>
+  </div>
+  <script src="note.js"></script>
+</body>
+</html>

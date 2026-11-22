@@ -169,7 +169,9 @@ RFC1123 与中文行的星期/月份名不用 chrono 的 `%a`/`%b`（依赖 loca
    `LaunchTarget` 才能直接执行。宿主在 `invoke_hit` 的 `Launch`/`Plugin`/`Action` 分支各记一次；
    `CopyText`/`Open` 不记（复制结果与打开文件不算"最近使用"）。
 2. `group = "tools"`：`settings.tools` 里的内置工具 id（默认 `screenshot`/`clipboard`/`lock_screen`/
-   `tile_windows`/`shortcut_guide`/`snippets`/`file_buffer`），按 `KNOWN_TOOLS` 规整、未知 id 丢弃。
+   `tile_windows`/`shortcut_guide`/`snippets`/`file_buffer`，即 `config::DEFAULT_TOOLS`），
+   按 `KNOWN_TOOLS` 规整、未知 id 丢弃。`color_picker`（颜色提取器）与 `sticky_note`（便签纸）
+   在 `KNOWN_TOOLS` 内、可在设置页勾选加入，但**默认不进**常用工具。
    设置页的工具开关写的也是同一字段。
 
 分数只用来保证"最近使用"永远排在工具之前（600 递减 vs 500 递减）。`group` 是
@@ -211,6 +213,18 @@ RFC1123 与中文行的星期/月份名不用 chrono 的 `%a`/`%b`（依赖 loca
   PNG 存到 `Pictures/efto/Screenshots/LongShot_*.png`（被拒时退到 `~/.efto/Screenshots`）
   并复制到剪贴板，用系统通知反馈。
   限制：吸顶/吸底内容会重复或缺失；滚动快于约 0.75 屏/180ms 时可能漏行；结果上限 3000 万像素。
+- **颜色提取器**：`run_action("color_picker")` 复用截图同一套「收起搜索框 → 抓整屏」路径
+  （`capture_after_hiding_main`），把冻结画面存进 `AppData.shot`，再开与截图同规格的全屏透明覆盖层
+  （`color-picker.html`，Windows 一个虚拟桌面窗口、macOS 每屏一个）。页面按
+  `view_w / innerWidth` 把光标位置换回图内物理像素，用离屏 canvas 取该点 RGB，显示 15×15 放大镜、
+  十字线与 HEX/RGB；单击或 `Enter` 调 `color_picker_finish` 把 HEX 写进剪贴板并关窗，`Esc` 调
+  `color_picker_cancel`。画面在唤起瞬间冻结，动画/视频里的颜色以冻结帧为准。
+- **便签纸**：`run_action("sticky_note")` 每次新建一条便签（多条独立窗口共存），数据在
+  `crates/app/src/notes.rs`（`~/.efto/notes.json`，字段 `id/text/x/y/width/height`）。
+  窗口 `note.html`：无边框、`always_on_top`、可缩放、不占任务栏，标题栏拖动走 `note_drag`，
+  文本改动去抖 300ms 调 `note_save`（同时回写窗口几何），关闭窗口即删除该条。
+  下次启动在 setup 里按存储顺序恢复全部便签（不抢焦点）；宿主退出时 `RunEvent::ExitRequested`
+  置 `QUITTING`，`WindowEvent::Destroyed` 见到该标记就不再删除，避免退出时把便签清空。
 - **剪贴板**：`clipwatch.rs` 用 500ms 轮询（不用 `WM_CLIPBOARDUPDATE`，省一个隐藏消息窗口），
   优先级 **文件列表（CF_HDROP）> 图片 > 文本**，同一份内容只记一次。启动时先读一次当前剪贴板当基线，
   所以不会把启动前的内容当成新记录。
@@ -257,7 +271,7 @@ RFC1123 与中文行的星期/月份名不用 chrono 的 `%a`/`%b`（依赖 loca
   AI 插件自行打开 UI 并通过 `onPluginEnter` 的 payload 预填选中文本；执行前复核模型与插件，
   菜单过期时返回明确错误而不是静默失败。
 - **单项热键**：`settings.tool_hotkeys` 把工具 id 映射到 Tauri 加速键，默认 `Ctrl+Alt+1..7`
-  依次对应 `KNOWN_TOOLS`；默认值挂在 `Settings::default()` 上（`#[serde(default)]` 只补缺失字段），
+  依次对应 `config::DEFAULT_TOOLS`（颜色提取器/便签纸不默认占用热键）；默认值挂在 `Settings::default()` 上（`#[serde(default)]` 只补缺失字段），
   设置页清空后保存的是显式空表，不会被重新补回，否则"解绑"永远无效。
   `hotkey::rebind` 在注册唤起热键与
   通用动作热键之后逐个注册，回调里 `ShortcutState::Pressed` 时把 `run_action` 投到独立线程

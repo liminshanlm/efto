@@ -25,6 +25,8 @@ pub enum BuiltinAction {
     Snippets,
     UniversalActions,
     FileBuffer,
+    ColorPicker,
+    StickyNote,
 }
 
 impl BuiltinAction {
@@ -42,6 +44,8 @@ impl BuiltinAction {
         BuiltinAction::Snippets,
         BuiltinAction::UniversalActions,
         BuiltinAction::FileBuffer,
+        BuiltinAction::ColorPicker,
+        BuiltinAction::StickyNote,
     ];
 
     /// 按 id 反查（默认面板只存 id）。
@@ -71,6 +75,8 @@ impl BuiltinAction {
             BuiltinAction::Snippets => "snippets",
             BuiltinAction::UniversalActions => "universal_actions",
             BuiltinAction::FileBuffer => "file_buffer",
+            BuiltinAction::ColorPicker => "color_picker",
+            BuiltinAction::StickyNote => "sticky_note",
         }
     }
 
@@ -89,6 +95,8 @@ impl BuiltinAction {
             BuiltinAction::Snippets => "片段",
             BuiltinAction::UniversalActions => "通用动作",
             BuiltinAction::FileBuffer => "文件缓冲",
+            BuiltinAction::ColorPicker => "颜色提取器",
+            BuiltinAction::StickyNote => "便签纸",
         }
     }
 
@@ -144,6 +152,30 @@ impl BuiltinAction {
                 "file buffer",
                 "file basket",
                 "batch files",
+            ],
+            BuiltinAction::ColorPicker => &[
+                "颜色提取器",
+                "颜色提取",
+                "取色器",
+                "取色",
+                "拾色",
+                "吸管",
+                "色值",
+                "color picker",
+                "colorpicker",
+                "eyedropper",
+                "color",
+            ],
+            BuiltinAction::StickyNote => &[
+                "便签纸",
+                "便签",
+                "便条",
+                "贴纸",
+                "记事",
+                "sticky note",
+                "sticky notes",
+                "note",
+                "memo",
             ],
         }
     }
@@ -869,6 +901,8 @@ mod tests {
             ("截图", "screenshot"),
             ("clipboard", "clipboard"),
             ("锁屏", "lock_screen"),
+            ("取色", "color_picker"),
+            ("便签", "sticky_note"),
         ] {
             let hits = SearchService::query(q, &index, &reg, 10);
             let hit = hits

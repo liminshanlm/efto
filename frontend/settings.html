@@ -185,6 +185,20 @@
                 </div>
                 <label class="switch"><input id="toolFileBuffer" type="checkbox" /><span></span></label>
               </div>
+              <div class="row">
+                <div class="row-text">
+                  <div class="label" data-i18n="settings.tool.colorPicker.label">颜色提取器</div>
+                  <div class="desc" data-i18n="settings.tool.colorPicker.desc">拾取屏幕任意位置的颜色并复制色值（默认不加入常用工具）</div>
+                </div>
+                <label class="switch"><input id="toolColorPicker" type="checkbox" /><span></span></label>
+              </div>
+              <div class="row">
+                <div class="row-text">
+                  <div class="label" data-i18n="settings.tool.stickyNote.label">便签纸</div>
+                  <div class="desc" data-i18n="settings.tool.stickyNote.desc">在屏幕上新建置顶便签（默认不加入常用工具）</div>
+                </div>
+                <label class="switch"><input id="toolStickyNote" type="checkbox" /><span></span></label>
+              </div>
             </div>
             <div class="hint" data-i18n="settings.tools.hint">勾选的工具会出现在“常用工具”里。应用和插件在搜索结果里点“加入常用工具”即可添加；顺序即 Alt+1..9 的编号。</div>
           </div>
@@ -491,6 +505,14 @@
               <div class="row">
                 <div class="row-text"><div class="label" data-i18n="settings.tool.fileBuffer.label">文件缓冲</div></div>
                 <input id="hkFileBuffer" class="text-input short" spellcheck="false" placeholder="Ctrl+Alt+7" />
+              </div>
+              <div class="row">
+                <div class="row-text"><div class="label" data-i18n="settings.tool.colorPicker.label">颜色提取器</div></div>
+                <input id="hkColorPicker" class="text-input short" spellcheck="false" placeholder="" />
+              </div>
+              <div class="row">
+                <div class="row-text"><div class="label" data-i18n="settings.tool.stickyNote.label">便签纸</div></div>
+                <input id="hkStickyNote" class="text-input short" spellcheck="false" placeholder="" />
               </div>
             </div>
             <div class="hint" data-i18n="settings.hotkeys.hint">

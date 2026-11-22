@@ -27,9 +27,14 @@ pub const ACTIONS_LABEL: &str = "actions";
 pub const FILES_LABEL: &str = "files";
 /// 截图选区覆盖层（运行时创建，用完即关）。
 pub const SCREENSHOT_LABEL: &str = "screenshot";
+/// 颜色提取器覆盖层（运行时创建，用完即关）。
+pub const COLOR_PICKER_LABEL: &str = "color-picker";
 
 /// 钉图窗口的 label 前缀，后接 pin id。
 pub const PIN_PREFIX: &str = "pin-";
+
+/// 便签窗口的 label 前缀，后接便签 id。
+pub const NOTE_PREFIX: &str = "note-";
 
 /// 插件 UI 窗口的 label 前缀，后接插件 id。
 pub const UI_PREFIX: &str = "plugin-ui-";
@@ -38,6 +43,17 @@ pub const UI_PREFIX: &str = "plugin-ui-";
 pub const PREVIEW_LABEL: &str = "preview";
 /// 网页预览窗口（WebviewUrl::External，每次按目标 URL 重新导航）。
 pub const PREVIEW_WEB_LABEL: &str = "preview-web";
+
+/// 宿主正在退出：此时窗口销毁**不能**删除便签，否则下次启动全没了。
+static QUITTING: AtomicBool = AtomicBool::new(false);
+
+pub fn mark_quitting() {
+    QUITTING.store(true, Ordering::SeqCst);
+}
+
+pub fn app_quitting() -> bool {
+    QUITTING.load(Ordering::SeqCst)
+}
 
 /// 预览窗口的尺寸（逻辑像素）。
 const PREVIEW_W: f64 = 640.0;
@@ -165,6 +181,10 @@ pub fn pin_label(id: &str) -> String {
     format!("{PIN_PREFIX}{id}")
 }
 
+pub fn note_label(id: &str) -> String {
+    format!("{NOTE_PREFIX}{id}")
+}
+
 /// 插件 UI 窗口的 label（同时作为协议与事件的寻址键）。
 pub fn ui_label(plugin_id: &str) -> String {
     format!("{UI_PREFIX}{}", efto_core::fsutil::sanitize_key(plugin_id))
@@ -205,10 +225,10 @@ fn restore_after_park(w: &tauri::WebviewWindow) {
 }
 
 pub fn show_main(app: &AppHandle) {
-    // 截图会话期间不弹搜索框：单实例转发、插件输出等任何来源都不该
-    // 在选区覆盖层打开时把主窗口拉起来（实测会打断截图，还触发窗口约束重算）
-    if screenshot_session_active(app) {
-        tracing::info!("截图会话进行中，忽略主窗口显示请求");
+    // 截图/取色会话期间不弹搜索框：单实例转发、插件输出等任何来源都不该
+    // 在覆盖层打开时把主窗口拉起来（实测会打断截图，还触发窗口约束重算）
+    if screenshot_session_active(app) || color_picker_overlay_open(app) {
+        tracing::info!("全屏覆盖层会话进行中，忽略主窗口显示请求");
         return;
     }
     // run_on_main_thread 借用 self，闭包又要拥有句柄：必须用另一个克隆体
@@ -230,7 +250,7 @@ pub fn show_main(app: &AppHandle) {
 /// 显示主窗口，但不发 `main:show`（用于插件内联输出：
 /// 不能让主窗口把搜索列表重置掉，输出行会紧接着推给前端）。
 pub fn show_main_quiet(app: &AppHandle) {
-    if screenshot_session_active(app) {
+    if screenshot_session_active(app) || color_picker_overlay_open(app) {
         return;
     }
     let inner = app.clone();
@@ -472,9 +492,11 @@ pub fn open_screenshot_overlay(
         // 每屏一个覆盖层，窗口几何 = 显示器点矩形（Logical == 点）
         let mut made = 0;
         for (idx, (_id, r)) in crate::tile::ax::displays().into_iter().enumerate() {
-            spawn_screenshot_overlay(
+            spawn_overlay(
                 app,
                 format!("{SCREENSHOT_LABEL}-{idx}"),
+                "screenshot.html",
+                "efto 截图",
                 tauri::LogicalPosition::new(r.x as f64, r.y as f64).into(),
                 tauri::LogicalSize::new(r.width as f64, r.height as f64).into(),
                 Some(r),
@@ -491,9 +513,11 @@ pub fn open_screenshot_overlay(
     {
         let origin = (shot.origin_x, shot.origin_y);
         let size = (shot.width, shot.height);
-        spawn_screenshot_overlay(
+        spawn_overlay(
             app,
             SCREENSHOT_LABEL.to_string(),
+            "screenshot.html",
+            "efto 截图",
             tauri::PhysicalPosition::new(origin.0, origin.1).into(),
             tauri::PhysicalSize::new(size.0, size.1).into(),
             None,
@@ -538,34 +562,93 @@ pub fn close_screenshot_overlays(app: &AppHandle) {
     }
 }
 
-fn spawn_screenshot_overlay(
+/// 打开颜色提取器覆盖层：与截图相同的全屏方案（Windows 一个虚拟桌面窗口，
+/// macOS 每屏一个），页面加载冻结画面并在光标处放大取色。
+pub fn open_color_picker_overlay(
+    app: &AppHandle,
+    shot: &crate::screenshot::Shot,
+) -> Result<(), String> {
+    close_color_picker_overlay(app);
+    #[cfg(target_os = "macos")]
+    {
+        let mut made = 0;
+        for (idx, (_id, r)) in crate::tile::ax::displays().into_iter().enumerate() {
+            spawn_overlay(
+                app,
+                format!("{COLOR_PICKER_LABEL}-{idx}"),
+                "color-picker.html",
+                "efto 颜色提取器",
+                tauri::LogicalPosition::new(r.x as f64, r.y as f64).into(),
+                tauri::LogicalSize::new(r.width as f64, r.height as f64).into(),
+                Some(r),
+            );
+            made += 1;
+        }
+        if made == 0 {
+            Err("没有可用的显示器".into())
+        } else {
+            Ok(())
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        spawn_overlay(
+            app,
+            COLOR_PICKER_LABEL.to_string(),
+            "color-picker.html",
+            "efto 颜色提取器",
+            tauri::PhysicalPosition::new(shot.origin_x, shot.origin_y).into(),
+            tauri::PhysicalSize::new(shot.width, shot.height).into(),
+            None,
+        );
+        Ok(())
+    }
+}
+
+pub fn color_picker_overlay_open(app: &AppHandle) -> bool {
+    let prefix = format!("{COLOR_PICKER_LABEL}-");
+    app.webview_windows()
+        .keys()
+        .any(|l| l == COLOR_PICKER_LABEL || l.starts_with(&prefix))
+}
+
+pub fn close_color_picker_overlay(app: &AppHandle) {
+    let prefix = format!("{COLOR_PICKER_LABEL}-");
+    for (label, w) in app.webview_windows() {
+        if label == COLOR_PICKER_LABEL || label.starts_with(&prefix) {
+            let _ = w.close();
+        }
+    }
+}
+
+fn spawn_overlay(
     app: &AppHandle,
     label: String,
+    page: &'static str,
+    title: &'static str,
     pos: tauri::Position,
     size: tauri::Size,
     display: Option<crate::tile::Rect>,
 ) {
+    #[cfg(not(target_os = "macos"))]
+    let _ = display;
     let app = app.clone();
     let spawned = std::thread::Builder::new()
-        .name("screenshot-overlay".into())
+        .name("overlay-window".into())
         .spawn(move || {
-            let builder = WebviewWindowBuilder::new(
-                &app,
-                label,
-                WebviewUrl::App("screenshot.html".into()),
-            )
-            .title("efto 截图")
-            .decorations(false)
-            .always_on_top(true)
-            .skip_taskbar(true)
-            .resizable(false)
-            .maximizable(false)
-            .minimizable(false)
-            .shadow(false)
-            // 长截图时要把背景图藏掉，只留下边框与提示，让用户看到并滚动底下的页面
-            .transparent(true)
-            // 先建成隐藏的，等定位/定尺寸到位再显示，避免左上角闪一下
-            .visible(false);
+            let builder = WebviewWindowBuilder::new(&app, label, WebviewUrl::App(page.into()))
+                .title(title)
+                .decorations(false)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .resizable(false)
+                .maximizable(false)
+                .minimizable(false)
+                .shadow(false)
+                // 长截图时要把背景图藏掉，只留下边框与提示，让用户看到并滚动底下的页面
+                .transparent(true)
+                // 先建成隐藏的，等定位/定尺寸到位再显示，避免左上角闪一下
+                .visible(false);
             match builder.build() {
                 Ok(w) => {
                     let _ = w.set_position(pos);
@@ -590,11 +673,11 @@ fn spawn_screenshot_overlay(
                         });
                     }
                 }
-                Err(e) => tracing::error!("截图窗口创建失败: {e}"),
+                Err(e) => tracing::error!("{title}窗口创建失败: {e}"),
             }
         });
     if let Err(e) = spawned {
-        tracing::error!("无法启动截图窗口线程: {e}");
+        tracing::error!("无法启动{title}窗口线程: {e}");
     }
 }
 
@@ -690,6 +773,58 @@ pub fn open_pin(
             }
         })
         .map_err(|e| format!("无法启动钉图窗口线程: {e}"))?;
+    Ok(())
+}
+
+/// 打开一张便签窗口：无边框、置顶、可缩放，位置/尺寸来自存储。
+/// `focus` 为 false 时用于启动恢复，避免把用户正在用的窗口抢走焦点。
+pub fn open_note(app: &AppHandle, note: &crate::notes::Note, focus: bool) -> Result<(), String> {
+    let label = note_label(&note.id);
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.show();
+        if focus {
+            let _ = w.set_focus();
+        }
+        return Ok(());
+    }
+    let app = app.clone();
+    let id = note.id.clone();
+    let init = format!(
+        "window.__EFTO_NOTE = {}; window.__EFTO_NOTE_FOCUS = {};",
+        serde_json::to_string(&id).map_err(|e| e.to_string())?,
+        focus
+    );
+    let width = note.width.unwrap_or(300).max(220) as f64;
+    let height = note.height.unwrap_or(240).max(160) as f64;
+    let x = note.x.unwrap_or(140);
+    let y = note.y.unwrap_or(120);
+    std::thread::Builder::new()
+        .name("note-open".into())
+        .spawn(move || {
+            let builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("note.html".into()))
+                .title("efto 便签")
+                .inner_size(width, height)
+                .decorations(false)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .resizable(true)
+                .maximizable(false)
+                .minimizable(false)
+                .shadow(true)
+                .visible(false)
+                .initialization_script(&init);
+            match builder.build() {
+                Ok(w) => {
+                    let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
+                    let _ = w.show();
+                    if focus {
+                        let _ = w.set_focus();
+                    }
+                }
+                Err(e) => tracing::error!("便签窗口创建失败: {e}"),
+            }
+        })
+        .map_err(|e| format!("无法启动便签窗口线程: {e}"))?;
     Ok(())
 }
 
