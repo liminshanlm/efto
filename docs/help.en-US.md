@@ -26,7 +26,9 @@ efto is a Windows launcher (macOS support in progress: the CLI and search/launch
 
 The Universal Actions hotkey defaults to `Ctrl+Alt+Space` (toggle or change it in Settings → Launcher; not available on macOS):
 select text in any app, press it, then copy, paste back into the foreground window, search the web,
-or open the selected link/path.
+or open the selected link/path. With a model configured in Settings → Model and the translation
+(`translate`) / AI chat (`ai-chat`) plugins installed, the menu also offers "Translate selection"
+(results inline in the main window) and "Ask AI" (opens the AI plugin with the selected text).
 
 ## 2. App Search and Launch
 

@@ -35,12 +35,27 @@ fn read_clipboard_text() -> String {
         .unwrap_or_default()
 }
 
+/// 通用动作菜单里直接调用的插件 id。是否出现由命令层判定：
+/// 模型已配置（`Settings::models` 非空）且插件已安装、启用。
+pub const TRANSLATE_PLUGIN: &str = "translate";
+pub const AI_PLUGIN: &str = "ai-chat";
+
 /// 动作 id 列表；标题与说明由前端按语言渲染。
 ///
+/// `translate` / `ai` 由 `translate` / `ai` 参数决定（模型已配置 + 插件存在），
+/// 且只在有选中文本时出现——拿空文本去问模型没有意义。
 /// `open` 只在内容像链接或已存在的路径时出现，避免给出必然失败的动作。
-pub fn action_ids(text: &str) -> Vec<&'static str> {
+pub fn action_ids(text: &str, translate: bool, ai: bool) -> Vec<&'static str> {
     let mut ids = vec!["copy", "paste", "web"];
     let t = text.trim();
+    if !t.is_empty() {
+        if translate {
+            ids.push("translate");
+        }
+        if ai {
+            ids.push("ai");
+        }
+    }
     if t.starts_with("http://")
         || t.starts_with("https://")
         || t.starts_with("www.")
@@ -57,9 +72,22 @@ mod tests {
 
     #[test]
     fn open_only_for_link_or_existing_path() {
-        assert!(action_ids("hello").contains(&"copy"));
-        assert!(!action_ids("hello").contains(&"open"));
-        assert!(action_ids("https://example.com").contains(&"open"));
-        assert!(action_ids("www.example.com").contains(&"open"));
+        assert!(action_ids("hello", false, false).contains(&"copy"));
+        assert!(!action_ids("hello", false, false).contains(&"open"));
+        assert!(action_ids("https://example.com", false, false).contains(&"open"));
+        assert!(action_ids("www.example.com", false, false).contains(&"open"));
+    }
+
+    #[test]
+    fn translate_and_ai_are_opt_in_with_selection() {
+        let plain = action_ids("hello", false, false);
+        assert!(!plain.contains(&"translate") && !plain.contains(&"ai"));
+
+        let both = action_ids("hello", true, true);
+        assert!(both.contains(&"translate") && both.contains(&"ai"));
+
+        // 空选区不出现：没有文本可翻译/追问
+        let blank = action_ids("   ", true, true);
+        assert!(!blank.contains(&"translate") && !blank.contains(&"ai"));
     }
 }

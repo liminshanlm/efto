@@ -12,6 +12,8 @@
     copy: { title: 'actions.copy', hint: 'actions.copyHint' },
     paste: { title: 'actions.paste', hint: 'actions.pasteHint' },
     web: { title: 'actions.web', hint: 'actions.webHint' },
+    translate: { title: 'actions.translate', hint: 'actions.translateHint' },
+    ai: { title: 'actions.ai', hint: 'actions.aiHint' },
     open: { title: 'actions.open', hint: 'actions.openHint' }
   };
   var ids = [];

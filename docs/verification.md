@@ -882,7 +882,8 @@ efto-jsrt:  48 passed
   `{date}`/`{time}`/`{datetime}` 展开，关键词含空格/重复/正文为空时保存报错。
 - `clipboard`：文件列表去重按 Windows 路径大小写不敏感、置顶条目不参与 200 条上限与过期清理、
   v1 纯文本 JSON 仍可反序列化。
-- `universal::action_ids`：固定动作始终存在，链接/已存在路径才追加“打开”。
+- `universal::action_ids`：固定动作始终存在，链接/已存在路径才追加“打开”；翻译 / AI 只在
+  调用方传入可用标记且有选中文本时出现。
 - `winclip::dropfiles_bytes`：CF_HDROP 的 DROPFILES 头与宽字符双 NUL 布局。
 
 ### 静态守卫
@@ -1744,4 +1745,19 @@ node --check plugins/ipmsg/main.js / ui.js / service.js      OK
 - 已跑：`node --check frontend/screenshot.js`；`node scripts/check-frontend.js`（前端守卫通过）。
 - **没验证**：真实 GUI 里拖动的观感——多屏/DPI 缩放下的边界夹紧、标注随动后的相对位置、
   拖动后双击复制与保存结果、文字编辑态下拖动不抢焦点。
+
+## 通用动作菜单调用翻译 / AI 插件（2026-11-22）
+
+- 实现：`universal::action_ids(text, translate, ai)` 增加两个可选动作；`commands::actions_data`
+  用 `selection_plugins` 判定「模型已配置（`Settings::models` 非空）+ 注册表里 `translate` /
+  `ai-chat` 可用」，且只在有选中文本时给出。`actions_run` 的 `translate` / `ai` 分支复用
+  `open_plugin`：翻译插件无 UI，结果经 `efto.output` 内联到主窗口；AI 插件自行 `showUI`，
+  并通过 `onPluginEnter` 的 payload 预填选中文本。执行前再复核模型与选中文本，菜单过期时明确报错。
+- 前端：`frontend/actions.js` 补 `translate` / `ai` 的标题与说明，
+  `frontend/locales/{zh-CN,en-US}.json` 各新增两条文案。
+- 已跑：`cargo test -p efto-app universal`（2 个测试：原有链接判定 + 新增可选动作/空选区反例）；
+  `node --check frontend/actions.js`；`node scripts/check-frontend.js`；
+  `node scripts/check-i18n.js`（420 keys × 2 语言一致）。
+- **没验证**：真实 GUI 端到端（选中文字 → 热键 → 点「翻译选中文本」看主窗口结果行；
+  点「用 AI 追问」看插件窗口预填）需要配置可用模型后手测；翻译请求本身依赖网络与模型。
 

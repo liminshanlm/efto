@@ -252,6 +252,10 @@ RFC1123 与中文行的星期/月份名不用 chrono 的 `%a`/`%b`（依赖 loca
   触发 `universal::capture`：记住前台窗口 → `SendInput` 发 `Ctrl+C` → 读剪贴板文本 →
   打开常驻 `actions` 窗口。动作固定为复制、粘贴回前台、网页搜索；内容像链接或已存在路径时追加"打开"。
   抓不到选中文本时窗口显示空态提示，动作执行返回明确错误。
+  当 `Settings::models` 非空且注册表里有 `translate` / `ai-chat` 插件时，另有选中文本时追加
+  "翻译"与"AI 追问"：翻译按内置动作调用无 UI 后端插件（`efto.output` 结果内联到主窗口），
+  AI 插件自行打开 UI 并通过 `onPluginEnter` 的 payload 预填选中文本；执行前复核模型与插件，
+  菜单过期时返回明确错误而不是静默失败。
 - **单项热键**：`settings.tool_hotkeys` 把工具 id 映射到 Tauri 加速键，默认 `Ctrl+Alt+1..7`
   依次对应 `KNOWN_TOOLS`；默认值挂在 `Settings::default()` 上（`#[serde(default)]` 只补缺失字段），
   设置页清空后保存的是显式空表，不会被重新补回，否则"解绑"永远无效。

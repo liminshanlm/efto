@@ -1714,10 +1714,43 @@ pub struct ActionsData {
 #[tauri::command]
 pub fn actions_data(data: State<'_, Shared>) -> ActionsData {
     let text = data.selection.lock().clone().unwrap_or_default();
+    let (translate, ai) = selection_plugins(&data);
     ActionsData {
-        ids: crate::universal::action_ids(&text),
+        ids: crate::universal::action_ids(&text, translate, ai),
         text,
     }
+}
+
+/// 通用动作菜单是否给出"翻译 / AI"：模型已配置，且对应插件已安装、启用。
+fn selection_plugins(data: &Shared) -> (bool, bool) {
+    if data.settings.lock().models.is_empty() {
+        return (false, false);
+    }
+    let registry = data.registry.read();
+    (
+        registry.get(crate::universal::TRANSLATE_PLUGIN).is_some(),
+        registry.get(crate::universal::AI_PLUGIN).is_some(),
+    )
+}
+
+/// 把选中文本交给插件：翻译走无 UI 后端（结果内联到主窗口），
+/// AI 插件自行打开 UI 并预填文本。调用前复核模型与插件，避免菜单过期后静默失败。
+fn run_selection_plugin(
+    app: &AppHandle,
+    data: &Shared,
+    plugin_id: &str,
+    cmd: &str,
+    text: &str,
+) -> Result<String, String> {
+    if text.is_empty() {
+        return Err("没有选中的文本".into());
+    }
+    if data.settings.lock().models.is_empty() {
+        return Err("未配置模型：请在 设置 → 模型 中添加模型".into());
+    }
+    let out = open_plugin(app, data, plugin_id, cmd, text)?;
+    windows::hide_actions(app);
+    Ok(out.message)
 }
 
 #[tauri::command]
@@ -1763,6 +1796,14 @@ pub async fn actions_run(
             windows::hide_actions(&app);
             Ok("已用浏览器搜索".into())
         }
+        "translate" => run_selection_plugin(
+            &app,
+            &data,
+            crate::universal::TRANSLATE_PLUGIN,
+            "翻译",
+            &text,
+        ),
+        "ai" => run_selection_plugin(&app, &data, crate::universal::AI_PLUGIN, "ai", &text),
         "open" => {
             if text.is_empty() {
                 return Err("没有可打开的内容".into());
