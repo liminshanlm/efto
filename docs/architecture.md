@@ -433,6 +433,19 @@ spawn(plugin)
 3. **窗口没建好时的消息要排队**，并由页面握手触发补发：SDK 注册好 `plugin:event|listen`
    之后调 `plugin_ui_ready`，宿主才把队列发出去。`on_page_load` 太早，实测会丢。
 
+### 插件文本文件读写（`app/src/fileapi.rs`）
+
+插件的 main 没有 `fs`，UI 也拿不到文件字节；需要读写的插件走宿主受限 API：
+
+- 授权集合 `FileGrants` 按插件 id 保存 canonical 路径。只有两个来源：`plugin_pick_files`
+  返回的选中项，以及系统拖拽落在 `plugin-ui-*` 窗口上的路径（`lib.rs` 的
+  `WindowEvent::DragDrop`）。未授权路径一律拒绝，插件不能自己拼路径读任意文件。
+- `plugin_file_read` / `plugin_file_write` 只接受普通文件、UTF-8 文本，上限 8 MiB；
+  读取时去 BOM，写入复用 `efto_core::fsutil::write_atomic`（临时文件 + 替换），失败明确报错。
+- `plugin_file_save_as` 弹原生保存框，取消返回 `null`；保存成功后把用户选中的路径加入授权，
+  因此“另存为”之后可以继续直接保存。
+- UI 侧对应 `efto.file.read/write/saveAs`，接口说明见 `docs/plugin-development.md`。
+
 ### 插件能力：局域网文件共享（`plugins/file-share`，纯插件 + Node）
 
 宿主**不再**实现文件共享：旧的 `crates/app/src/share.rs` 与 `efto.share` 能力已删除。

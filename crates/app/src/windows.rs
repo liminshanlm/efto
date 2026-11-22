@@ -1490,6 +1490,9 @@ mod tests {
         assert!(PLUGIN_SDK.contains("plugin:message"));
         // 插件 UI 的原生文件选择与系统拖拽入口
         assert!(PLUGIN_SDK.contains("plugin_pick_files"));
+        assert!(PLUGIN_SDK.contains("plugin_file_read"));
+        assert!(PLUGIN_SDK.contains("plugin_file_write"));
+        assert!(PLUGIN_SDK.contains("plugin_file_save_as"));
         assert!(PLUGIN_SDK.contains("plugin_shell_show_in_folder"));
         assert!(PLUGIN_SDK.contains("tauri://drag-drop"));
     }

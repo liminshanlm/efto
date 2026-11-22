@@ -11,13 +11,21 @@ use crate::state::Shared;
 use crate::windows;
 
 /// label 形如 `plugin-ui-<sanitize(id)>`，还原成注册表里的真实 id。
-fn plugin_of(app: &AppHandle, window: &WebviewWindow) -> Result<String, String> {
+pub(crate) fn plugin_of(app: &AppHandle, window: &WebviewWindow) -> Result<String, String> {
     let label_id = window
         .label()
         .strip_prefix("plugin-ui-")
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| "该窗口不是插件 UI 窗口".to_string())?
-        .to_string();
+        .ok_or_else(|| "该窗口不是插件 UI 窗口".to_string())?;
+    resolve_plugin_id(app, label_id).ok_or_else(|| format!("未知插件: {label_id}"))
+}
+
+/// 窗口事件（如系统拖拽）里只有 label，没有 WebviewWindow，用它反查插件 id。
+pub(crate) fn plugin_id_by_label(app: &AppHandle, label: &str) -> Option<String> {
+    resolve_plugin_id(app, label.strip_prefix("plugin-ui-").filter(|s| !s.is_empty())?)
+}
+
+fn resolve_plugin_id(app: &AppHandle, label_id: &str) -> Option<String> {
     // 先把 id 拷出来再释放注册表读锁：guard 的生命周期不能长于 State 借用
     let ids: Vec<String> = {
         let data = app.state::<Shared>();
@@ -26,7 +34,6 @@ fn plugin_of(app: &AppHandle, window: &WebviewWindow) -> Result<String, String> 
     };
     ids.into_iter()
         .find(|id| efto_core::fsutil::sanitize_key(id) == label_id)
-        .ok_or_else(|| format!("未知插件: {label_id}"))
 }
 
 fn call(app: &AppHandle, window: &WebviewWindow, module: &str, method: &str, args: Vec<Value>) -> Result<Value, String> {
@@ -114,22 +121,29 @@ pub fn plugin_open_external(url: String, app: AppHandle, window: WebviewWindow) 
 /// rfd 是阻塞式对话框，放到阻塞线程池里跑，避免卡住 Tauri 的异步运行时。
 #[tauri::command]
 pub async fn plugin_pick_files(app: AppHandle, window: WebviewWindow) -> Result<Vec<String>, String> {
-    plugin_of(&app, &window)?;
-    tauri::async_runtime::spawn_blocking(move || {
+    let plugin = plugin_of(&app, &window)?;
+    let picked = tauri::async_runtime::spawn_blocking(move || {
         rfd::FileDialog::new()
-            .set_title("选择要分享的文件")
+            .set_title("选择文件")
             .set_parent(&window)
             .pick_files()
             .map(|paths| {
                 paths
                     .into_iter()
                     .map(|p| p.to_string_lossy().to_string())
-                    .collect()
+                    .collect::<Vec<_>>()
             })
             .unwrap_or_default()
     })
     .await
-    .map_err(|e| format!("文件选择框失败：{e}"))
+    .map_err(|e| format!("文件选择框失败：{e}"))?;
+    // 用户亲手选中的文件才获得读写授权（见 fileapi.rs）
+    if !picked.is_empty() {
+        let data = app.state::<Shared>();
+        data.file_grants
+            .grant(&plugin, picked.iter().map(std::path::PathBuf::from));
+    }
+    Ok(picked)
 }
 
 /// 插件 UI 页面的日志出口。

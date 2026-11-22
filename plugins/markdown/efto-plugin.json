@@ -1,0 +1,13 @@
+{
+  "name": "markdown",
+  "version": "0.1.0",
+  "description": "Markdown 预览与编辑：文档/源码双模式、打开与拖入文件、保存、导出 HTML 与打印",
+  "main": "main.js",
+  "index": "index.html",
+  "logo": "logo.png",
+  "author": { "name": "efto" },
+  "cmds": [
+    { "type": "input", "label": "Markdown 编辑器", "cmd": "md" },
+    { "type": "input", "label": "Markdown", "cmd": "markdown" }
+  ]
+}

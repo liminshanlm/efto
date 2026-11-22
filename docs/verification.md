@@ -1833,4 +1833,30 @@ node --check plugins/ipmsg/main.js / ui.js / service.js      OK
   点击后剪贴板内容）；便签窗口的实际拖动/缩放/置顶层级、重启恢复位置、退出时是否保留、
   多条便签同时输入时的落盘时序；macOS 上的覆盖层与便签窗口未构建未实测。
 
+## Markdown 插件与插件文本文件 API（2026-11-22）
+
+新增 `plugins/markdown`（触发词 `md` / `markdown`）：文档 / 源码双模式、打开与拖入、
+保存与另存、快捷插入工具栏、导出独立 HTML、打印。宿主新增 `crates/app/src/fileapi.rs`
+（`plugin_file_read/write/save_as`）与按插件 id 的路径授权。
+
+已跑：
+
+- `cargo test -p efto-app fileapi`：4 项通过（未授权路径拒绝、写入后读取且去 BOM、
+  超 8 MiB 与非 UTF-8 拒绝、另存文件名清洗）。
+- `node plugins/markdown/tests/run-all.js`：24 项通过（HTML 转义、危险协议降级、标题、
+  段落软换行、行内格式、列表与任务项、引用与代码块、未闭合围栏、表格对齐、链接与图片、
+  空输入）。
+- `node --check plugins/markdown/main.js`、`ui.js`、`render.js`。
+- `cli plugins` 能发现 `markdown`；`cli search md` 首条为「Markdown 编辑器 [exact]」；
+  `cli plugin-run markdown md "# hi" --json` 返回 `ok: true`，事件里有 `[ui→page:seed]`。
+- `scripts/verify.ps1`：全量无 GUI 端到端通过（`plugins` 里出现 `markdown v0.1.0`）。
+
+**没验证**：
+
+- GUI 实跑：文档 / 源码切换观感、拖入授权、打开 / 保存 / 另存 / 导出的系统对话框、
+  `window.print()` 的打印预览、浅色与深色主题、`Ctrl+S/O/E/P`、未保存确认。
+- 预览里的相对路径图片无法在 `efto://` 页面加载（只认 http(s) 绝对地址与页面同源资源）；
+  导出 HTML 不受此限制。
+- macOS 未构建未实测。
+
 

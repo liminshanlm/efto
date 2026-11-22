@@ -110,6 +110,15 @@
 
     // 原生文件选择框；取消时 resolve 空数组
     pickFiles: function () { return invoke('plugin_pick_files'); },
+    // 文本文件读写：只允许 pickFiles 选中或系统拖入的路径（宿主侧授权，见 fileapi.rs）。
+    // read 拒绝非 UTF-8、目录与超过 8 MiB 的文件；saveAs 走原生保存框，取消返回 null。
+    file: {
+      read: function (path) { return invoke('plugin_file_read', { path: String(path) }); },
+      write: function (path, text) { return invoke('plugin_file_write', { path: String(path), text: String(text) }); },
+      saveAs: function (name, text) {
+        return invoke('plugin_file_save_as', { name: String(name == null ? 'untitled.md' : name), text: String(text) });
+      }
+    },
     // 系统文件拖拽：cb(paths) 只在松手时触发；cb(bool) 用于高亮拖拽区域
     onFileDrop: function (cb) {
       listenTauriEvent('tauri://drag-drop', function (p) { cb((p && p.paths) || []); });

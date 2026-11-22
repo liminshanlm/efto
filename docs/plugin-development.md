@@ -12,7 +12,7 @@ my-plugin/
   main.js | main.ts  后端逻辑（可选）
   index.html       UI 页面（可选）
   preload.js       UI 前置脚本（可选，第一阶段仅识别、不执行）
-  logo.png         图标（可选）
+  logo.png         图标（新建插件必须提供：正方形透明底，建议 256×256）
 ```
 
 清单最小可用形式：
@@ -379,12 +379,17 @@ const ocr = await efto.ai.ocr({ path: 'D:\\reports\\q3.pdf' });
 </script>
 ```
 
-UI 侧另有三个文件相关能力：
+UI 侧的文件相关能力：
 
 - `efto.pickFiles()` → `Promise<string[]>`：原生多选文件框，取消返回空数组。
 - `efto.onFileDrop(cb)` / `efto.onFileDrag(cb)`：系统文件拖拽。前者在松手时给绝对路径
   `cb(paths)`；后者给 `cb(true/false)` 用于高亮拖拽区（走 Tauri 的拖拽事件，HTML5 `drop` 拿不到真实路径）。
 - `efto.shellShowItemInFolder(path)`：在资源管理器中定位文件。
+- `efto.file.read(path)` / `efto.file.write(path, text)` / `efto.file.saveAs(name, text)`：
+  受限文本文件读写。只放行用户通过原生选择框选中、或系统拖进插件窗口的路径；`saveAs`
+  由用户选路径，保存成功后同样加入放行集合。只处理 UTF-8 文本（读取时去 BOM），
+  单文件上限 8 MiB，目录 / 非 UTF-8 / 超限都会明确报错；写入是原子替换。
+  `saveAs` 取消时返回 `null`。宿主侧边界见 `docs/architecture.md` 的「插件文本文件读写」。
 
 主题：`efto.isDarkMode()` / `efto.isLightMode()` 是**函数**，不是布尔属性。插件窗口跟主窗口
 用同一套主题设置（跟随系统 / 浅色 / 深色）：宿主建窗口时按设置锁定窗口主题，设置变更时也会

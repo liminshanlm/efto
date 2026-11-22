@@ -318,6 +318,15 @@ interface Efto {
 
   /** UI 页面专用：原生文件选择框，取消时返回空数组 */
   pickFiles(): Promise<string[]>;
+  /** UI 页面专用：文本文件读写。只放行 `pickFiles` 选中或系统拖入的路径。 */
+  file: {
+    /** 读取 UTF-8 文本；目录、非 UTF-8、超过 8 MiB 的文件会明确报错。 */
+    read(path: string): Promise<{ path: string; content: string; bytes: number }>;
+    /** 写回已授权的文件（UTF-8；原子写，超过 8 MiB 报错）。 */
+    write(path: string, text: string): Promise<{ path: string; bytes: number }>;
+    /** 另存为：原生保存框，用户选路径；取消返回 null。保存后该路径获得写权限。 */
+    saveAs(name: string, text: string): Promise<string | null>;
+  };
   /** UI 页面专用：系统文件拖入松手 */
   onFileDrop(cb: (paths: string[]) => void): unknown;
   /** UI 页面专用：拖拽进入/离开高亮 */

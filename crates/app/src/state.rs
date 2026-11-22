@@ -55,6 +55,8 @@ pub struct AppData {
     pub file_buffer: Mutex<Vec<String>>,
     /// 便签纸（`~/.efto/notes.json`）。
     pub notes: Mutex<crate::notes::NoteStore>,
+    /// 插件 UI 的文件读写授权（只放行用户选择 / 拖入的路径）。
+    pub file_grants: crate::fileapi::FileGrants,
     /// 通用动作抓取到的选中文本（最近一次）。
     pub selection: Mutex<Option<String>>,
     /// 剪贴板图片缩略图缓存：图片路径 → data URL。
@@ -141,6 +143,7 @@ impl AppData {
             snippets: Mutex::new(efto_core::snippets::SnippetStore::load()),
             file_buffer: Mutex::new(Vec::new()),
             notes: Mutex::new(crate::notes::NoteStore::load()),
+            file_grants: crate::fileapi::FileGrants::new(),
             selection: Mutex::new(None),
             clip_thumbs: Mutex::new(std::collections::HashMap::new()),
         }

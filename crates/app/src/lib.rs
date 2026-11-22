@@ -15,6 +15,7 @@ pub mod cli;
 mod ai;
 mod clipwatch;
 mod commands;
+mod fileapi;
 pub mod hosts;
 mod hotkey;
 mod guide;
@@ -280,6 +281,9 @@ pub fn run() {
             ui::plugin_shell_show_in_folder,
             ui::plugin_open_external,
             ui::plugin_pick_files,
+            fileapi::plugin_file_read,
+            fileapi::plugin_file_write,
+            fileapi::plugin_file_save_as,
             ui::plugin_to_main,
             ui::plugin_broadcast,
             ui::plugin_ui_log,
@@ -354,6 +358,15 @@ pub fn run() {
                     }
                 }
                 return;
+            }
+            if let WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                // 插件 UI 的「拖入文件」授权：只有真正拖进该插件窗口的路径才放行
+                if let Some(plugin) =
+                    crate::ui::plugin_id_by_label(window.app_handle(), window.label())
+                {
+                    let data = window.app_handle().state::<Shared>();
+                    data.file_grants.grant(&plugin, paths.iter().cloned());
+                }
             }
             if window.label() != windows::MAIN_LABEL {
                 return;

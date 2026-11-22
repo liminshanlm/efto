@@ -68,6 +68,8 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1               # 无 
     同一次改动里往 `docs/macos-parity-todo.md` 追加一行：功能点、Windows 实现位置（文件与入口）、
     macOS 侧待办（缺失 / 需适配 / 已具备）、同步要点与验证方式。macOS 侧补齐后把该行状态改为
     `已同步` 并注明提交。只靠聊天记录或事后回忆不算完成。
+11. **新建插件必须同时生成图标**：插件目录里要有 `logo.png`（正方形、透明底、圆角，建议 256×256），
+    并在 `efto-plugin.json` 里写 `logo` 字段。只有清单没有图标的插件视为未完成。
 
 ## Agent Notes 约定
 
