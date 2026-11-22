@@ -722,15 +722,25 @@ pub fn main_state(app: &AppHandle) -> String {
     }
 }
 
-/// 主窗口的 CGWindowID（窗口服务器口径）；取不到返回 None。
+/// 任意窗口的 CGWindowID（窗口服务器口径）。
 #[cfg(target_os = "macos")]
-pub fn main_window_number(app: &AppHandle) -> Option<u32> {
-    let w = app.get_webview_window(MAIN_LABEL)?;
+pub fn window_number(w: &tauri::WebviewWindow) -> Option<u32> {
     let ptr = w.ns_window().ok()?;
     let obj = ptr as *mut objc2::runtime::AnyObject;
     // SAFETY: windowNumber 是 NSWindow 的只读属性
     let num: i64 = unsafe { objc2::msg_send![obj, windowNumber] };
     (num > 0).then_some(num as u32)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn window_number(_w: &tauri::WebviewWindow) -> Option<u32> {
+    None
+}
+
+/// 主窗口的 CGWindowID（窗口服务器口径）；取不到返回 None。
+#[cfg(target_os = "macos")]
+pub fn main_window_number(app: &AppHandle) -> Option<u32> {
+    window_number(&app.get_webview_window(MAIN_LABEL)?)
 }
 
 /// 主窗口在 AppKit 看来可见吗（native hide 之后立刻为假）。

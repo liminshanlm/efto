@@ -263,6 +263,33 @@ mod ffi {
 
 #[cfg(target_os = "macos")]
 pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Shot, String> {
+    capture_region_impl(x, y, width, height, None)
+}
+
+/// macOS：区域捕获，但**排除 `exclude` 这个窗口**（从它下面合成）。
+///
+/// 长截图时覆盖层要留在屏幕上给用户看边框和提示，又不能被抓进结果帧。
+/// `NSWindowSharingNone` 对显示器捕获无效（实测 CGDisplayCreateImage 照样拍进去），
+/// 所以走"在这个窗口之下合成"。
+#[cfg(target_os = "macos")]
+pub fn capture_region_below(
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    exclude: u32,
+) -> Result<Shot, String> {
+    capture_region_impl(x, y, width, height, Some(exclude))
+}
+
+#[cfg(target_os = "macos")]
+fn capture_region_impl(
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    exclude: Option<u32>,
+) -> Result<Shot, String> {
     let width = width.max(1);
     let height = height.max(1);
     if !crate::permissions::screen_recording_allowed() {
@@ -296,9 +323,27 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Shot, S
         // 位图上下文的缓冲行序已是自顶向下：直接画，**不要**再翻转（实测翻了会上下颠倒）。
         let mut captured = 0u32;
         for (id, r) in crate::tile::ax::displays() {
-            // SAFETY: id 来自 CGGetActiveDisplayList；图非空时由本函数 Release；
+            // SAFETY: 两种来源的都是 CGImage，非空时由本函数 Release；
             // 目标槽位矩形可超出画布——上下文自动裁剪（区域捕获即靠这一点）。
-            let img = ffi::CGDisplayCreateImage(id);
+            let img = match exclude {
+                // 参数是全局"点"矩形（与 CGDisplayBounds 同口径）
+                Some(excl) => ffi::CGWindowListCreateImage(
+                    ffi::CGRect {
+                        origin: ffi::CGPoint {
+                            x: r.x as f64,
+                            y: r.y as f64,
+                        },
+                        size: ffi::CGSize {
+                            width: r.width as f64,
+                            height: r.height as f64,
+                        },
+                    },
+                    ffi::WINDOW_LIST_ON_SCREEN_BELOW,
+                    excl,
+                    ffi::WINDOW_IMAGE_BEST_RESOLUTION,
+                ),
+                None => ffi::CGDisplayCreateImage(id),
+            };
             if img.is_null() {
                 continue;
             }

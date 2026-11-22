@@ -1026,9 +1026,10 @@ pub fn screenshot_long_start(
 
     let shared = data.inner().clone();
     let app2 = app.clone();
+    let exclude = windows::window_number(&window);
     if let Err(e) = std::thread::Builder::new()
         .name("efto-longshot".into())
-        .spawn(move || run_long_capture(app2, shared, px, py, w, h, stop, rows))
+        .spawn(move || run_long_capture(app2, shared, px, py, w, h, exclude, stop, rows))
     {
         *data.long_capture.lock() = None;
         let _ = window.set_ignore_cursor_events(false);
@@ -1066,6 +1067,7 @@ fn run_long_capture(
     y: i32,
     width: u32,
     height: u32,
+    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))] exclude: Option<u32>,
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
     rows_done: std::sync::Arc<std::sync::atomic::AtomicU32>,
 ) {
@@ -1101,7 +1103,17 @@ fn run_long_capture(
         if stop.load(Ordering::SeqCst) || start.elapsed().as_millis() as u64 >= HARD_LIMIT_MS {
             break;
         }
-        match crate::screenshot::capture_region(x, y, width, height) {
+        // mac 上覆盖层必须从帧里排除：`NSWindowSharingNone` 对显示器捕获无效，
+        // 只能"在这个覆盖层窗口之下"合成——覆盖层在屏幕保护级，比菜单栏高，
+        // 所以菜单栏仍在结果里。
+        #[cfg(target_os = "macos")]
+        let frame = match exclude {
+            Some(id) => crate::screenshot::capture_region_below(x, y, width, height, id),
+            None => crate::screenshot::capture_region(x, y, width, height),
+        };
+        #[cfg(not(target_os = "macos"))]
+        let frame = crate::screenshot::capture_region(x, y, width, height);
+        match frame {
             Ok(shot) => {
                 match &last_frame {
                     Some(prev) => {
