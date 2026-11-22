@@ -583,6 +583,12 @@
                 />
                 <button class="btn" id="checkNode" data-i18n="settings.runtime.check">检测</button>
               </div>
+              <div class="runtime-guide" id="nodeGuide">
+                <span data-i18n="settings.runtime.node.guide">
+                  未安装 Node.js？到官网下载 LTS 安装包，安装后点「检测」（安装包默认会写入 PATH）。
+                </span>
+                <button class="link-btn" data-url="https://nodejs.org/en/download" data-i18n="settings.runtime.download">前往下载</button>
+              </div>
             </div>
           </div>
 
@@ -606,12 +612,18 @@
                 />
                 <button class="btn" id="checkPython" data-i18n="settings.runtime.check">检测</button>
               </div>
+              <div class="runtime-guide" id="pythonGuide">
+                <span data-i18n="settings.runtime.python.guide">
+                  未安装 Python？到官网下载安装包，安装时勾选「Add python.exe to PATH」，装完后点「检测」。
+                </span>
+                <button class="link-btn" data-url="https://www.python.org/downloads/" data-i18n="settings.runtime.download">前往下载</button>
+              </div>
             </div>
           </div>
 
           <div class="hint" data-i18n="settings.runtime.hint">
             保存并检测通过后，插件可以调用 efto.node.run / efto.python.run 执行脚本；
-            解释器路径只能在这里配置，插件无法自己指定或替换程序。
+            解释器路径只能在这里配置，插件无法自己指定或替换程序。留空时启动会自动从系统 PATH 探测。
           </div>
 
           <div class="footer-actions">

@@ -104,21 +104,6 @@ interface EftoScriptResult {
   truncated: boolean;
 }
 
-interface EftoShareItem {
-  path: string;
-  name?: string;
-}
-
-interface EftoShareState {
-  running: boolean;
-  port: number;
-  urls: string[];
-  /** 局域网 IPv6 地址；没有时为空数组 */
-  urls6: string[];
-  items: Array<{ path: string; name: string; size?: number; is_dir?: boolean }>;
-  invalid: Array<{ path: string; reason: string }>;
-}
-
 interface EftoHostsRead {
   path: string;
   backup: string;
@@ -237,7 +222,7 @@ interface EftoOutputRow {
 
 /**
  * 插件 API。main 进程与 UI 页面共用同名对象：
- * - main：`efto.exec` / `efto.share` / `efto.ai` 等全部能力；
+ * - main：`efto.exec` / `efto.node` / `efto.ai` 等全部能力；
  * - UI：宿主注入的 SDK 只提供通信、kv、窗口与系统能力（见 assets/plugin-sdk.js）。
  */
 interface EftoSearchItem {
@@ -265,12 +250,6 @@ interface Efto {
   output(rows: EftoOutputRow[]): boolean;
   /** main → UI 页面 */
   ipcMessage(name: string, data?: unknown): Promise<unknown>;
-  /** 局域网只读文件共享 */
-  share: {
-    start(opts: { port?: number; items?: EftoShareItem[] }): EftoShareState;
-    stop(): EftoShareState;
-    status(): EftoShareState;
-  };
   /** Node.js 脚本（需在 设置 → 运行时 配置解释器） */
   node: { run(opts: EftoScriptOptions): Promise<EftoScriptResult> };
   /** Python 脚本（需在 设置 → 运行时 配置解释器） */

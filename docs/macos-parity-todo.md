@@ -1,0 +1,22 @@
+# macOS 同步清单
+
+Windows 侧新增或变更的、用户可感知的功能，在这里留一行待办，供 macOS 侧后续对齐。
+约定见 `AGENTS.md` 硬性约定第 10 条。
+
+## 维护规则
+
+- Windows 侧功能改动**同一次提交**里追加/更新对应的行，不事后补。
+- `状态` 取值：`待同步` / `适配中` / `已同步` / `不适用`。
+- `macOS 待办` 要写清是**缺失**（mac 上还没有）、**需适配**（有对应能力但入口/行为不同），
+  还是**已具备**（无需改动，仅登记证据）。
+- macOS 侧补齐后把状态改为 `已同步`，并在 `备注` 里写明对应提交与验证方式。
+- 只登记用户可感知的行为（命令、快捷键、界面入口、插件 API、边界判定）；纯内部重构不登记。
+
+## 清单
+
+| 功能 | Windows 实现位置 | macOS 待办 | 同步要点 / 验证 | 状态 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| 局域网消息插件 `ipmsg`（UDP 广播发现 + TCP 文本消息 + 首次通信同意，仅文本） | 纯插件实现，宿主零改动：`plugins/ipmsg/main.js`（`efto.node.run` 拉起服务）、`service.js`（UDP/TCP 24250 + HTTP 127.0.0.1:24251）、`ui.js`（webview fetch 控制口 + kv 持久化 `trusted/approved/threads`） | 已具备（同一份 JS 跨平台）；mac 需实测 UDP 广播/收包、macOS 防火墙对 node 的放行提示 | 依赖本机 Node：设置 → 运行时 配置 node 后才可用（mac 同样适用）。两端都启动插件后应在 9s 内互相出现；未授权发送返回 `pending`，对方同意后自动补发；重开插件信任仍在。验证：`node --check` 三个 JS + 单机端到端脚本；mac 侧补 `docs/verification.md` 记录 | 已同步 | 2026-11-22 由宿主 Rust 能力改为纯插件 + Node，协议为 efto 自定义，不兼容标准 IPMSG |
+| 局域网文件共享插件 `file-share`（只读 HTTP：目录浏览、Range 下载） | 纯插件实现，宿主零改动：`plugins/file-share/main.js`（`efto.node.run` bootstrap + 控制口调用）、`service.js`（数据口 5421 + 控制口 127.0.0.1:5422）、`ui.js` 不变；宿主 `share.rs` / `efto.share` 已删除 | 已具备（同一份 JS 跨平台）；mac 需实测 `[::]` 监听、macOS 防火墙对 node 的放行提示 | **用户可感知变化**：插件 API `efto.share` 移除，file-share 依赖本机 Node（设置 → 运行时 配置后才可用）；分享地址、端口、UI 协议与 kv 结构不变。验证：`node --check` + service 端到端 22 项 + main.js 内嵌代码实跑；mac 侧补 `docs/verification.md` 记录 | 已同步 | 2026-11-22 由宿主 Rust 能力改为纯插件 + Node |
+| 运行时未配置时自动从 PATH 探测 node/python 并写回设置 | `crates/core/src/exec.rs` `detect_on_path`（`ScriptRuntime::path_names` 已按平台取 `node`/`python3`）；`crates/app/src/lib.rs` setup 调用 `state::autofill_runtimes` 并 `Settings::save`；`crates/app/src/commands.rs` `runtime_status`（设置页再补一次）；`frontend/settings.js` 回填空输入框 | **需适配 + 需实测**：探测代码跨平台，但 Finder/Dock 启动的 app 通常不继承 shell 的 PATH（`/opt/homebrew/bin`、nvm 目录常缺失），可能探测不到。mac 侧需确认是否补这几个常见目录或回退到 `which`；GUI 启动自动填入、设置页回填与"清空后被填回"的边界需真机手测 | 用户可感知变化：设置 → 运行时留空时启动会被自动填入，仍可手动改；已配置路径永不覆盖；清空并保存等于未配置，下次启动会再填。验证：`cargo test -p efto-core detect_skips_dirs_without_a_working_interpreter`、`cargo test -p efto-app autofill_runtimes`；mac 上分别看 `node --version` / `python3 --version` 与设置页结果 | 待同步 | 2026-11-22 Windows 已实现并构建通过；macOS 尚未验证 PATH 继承 |
+| 运行时设置页的 Node.js / Python 安装引导（说明文案 + 官网下载入口） | `frontend/settings.html`（`#nodeGuide` / `#pythonGuide`）、`frontend/settings.js`（`paintRuntime` 按 `configured && ok` 显隐；`.runtime-guide .link-btn` 调 `open_url`）、`frontend/settings.css`、`frontend/locales/{zh-CN,en-US}.json`；下载地址 Node.js `https://nodejs.org/en/download`、Python `https://www.python.org/downloads/` | **需适配**：`open_url` 命令跨平台，mac 需确认浏览器打开正常；下载地址与 PATH 勾选文案按平台调整（mac 用 Homebrew / python.org pkg，不涉及"Add to PATH"） | 用户可感知变化：未配置或检测不通过时卡片显示引导与下载按钮，通过后隐藏。验证：`node --check frontend/settings.js`、`node scripts/check-frontend.js`；Windows GUI 实跑（可用时隐藏 / 改错路径后出现 / 两个链接分别打开 nodejs.org/en/download 与 python.org/downloads）；mac 侧仍需 GUI 手测两处链接 | 待同步 | 2026-11-22 Windows 已实现并 GUI 实跑通过（Node 链接初版落到目录索引，已改 `/en/download`）；macOS 下载文案与链接待适配 |

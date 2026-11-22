@@ -1,0 +1,13 @@
+{
+  "name": "ipmsg",
+  "version": "0.1.0",
+  "description": "局域网即时消息：自动发现同网段设备，仅发文本；首次通信需对方同意",
+  "main": "main.js",
+  "index": "index.html",
+  "author": { "name": "efto" },
+  "cmds": [
+    { "type": "input", "label": "飞鸽", "cmd": "飞鸽" },
+    { "type": "input", "label": "局域网消息", "cmd": "局域网消息" },
+    { "type": "input", "label": "IPMSG", "cmd": "ipmsg" }
+  ]
+}

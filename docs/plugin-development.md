@@ -112,7 +112,6 @@ efto.output([{ title: '42', copy: '42' }]);
 | 外部程序 | `exec({ name, args, timeoutMs })` → Promise | 只认白名单名字（目前 `es`），详见下方“efto 扩展” |
 | **脚本运行时** | `efto.node.run({ code, args?, timeoutMs? })` / `efto.python.run(...)` → Promise | 解释器需在 设置 → 运行时 配置并检测通过 |
 | 窗口 | `showUI/hideUI` `showMainWindow/hideMainWindow` `setSubTitle` `closeWindow` | UI 类能力全部异步投递，绝不阻塞主线程 |
-| **内网共享** | `efto.share.start({ port, items })` / `stop()` / `status()` | 只读 HTTP 文件服务，`items: [{ path, name? }]`，详见下方 |
 | **hosts** | `efto.hosts.path()` / `read()` / `save({ text, encoding? })` → Promise | 写 Windows hosts，保存走 UAC 提权并自动备份 |
 | **大模型** | `efto.ai.chat({ messages, model?, temperature?, maxTokens?, timeoutSecs?, stream?, onDelta?, webSearch?, readUrl? })` → Promise / `efto.ai.models()` | 调用 设置 → 模型 里的（默认）模型，OpenAI 兼容接口；`onDelta` 接收流式增量；`webSearch`/`readUrl` 开启 DeepSeek 服务端联网 |
 | **OCR** | `efto.ai.ocr({ path, purpose?, model? })` → Promise | 调 DeepSeek OCR 识别 PDF / Word / PPT / 图片，返回逐页文字 |
@@ -173,6 +172,8 @@ const r = await efto.exec({
 
 让插件用本机的 Node.js / Python 执行一段脚本。解释器**只能**在 设置 → 运行时 里配置，
 检测通过后所有插件都能调用；插件无法指定或替换解释器路径。
+路径留空时，efto 启动会自动从系统 PATH 里探测可用的 `node` / `python` 并写回设置，
+之后仍可在设置页改成别的解释器。
 
 ```js
 const r = await efto.node.run({
@@ -194,36 +195,27 @@ await efto.python.run({ code: 'print(1 + 1)' });
 - 未配置或检测失败时**明确报错**，不会降级去找 PATH 上的同名程序。
 - 只写名字（如 `node`）时由 CreateProcess 从 PATH 解析；建议在设置里填完整路径。
 
-### efto 扩展：`efto.share`
+#### 长驻服务推荐模式（插件自带，无需改宿主）
 
-把文件/文件夹以**只读 HTTP** 方式暴露给同网段设备。服务实现是 Rust 标准库
-（`crates/app/src/share.rs`），插件进程里没有 Node、没有监听套接字。
+`efto.node.run` 是一次性执行（有超时、会被 kill），不能直接监听端口。需要常驻服务时，
+推荐让插件自己拉起一个 detached 的 Node 子进程，UI 走本地回环 HTTP：
 
-```js
-const st = efto.share.start({
-  port: 5421,                          // 0 = 随机端口；默认 5421
-  items: [{ path: 'D:\\资料\\报告.pdf' }] // 目录会自动提供浏览与下载
-});
-// st = { running, port, urls: ['http://192.168.1.5:5421/'],
-//        urls6: ['http://[2408:...:1]:5421/'],
-//        items: [{name,path,is_dir,size}], invalid: [{path,reason}] }
+1. `main.js` 调 `efto.node.run({ code: bootstrap })`，bootstrap 里用
+   `spawn(process.execPath, ['service.js', token], { detached: true, stdio: ['ignore', fd, fd] })`
+   起同目录的 `service.js`，再 `unref()`。孙进程不会被宿主的超时 kill 波及。
+2. `service.js` 监听 `127.0.0.1` 上的 HTTP 控制口（令牌放查询串，POST 用
+   `content-type: text/plain` 规避 CORS 预检），真正的网络协议都写在 Node 里。
+3. UI 直接 `fetch('http://127.0.0.1:<port>/...?t=<token>')`，不经过 main 转发。
+4. 生命周期：bootstrap 先探测旧实例避免重复启动；UI `pagehide` 用
+   `navigator.sendBeacon('/stop')`；服务端再加一道空闲自退兜底。
 
-efto.share.status();                   // 同上；未启动时 running=false
-efto.share.stop();
-```
+参考实现：`plugins/ipmsg`（UDP 发现 + TCP 文本消息 + 首次通信授权）与
+`plugins/file-share`（只读 HTTP 文件共享，数据口 5421 / 控制口 5422）。
+注意这类插件**依赖本机 Node**：未安装或设置里未检测通过时，UI 必须明确提示
+"需要 Node"并给出重试入口，不能静默失败。
 
-行为约定：
-
-- 只暴露 `items` 里的路径；请求路径会做规范化 + 前缀校验，`..` 和编码绕过都返回 404。
-- 支持 `GET` / `HEAD`、`Range`（206 断点续传）、目录列表、RFC 5987 中文文件名。
-- `urls6` 只有在 IPv6 监听真的建起来、且本机存在非回环 IPv6 地址时才有值；否则是空数组，
-  UI 应据此禁用 IPv6 入口，不要伪造一个连不上的链接。
-- 不含上传、账号与权限；`invalid` 里的路径**不会**被静默忽略，会在返回值里列出来。
-- `items[].path` 回传的是**调用方传入的路径文本**（不是 canonicalize 后的 `\\?\` 形式），
-  插件可直接拿它做去重、删除匹配；共享根目录的规范化只在宿主内部使用。
-- 同端口重复 `start` 只更新条目，不会重启监听；换端口才重建。
-
-示例插件：`plugins/file-share`。
+> 旧版的宿主能力 `efto.share` 已删除；文件共享的 HTTP 服务与路径校验现在都在
+> `plugins/file-share/service.js` 里，宿主不再持有监听套接字。
 
 ### efto 扩展：`efto.hosts`
 

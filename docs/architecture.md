@@ -334,7 +334,9 @@ GUI 与 CLI **共用同一个 `exec_capability` 入口**：两处各写一份校
 
 1. **路径只来自设置**：`runtime_capability` 从 `Settings::node_path` / `python_path` 取解释器，
    插件参数里出现 `path`/`interpreter`/`program`/`command`/`shell`/`cwd`/`env`/`file`
-   直接拒绝 —— 否则这个能力就成了任意程序执行。
+   直接拒绝 —— 否则这个能力就成了任意程序执行。路径为空时，宿主在启动（以及打开运行时设置页）
+   会用 `exec::detect_on_path` 按 PATH 顺序探测 `node.exe` / `python.exe` 等固定文件名，
+   首个 `--version` 通过者写回 settings.json；已配置的路径永不覆盖，用户仍可改成别的解释器。
 2. **同一判据**：设置页"检测"、保存后的状态展示、调用时的失败都走 `probe_interpreter`
    （`--version`）与同一条 `resolve_interpreter`，不存在"显示可用但跑不起来"。
 3. **可控成本**：默认 10s、上限 60s，`-e`/`-c` 单参数传源码不落盘，cwd 固定为插件根目录。
@@ -377,21 +379,20 @@ spawn(plugin)
 3. **窗口没建好时的消息要排队**，并由页面握手触发补发：SDK 注册好 `plugin:event|listen`
    之后调 `plugin_ui_ready`，宿主才把队列发出去。`on_page_load` 太早，实测会丢。
 
-### 插件能力：局域网文件共享（`crates/app/src/share.rs`）
+### 插件能力：局域网文件共享（`plugins/file-share`，纯插件 + Node）
 
-`efto.share.start/stop/status` 是宿主能力，插件进程里没有 Node、也没有监听套接字：
+宿主**不再**实现文件共享：旧的 `crates/app/src/share.rs` 与 `efto.share` 能力已删除。
+共享服务由插件自带的 Node 脚本 `plugins/file-share/service.js` 提供：
 
-- `AppData.share` 持有唯一一个 `ShareServer`。`TcpListener` 绑 `0.0.0.0` 后交给
-  `efto-share` 线程非阻塞 accept（80ms 轮询退出），每个连接再单独起线程处理；
-  同一端口再尝试绑 `[::]`（Windows 默认 `IPV6_V6ONLY=1`，可并存），成功才在快照里给 `urls6`。
-- 只暴露 `items` 里显式给出的路径：相对片段先逐段拒绝 `..` / 分隔符 / 盘符，
-  `canonicalize()` 后再校验前缀，越界一律 404。
-- 支持 `GET` / `HEAD`、单区间 `Range`（206 + `Content-Range`）、目录浏览、
-  RFC 5987 中文文件名；不含上传与账号。
-- 同端口重复 `start` 只替换条目（`set_items`），换端口才停旧起新。
-- 局域网地址用 `UdpSocket::connect("8.8.8.8:80")` 取本机主 IPv4（不发包），失败退回 `127.0.0.1`；
-  IPv6 同理用 `[2001:4860:4860::8888]:80` 探测，取不到非回环地址就不提供 `urls6`。
-- 插件 UI 关闭时 `efto.onUiClosed` 主动 `stop`，避免服务在用户看不见的地方继续跑。
+- 数据口默认 `0.0.0.0:5421`（0 = 随机端口），另尝试 `[::]`（`ipv6Only`），成功且存在非回环
+  IPv6 地址时才返回 `urls6`；控制口固定 `127.0.0.1:5422`，令牌走查询串。
+- 只暴露调用方显式给出的路径：相对片段逐段拒绝 `..` / 分隔符 / 盘符，`realpath` 后再校验前缀，
+  越界一律 404；支持 `GET`/`HEAD`、单区间 `Range`、目录浏览、RFC 5987 中文文件名。
+- main.js（内嵌 V8）只做编排：用 `efto.node.run` bootstrap 拉起 detached 的 `service.js`，
+  再通过控制口执行 `start/stop/status`；UI 协议与 kv 结构不变。
+- 生命周期：UI 关闭即 `stop`；数据口在跑时 main 每 45s heartbeat，服务超过 120s
+  没有控制请求就自动停止共享（应用被强杀时不会留下对外服务）；无数据口 30 分钟后进程自退。
+- 因此该插件**依赖本机 Node**：设置 → 运行时 未配置/检测失败时不可用。
 
 ### 插件能力：Windows hosts 写入（`core/src/hosts.rs` + `app/src/hosts.rs`）
 

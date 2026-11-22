@@ -18,7 +18,7 @@ crates/core/   应用发现、.lnk 解析、索引、搜索打分、插件清单
 crates/jsrt/   rusty_v8 引擎、efto API 垫片、TS 转译、能力线程池   无内部依赖
 crates/app/    Tauri 2 宿主：托盘、热键、窗口、efto:// 协议、Host 实现
 frontend/      搜索框（纯静态 HTML/CSS/JS，无打包器）
-plugins/       示例插件：hello-js、timestamp-ts、file-share（原生局域网共享）、hosts（UAC 提权编辑 hosts）
+plugins/       示例插件：hello-js、timestamp-ts、file-share（局域网只读共享，Node 服务）、ipmsg（局域网文本消息）、hosts（UAC 提权编辑 hosts）
 plugin-sdk/    efto.d.ts
 scripts/       构建/验证脚本（.ps1 必须保持纯 ASCII）
 docs/          architecture / plugin-development / roadmap / verification
@@ -64,6 +64,10 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1               # 无 
 9. **功能变更时同步更新帮助文档**。用户可感知的行为（命令、参数、插件 API、快捷键、界面提示、
    边界判定）改了，必须在同一次改动里更新对应的 `docs/` 文档（architecture / plugin-development /
    verification / roadmap）以及 `plugin-sdk/efto.d.ts` 里相关的类型与注释；文档没跟上视为未完成。
+10. **Windows 侧的功能改动要落一份 macOS 同步清单**。在 Windows 上新增或改变用户可感知功能时，
+    同一次改动里往 `docs/macos-parity-todo.md` 追加一行：功能点、Windows 实现位置（文件与入口）、
+    macOS 侧待办（缺失 / 需适配 / 已具备）、同步要点与验证方式。macOS 侧补齐后把该行状态改为
+    `已同步` 并注明提交。只靠聊天记录或事后回忆不算完成。
 
 ## Agent Notes 约定
 
@@ -110,3 +114,4 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1               # 无 
 - `docs/plugin-development.md` —— 插件 API、TS 写法、UI 通信
 - `docs/verification.md` —— 已验证内容与"没验证过什么"
 - `docs/roadmap.md` —— 未实现项
+- `docs/macos-parity-todo.md` —— Windows 已实现功能的 macOS 同步清单

@@ -549,37 +549,65 @@ release 二进制同样跑通了 `cli search jsb`、`cli plugins` 与 `cli plugi
 - 老式无 alpha 图标走 AND mask 反推的分支——没有专门构造样本，只有代码路径。
 - 插件 png logo 直接透传后的显示效果（尺寸/留白由插件图片自身决定）。
 
-## 局域网文件共享插件 file-share（2026-11-17）
+## 局域网文件共享插件 file-share（Node 服务版，2026-11-22）
 
-参考 `https://gitee.com/yuDeJiJie/file-share`（Apache-2.0），后端从
-Node/express 改写为宿主 Rust 能力 `efto.share`，插件只保留 UI 与路径列表。
+参考 `https://gitee.com/yuDeJiJie/file-share`（Apache-2.0）。最初后端是宿主 Rust 能力
+`efto.share`；2026-11-22 按"宿主保持小、能力放插件"的要求改为**纯插件 + 本机 Node**：
+`plugins/file-share/service.js` 提供只读 HTTP（数据口 5421 / 控制口 `127.0.0.1:5422`），
+`main.js` 用 `efto.node.run` bootstrap 拉起 detached 服务并调用控制口。宿主
+`crates/app/src/share.rs`、`efto.share` 与 `AppData.share` 已删除。
+该插件**依赖本机 Node**：需在 设置 → 运行时 配置并检测通过（留空时启动会自动从 PATH 探测）。
 
-`cargo test --workspace` 240 项通过（core 146 / jsrt 47 / app 47）；本次 `scripts/verify.ps1`
-除本机未装 Everything 的 `es` 用例外全部通过（插件被正常发现，4 个 cmd，含 `fs` 触发词）。
+已跑过并看到输出：
 
-已用单元测试钉住的行为（`crates/app/src/share.rs`）：
+```
+node --check plugins/file-share/{main.js,ui.js,service.js}        OK
+单机端到端（真起 service.js + 真发 HTTP 请求）                     22 项全部 PASS
+main.js 内嵌 BOOT_CODE / CALL_CODE 按 efto.node.run 方式实跑       start/status/stop/shutdown 全 PASS
+cargo test -p efto-app --lib -j 1                                  107 passed / 0 failed
+cargo test -p efto-jsrt -j 1                                       48 passed / 0 failed
+```
 
-- `serves_index_and_file_with_range`：`GET /` 能列出共享项；`GET /f/0` 返回原文；
-  `Range: bytes=6-10` 返回 206、`Content-Range: bytes 6-10/11` 和正确片段。
-- `rejects_path_escape`：`/s/0/../secret.txt` 与编码形式 `%2e%2e` 都返回 404。
-- `reports_invalid_items`：不存在/空路径进入 `invalid`，不阻塞其它条目。
-- `range_parser_accepts_open_ended`、`disposition_keeps_utf8_name`。
-- `capability_contract_starts_updates_and_stops`：`share.start` 真起监听并能下载；
-  同端口再次 start 只更新条目；`stop` 后 `status` 为未运行。
+端到端覆盖：
 
-同日 UI 迭代：新增 `fs` 触发词；插件页改为卡片式布局；文件选择走新增的
-`plugin.pickFiles()`（宿主命令 `plugin_pick_files` + rfd），拖拽走 Tauri 原生 drag-drop
-事件（`plugin.onFileDrop/onFileDrag`），不用 HTML5 `drop`（拿不到绝对路径）；
-"在文件夹中显示" 走新增的 `plugin.shellShowItemInFolder`。取消分享后删条目不会隐式重启服务。
-共享服务同时尝试监听 `[::]`，仅在监听成功且存在非回环 IPv6 时返回 `urls6`。
+- 错误令牌 `/status` → 403；`/start` 用随机端口起服务，返回 2 个条目与局域网 `urls`；
+- `GET /` 列出共享项；`GET /s/0/` 列出子目录与 `%20` 编码后的文件名；嵌套文件可下载；
+- `/s/0/%2e%2e/outside/secret.txt` → 404（编码后的 `..` 也挡住）；
+- 目录条目的 `/f/0` → 302 跳到 `/s/0/`；
+- 文件下载带 `filename*=UTF-8''`；`Range: bytes=0-4` → 206 + `bytes 0-4/16`；
+  `bytes=10-` 开区间正确；越界 → 416 + `bytes */16`；`HEAD` 有 `Content-Length` 无 body；
+- `POST /` → 405；端口被占用时 `/start` 返回带端口号的 `error`；
+- 不存在的路径进 `invalid` 且不启动；`/stop` 后数据口关闭；`/shutdown` 进程以 0 退出。
+
+### 2026-11-22 真实宿主实跑（Windows，本机 Node v26.13.0）
+
+```
+target\debug\efto.exe cli plugin-run file-share fs <临时分享目录> --json --wait-ms 4000
+  -> ok=true running=true stopped=true errors=0
+  -> 两条 [runtime] node code=0（bootstrap 25B / start 527B stdout）
+```
+
+随后用 PowerShell 对该次启动的 5421 数据口做 21 项 HTTP 检查，全部 PASS：
+
+- `GET /` 200，首页出现共享目录链接；
+- `GET /s/N/` 200，列出 hello.txt / range.txt / empty.txt / sub；
+- `sub/` 列出 nested.txt 且带「返回上级」，根目录无该链接；
+- 下载 hello.txt（17B）与 sub/nested.txt 内容与源文件逐字节一致；
+- `Range: bytes=2-5` → 206 body `2345` + `bytes 2-5/10`；`bytes=20-` → 416 `bytes */10`；
+- `HEAD` → 200 + `Content-Length: 10` 无 body；0 字节文件 `bytes=0-0` → 416；
+- `/s/N/..%2f..%2f..%2fWindows/win.ini` → 404；`POST /` → 405。
+
+结束后按端口定位到命令行含 `plugins\file-share\service.js` 的 node 结束，5421/5422 均已释放；
+测试写入的分享条目已从 `~/.efto/plugin-data/file-share.json` 清除。
 
 **没验证的**：
 
-- GUI 里插件窗口的实际观感，以及从另一台设备真实下载（当前只有本机回环请求）。
-- GUI 里的原生文件选择框与从资源管理器拖拽（需要真实桌面交互，未纳入自动化）。
-- Windows 防火墙首次放行弹窗；跨网段/多网卡时只展示主 IPv4，IPv6 只取主地址。
-- 大文件（>4GB）与多连接并发、断点续传在浏览器里的实际表现。
-- 中文文件名在各浏览器落盘时的最终名称（只验证了响应头编码）。
+- 插件窗口在 WebView2 里的实际观感（UI 协议未改，仍是 `state` / `start` / `stop` / `add` 等消息）。
+- 两台真实设备互相下载、Windows 防火墙首次放行 node.exe 的弹窗。
+- 应用被强杀后 120s 租约到期自动停共享的实际表现。
+- 大文件（>4GB）、多连接并发、浏览器断点续传，以及中文文件名落盘后的最终名称。
+
+> 以下 2026-11-20 的三条排障记录针对旧的宿主 Rust 实现（`share.rs` 已删除），保留作历史。
 
 ## 2026-11-20：file-share 条目删不掉
 
@@ -684,10 +712,34 @@ WARN 共享连接处理失败（10.10.174.110:65431）：无法立即完成一�
   `path`/`interpreter`/`program`/`command`/`shell`/`cwd`/`env`/`file` 一律拒绝；
   `args` 必须是字符串数组；未知 runtime 只回 "只支持 node / python"。
 - `missing_fields_use_defaults`：旧 settings.json 没有运行时字段时默认未配置（`None`）。
+- `detect_skips_dirs_without_a_working_interpreter`（2026-11-22）：PATH 探测只认文件名还不够，
+  同名占位文件（不是可执行解释器）必须被 `--version` 判据跳过，而不是写进设置。
+
+### 2026-11-22 运行时未配置自动探测
+
+- `state::autofill_runtimes`：GUI 启动时若 `node_path` / `python_path` 为空（或空白），
+  按 `PATH` 顺序找 `node.exe` / `python.exe` / `python3.exe`，首个探测通过者写回
+  settings.json；已配置的路径不覆盖。`runtime_status` 也会补一次（清空后重新打开设置页）。
+- 本机 PATH 实测：`where node` → `C:\Program Files\nodejs\node.exe`，
+  `where python` → `Python312\python.exe`（另有 WindowsApps 商店占位，探测会跳过后者）。
+- `cargo test -p efto-core` 254 通过、`cargo test -p efto-app --lib` 107 通过。
+- 安装引导（2026-11-22）：Node.js / Python 卡片在未配置或检测不通过时多一行说明 +
+  「前往下载」（`open_url` 打开 `nodejs.org/en/download` / `python.org/downloads`），
+  检测通过后自动隐藏。前端静态检查通过（`node --check frontend/settings.js`、
+  `node scripts/check-frontend.js`）。
+- 安装引导 GUI 实跑（2026-11-22，Windows 真机）：
+  - 两解释器都可用时，页面只有「可用 / 版本」，两行引导与按钮都不在 UI 树里（`hidden`）。
+  - 把路径改成 `C:\not-exist\node.exe` 点「检测」→ 状态「不可用」+ 报错文案出现，
+    引导文案与「前往下载」按钮出现；Python 同样。
+  - 点 Node「前往下载」→ 默认浏览器（Edge）打开 `https://nodejs.org/en/download`，
+    标题为 “Node.js — Download Node.js®”。**注意**：初版写的 `https://nodejs.org/download/`
+    会落到裸目录索引页（Index of /download/），已改成 `/en/download`。
+  - 点 Python「前往下载」→ 打开 `https://www.python.org/downloads/`。
+  - 改回正确路径再点「检测」→ 恢复「可用」，引导重新隐藏；未点保存，settings.json 未被改动。
 
 **没验证的**：
 
-- 设置页运行时页面的真实交互（检测按钮、保存后状态、检测失败样式）——需 GUI 手测。
+- 启动时自动探测的耗时观感（两个 `--version` 进程）；PATH 含不可达网络路径时最坏受 5s 超时约束。
 - 真机 Node.js / Python 的实际执行（`-e`/`-c` 参数长度、非 ASCII 输出、Python 在
   Windows 上的 stdout 编码）；当前只验证了参数校验与探测失败路径。
 - 插件端拿到 `Promise` 后的错误呈现（未配置时的 toast/控制台输出）。
@@ -1425,7 +1477,7 @@ log:error 事件、线程回收），**全部通过、零报错**：
 | timestamp-ts | ts 双向转换（秒/毫秒/ISO 行） | ✅ |
 | translate | 空载荷提示；真文本无模型时**明确报"未配置模型"** | ✅ |
 | hosts | 真读 /etc/hosts（utf8） | ✅ |
-| file-share | share 状态回传（端口 5421） | ✅ |
+| file-share | Node 服务 start/stop/status 通道（数据口 5421，控制口 5422） | ✅ |
 | quickweb | UI 通道 | ✅ |
 | text-beautify | UI seed + **自测套件 19 项/7 文件全过** | ✅ |
 | ai-chat | prefill 通道 | ✅ |
@@ -1613,3 +1665,54 @@ log:error 事件、线程回收），**全部通过、零报错**：
   整屏压暗）；修复后帧无压暗、无提示条、菜单栏完整（提示条区域 mean=223）。
 - 验证：测试 145/241/48 绿；`verify.sh` ALL CHECKS PASSED。
 - **待人工**：实际跑一次长截图（拖选 → 滚动 → 自动收尾），确认拼接结果干净。
+
+## 局域网消息插件 ipmsg（2026-11-22）
+
+精简版飞鸽传书：只发文本、不传文件。**宿主没有任何改动**——局域网能力全部由插件通过
+`efto.node.run` 拉起本机 Node 常驻服务实现，因此必须先在本机安装 Node 并在
+设置 → 运行时 配置与检测通过，插件才可用。
+
+分工：
+
+- `plugins/ipmsg/main.js`（内嵌 V8）：`efto.node.run` 执行一段 bootstrap，先探测
+  24251 上的旧实例，没有就 `spawn(process.execPath, ['service.js', token], {detached:true})`
+  起常驻服务；令牌存插件 kv，通过 `ipcMessage('svc', {state, port, token})` 下发给 UI。
+- `plugins/ipmsg/service.js`（本机 Node）：UDP 24250 广播发现（2s 信标 / 9s TTL）、
+  TCP 24250 单行 JSON（`request/msg/approve/reject/hello`）、HTTP `127.0.0.1:24251`
+  控制口（`/status /init /send /respond /stop`，查询串校验令牌）。
+- `plugins/ipmsg/ui.js`（webview）：800ms 轮询控制口，直接 `fetch` 发消息与处理授权；
+  `trusted/approved/threads` 落插件 kv；页面关闭时 `sendBeacon('/stop')`，
+  服务另有 30 分钟无人轮询自退兜底。
+
+协议仍是自定义的，**不与标准 IPMSG 互通**；首次发送先 `request`，对方在 `requests`
+里同意后回 `approve`，暂存消息（上限 20 条）自动补发。
+
+已跑过并看到输出：
+
+```
+node --check plugins/ipmsg/main.js / ui.js / service.js      OK
+单机端到端脚本（真起 service.js + 模拟对端 TCP/UDP）          23 项全部 PASS
+```
+
+单机端到端覆盖（同一台机器上模拟同网段对端）：
+
+- 不带令牌启动 `service.js` → 退出码 2（拒绝启动）；错误令牌 `/status` → 403；
+- `/status` 返回 `running` 与本机 `self`；UDP 注册的对端被 `peers` 识别（`addr` 含对端端口）；
+- 未授权 `/send` → 对端收到 `request`，`outbox=1` 且接口返回 `pending`；
+- 对端发 `approve` → outbox 自动重投为 `msg`、`outbox=0`、`peers[].outboundOk=true`；
+- 对端发 `request` → `requests` 出现；`/respond accept` → 对端收到 `approve`、
+  `peers[].allowed=true`；
+- 已授权对端发 `msg` → 收下并只在首次 `/status` 返回（取走即清空）；
+- `/init` 清空信任后对端再发 `msg` → `not_allowed`；
+- `/stop` → 200，服务以 0 退出。
+
+**没验证的**：
+
+- 两台真实机器同网段的发现与收发；Windows 防火墙首次放行 node.exe 的弹窗与放行后行为；
+  多网卡/虚拟网卡下 `255.255.255.255` 是否覆盖目标网段。
+- WebView2 里 `http://efto.localhost` 的页面 `fetch` 到 `http://127.0.0.1` 的
+  CORS / Private Network Access 实况（服务端已回 OPTIONS 204 + `Allow-Private-Network`，
+  但未在真实插件窗口点过）。
+- 插件窗口的渲染与交互（在线列表、未读、待同意条、Enter 发送、「重试启动」按钮）。
+- 24250/24251 被其它程序占用时的报错文案与实际观感。
+

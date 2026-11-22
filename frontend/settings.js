@@ -582,6 +582,9 @@
     st = st || {};
     var pill = $(kind + 'Pill');
     var desc = $(kind + 'Status');
+    // 已配置且检测通过就把安装引导收起来，避免误导用户以为还得再装一次
+    var guide = $(kind + 'Guide');
+    if (guide) guide.hidden = !!(st.configured && st.ok);
     if (!st.configured) {
       pill.className = 'pill';
       pill.textContent = T('settings.runtime.notConfigured', '未配置');
@@ -607,6 +610,9 @@
       .then(function (st) {
         paintRuntime('node', st.node);
         paintRuntime('python', st.python);
+        // 后端在未配置时会从 PATH 自动补一个；输入框还没填就同步过来，仍可改
+        if (st.node && st.node.path && !$('nodePath').value) $('nodePath').value = st.node.path;
+        if (st.python && st.python.path && !$('pythonPath').value) $('pythonPath').value = st.python.path;
       })
       .catch(function (e) { toast(T('settings.runtime.loadFailed', '读取运行时状态失败：') + e, true); });
   }
@@ -842,6 +848,13 @@
     if (e.key === 'Enter') checkRuntime('python');
   });
   $('saveRuntime').addEventListener('click', saveRuntime);
+  document.querySelectorAll('.runtime-guide .link-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      invoke('open_url', { url: btn.dataset.url }).catch(function (e) {
+        toast(T('settings.runtime.openFailed', '打开下载页失败：') + e, true);
+      });
+    });
+  });
   $('addModel').addEventListener('click', addModel);
   $('saveModels').addEventListener('click', saveModels);
   $('modelList').addEventListener('click', function (e) {

@@ -75,6 +75,26 @@ impl ScriptRuntime {
             Self::Python => "-c",
         }
     }
+
+    /// 在 PATH 目录里查找时接受的文件名（按优先级）。
+    fn path_names(self) -> &'static [&'static str] {
+        match self {
+            Self::Node => {
+                if cfg!(windows) {
+                    &["node.exe"]
+                } else {
+                    &["node"]
+                }
+            }
+            Self::Python => {
+                if cfg!(windows) {
+                    &["python.exe", "python3.exe"]
+                } else {
+                    &["python3", "python"]
+                }
+            }
+        }
+    }
 }
 
 /// 解析插件传来的 runtime 名字（大小写不敏感）。
@@ -635,6 +655,37 @@ pub fn probe_interpreter(interpreter: &str) -> Result<String, ExecError> {
         )));
     }
     Ok(line.to_string())
+}
+
+/// 在系统 PATH 里探测可用的解释器，返回第一个通过 `--version` 校验的绝对路径。
+///
+/// 设置页在未配置时用它自动补全（用户之后仍可在 设置 → 运行时 改成别的路径）。
+/// 只按固定文件名查找，**不接受插件传入名字**；真正判据仍是 [`probe_interpreter`]，
+/// 所以 Windows 商店里那个只会弹商店的 `python.exe` 占位程序会被跳过。
+pub fn detect_on_path(rt: ScriptRuntime) -> Option<String> {
+    let raw = std::env::var_os("PATH")?;
+    detect_in_dirs(rt, std::env::split_paths(&raw))
+}
+
+/// [`detect_on_path`] 的可测试内核：按目录顺序找固定文件名并逐个探测。
+fn detect_in_dirs<I>(rt: ScriptRuntime, dirs: I) -> Option<String>
+where
+    I: IntoIterator,
+    I::Item: AsRef<Path>,
+{
+    for dir in dirs {
+        for name in rt.path_names() {
+            let candidate = dir.as_ref().join(name);
+            if !candidate.is_file() {
+                continue;
+            }
+            let raw = candidate.to_string_lossy().to_string();
+            if probe_interpreter(&raw).is_ok() {
+                return Some(raw);
+            }
+        }
+    }
+    None
 }
 
 /// 解释器解析：带路径分隔符/盘符的必须是已存在的文件；纯名字交给 CreateProcess 走 PATH。
@@ -1581,6 +1632,18 @@ mod tests {
             probe_interpreter(&missing.display().to_string()),
             Err(ExecError::BadInterpreter(_))
         ));
+    }
+
+    #[test]
+    fn detect_skips_dirs_without_a_working_interpreter() {
+        // 目录里只有同名占位文件（不是可执行解释器）：必须跳过而不是直接返回它
+        let dir = std::env::temp_dir().join(format!("efto-detect-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let fake = dir.join(if cfg!(windows) { "node.exe" } else { "node" });
+        std::fs::write(&fake, b"not an interpreter").unwrap();
+        assert_eq!(detect_in_dirs(ScriptRuntime::Node, [&dir]), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -2225,7 +2225,13 @@ fn blank_to_none(v: String) -> Option<String> {
 /// 运行时状态：探测设置里保存的 node / python 解释器是否真的能跑。
 #[tauri::command]
 pub fn runtime_status(data: State<'_, Shared>) -> Value {
-    let s = data.settings.lock();
+    let mut s = data.settings.lock();
+    // 用户在本次会话里把路径清空后重新打开本页，也补一次自动检测
+    if crate::state::autofill_runtimes(&mut s) {
+        if let Err(e) = s.save() {
+            tracing::warn!("自动检测运行时后保存设置失败: {e}");
+        }
+    }
     json!({
         "node": probe_saved(efto_core::exec::ScriptRuntime::Node, s.node_path.as_deref()),
         "python": probe_saved(efto_core::exec::ScriptRuntime::Python, s.python_path.as_deref()),

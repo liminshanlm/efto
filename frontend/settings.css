@@ -337,6 +337,33 @@ select.text-input { cursor: pointer; }
 
 .import-row .text-input { flex: 1 1 auto; }
 
+/* 未安装时的下载引导：跟着状态显隐，所以必须补 [hidden] 规则 */
+.runtime-guide {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 17px 15px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.runtime-guide[hidden] { display: none; }
+
+.link-btn {
+  flex: 0 0 auto;
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.link-btn:hover { color: var(--accent-hover); text-decoration: underline; }
+
 /* ---------- 自定义索引目录 ---------- */
 .dir-list:empty { display: none; }
 

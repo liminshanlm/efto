@@ -125,7 +125,7 @@ Settings has seven pages:
 - **Web Search**: manage search engines (keyword, name, URL containing `{q}`), the empty-result fallback toggle, and the fallback engine.
 - **Tool Hotkeys**: bind independent global hotkeys to the 7 built-in tools.
 - **Plugins**: import plugins, list installed plugins, disable / re-enable each one (disabled plugins drop out of search and can't be triggered; their files stay), open the plugin folder.
-- **Runtimes**: Node.js and Python interpreter paths, with a check button.
+- **Runtimes**: Node.js and Python interpreter paths, with a check button. When left empty, efto auto-detects them from the system PATH at startup; you can still edit them. If a runtime is missing or fails the check, the card shows install guidance and a download link (Node.js LTS; for Python, tick "Add python.exe to PATH" during setup).
 - **Models**: OpenAI-compatible model list and default model for `efto.ai.chat`.
 
 Changes apply immediately; hotkey and theme changes propagate to all windows.

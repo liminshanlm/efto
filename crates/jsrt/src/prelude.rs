@@ -385,24 +385,6 @@ pub const PRELUDE: &str = r#"(function () {
     ipcMessage: function (name, data) {
       return callAsync('ui', 'postMessage', [mustString(name, 'name'), data === undefined ? null : data]);
     },
-    /**
-     * 局域网只读文件共享。items: [{ path, name? }]，port 默认 5421（0 = 随机端口）。
-     * 返回 { running, port, urls, items, invalid }，invalid 是读不到的路径。
-     */
-    share: {
-      start: function (opts) {
-        if (!isObj(opts)) throw new TypeError('efto.share.start 需要 { port, items }');
-        if (opts.port !== undefined && (typeof opts.port !== 'number' || opts.port < 0 || opts.port > 65535)) {
-          throw new TypeError('efto.share.port 必须是 0~65535');
-        }
-        if (opts.items !== undefined && !Array.isArray(opts.items)) {
-          throw new TypeError('efto.share.items 必须是数组');
-        }
-        return call('share', 'start', [Object.assign({}, opts)]);
-      },
-      stop: function () { return call('share', 'stop', []); },
-      status: function () { return call('share', 'status', []); }
-    },
     /** Node.js 脚本（需在 设置 → 运行时 配置 node 解释器）。 */
     node: { run: function (opts) { return runScript('node', opts); } },
     /** Python 脚本（需在 设置 → 运行时 配置 python 解释器）。 */
@@ -559,7 +541,6 @@ pub const PRELUDE: &str = r#"(function () {
     exec: ext.exec,
     output: ext.output,
     ipcMessage: ext.ipcMessage,
-    share: ext.share,
     node: ext.node,
     python: ext.python,
     hosts: ext.hosts,

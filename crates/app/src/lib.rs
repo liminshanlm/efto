@@ -27,7 +27,6 @@ mod pump;
 mod permissions;
 mod preview;
 mod screenshot;
-mod share;
 mod state;
 mod system;
 mod tile;
@@ -116,6 +115,14 @@ pub fn run() {
         })
         .setup(|app| {
             let handle = app.handle().clone();
+            // 运行时未配置时先从系统 PATH 补一次并落盘，随后 AppData::new 读到的就是补好的设置。
+            // 放在 setup 而不是 AppData::new 里：单测构造 AppData 不应写用户的 settings.json。
+            let mut settings = efto_core::config::Settings::load();
+            if state::autofill_runtimes(&mut settings) {
+                if let Err(e) = settings.save() {
+                    tracing::warn!("自动检测运行时后保存设置失败: {e}");
+                }
+            }
             let host = Arc::new(TauriHost::new(handle.clone()));
             let data: Shared = Arc::new(AppData::new(host));
             app.manage(data.clone());

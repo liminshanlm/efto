@@ -223,14 +223,6 @@ impl Host for TauriHost {
                 Ok(Value::Bool(true))
             }),
 
-            // ---------------- 局域网只读文件共享（原生插件 file-share） ----------------
-            ("share", "start") => {
-                let opts = args.first().cloned().unwrap_or(Value::Null);
-                data.share_start(&opts)
-            }
-            ("share", "stop") => Ok(data.share_stop()),
-            ("share", "status") => Ok(data.share_status()),
-
             // ---------------- 动态搜索项（插件把自己的数据挂到启动器搜索） ----------------
             ("search", "setItems") => {
                 let items = args

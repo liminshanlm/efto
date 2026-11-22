@@ -47,8 +47,6 @@ pub struct AppData {
     pub long_capture: Mutex<Option<crate::screenshot::LongCapture>>,
     /// 文件图标缓存：key 是 exe / .lnk / logo 的路径。
     icon_cache: Mutex<std::collections::HashMap<String, IconSlot>>,
-    /// 插件的局域网只读共享服务（file-share）。
-    pub share: Mutex<Option<crate::share::ShareServer>>,
     /// 搜索框命令的取消令牌（Esc）。同一时刻只允许一条命令。
     pub command_cancel: Mutex<Option<Arc<AtomicBool>>>,
     /// 用户片段（Snippets）。
@@ -62,6 +60,43 @@ pub struct AppData {
 }
 
 pub type Shared = Arc<AppData>;
+
+/// 未配置运行时（空 / 空白）时，从系统 PATH 探测一次 node / python。
+///
+/// 找到就写进内存设置并返回 `true`（调用方负责落盘）；已显式配置的路径永远不覆盖，
+/// 用户之后仍可在 设置 → 运行时 改成别的解释器。
+pub(crate) fn autofill_runtimes(settings: &mut Settings) -> bool {
+    autofill_with(settings, efto_core::exec::detect_on_path)
+}
+
+/// 探测函数可注入，单测不依赖本机是否装了 node / python。
+fn autofill_with(
+    settings: &mut Settings,
+    detect: impl Fn(efto_core::exec::ScriptRuntime) -> Option<String>,
+) -> bool {
+    use efto_core::exec::ScriptRuntime;
+
+    fn blank(v: Option<&String>) -> bool {
+        v.map(|s| s.trim().is_empty()).unwrap_or(true)
+    }
+
+    let mut changed = false;
+    if blank(settings.node_path.as_ref()) {
+        if let Some(path) = detect(ScriptRuntime::Node) {
+            tracing::info!("未配置 Node 运行时，已从 PATH 自动检测: {path}");
+            settings.node_path = Some(path);
+            changed = true;
+        }
+    }
+    if blank(settings.python_path.as_ref()) {
+        if let Some(path) = detect(ScriptRuntime::Python) {
+            tracing::info!("未配置 Python 运行时，已从 PATH 自动检测: {path}");
+            settings.python_path = Some(path);
+            changed = true;
+        }
+    }
+    changed
+}
 
 impl AppData {
     pub fn new(host: Arc<dyn Host>) -> Self {
@@ -100,7 +135,6 @@ impl AppData {
             shot: Mutex::new(None),
             long_capture: Mutex::new(None),
             icon_cache: Mutex::new(std::collections::HashMap::new()),
-            share: Mutex::new(None),
             command_cancel: Mutex::new(None),
             snippets: Mutex::new(efto_core::snippets::SnippetStore::load()),
             file_buffer: Mutex::new(Vec::new()),
@@ -566,5 +600,40 @@ mod tests {
         let r2 = d.rebuild();
         assert!(r2.merged > 0, "本机应至少索引到一些应用：{r2:?}");
         assert_eq!(r1.merged, r2.merged, "两次重建结果应一致");
+    }
+
+    #[test]
+    fn autofill_runtimes_only_fills_blank_fields() {
+        use efto_core::exec::ScriptRuntime;
+
+        let mut s = Settings::default();
+        s.node_path = Some("   ".into());
+        s.python_path = Some("D:/custom/python.exe".into());
+        let changed = autofill_with(&mut s, |rt| match rt {
+            ScriptRuntime::Node => Some("C:/Program Files/nodejs/node.exe".into()),
+            ScriptRuntime::Python => Some("should-not-be-used".into()),
+        });
+        assert!(changed);
+        assert_eq!(
+            s.node_path.as_deref(),
+            Some("C:/Program Files/nodejs/node.exe")
+        );
+        // 已配置的路径永不覆盖
+        assert_eq!(s.python_path.as_deref(), Some("D:/custom/python.exe"));
+
+        // 第二次调用无事可做
+        assert!(!autofill_with(&mut s, |_| Some("C:/other.exe".into())));
+        assert_eq!(
+            s.node_path.as_deref(),
+            Some("C:/Program Files/nodejs/node.exe")
+        );
+    }
+
+    #[test]
+    fn autofill_runtimes_keeps_fields_empty_when_nothing_detected() {
+        let mut s = Settings::default();
+        assert!(!autofill_with(&mut s, |_| None));
+        assert!(s.node_path.is_none());
+        assert!(s.python_path.is_none());
     }
 }
