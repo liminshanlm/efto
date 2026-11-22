@@ -4,6 +4,7 @@
   "description": "局域网即时消息（仅与安装 efto 的设备互通，不兼容飞鸽/IPMSG）：自动发现同网段设备，支持按 IP 查询、文本与文件传输；首次通信需对方同意",
   "main": "main.js",
   "index": "index.html",
+  "logo": "logo.png",
   "author": { "name": "efto" },
   "cmds": [
     { "type": "input", "label": "飞鸽", "cmd": "飞鸽" },
