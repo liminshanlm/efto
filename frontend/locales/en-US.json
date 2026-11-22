@@ -156,7 +156,7 @@
   "settings.tool.tile.desc": "Open a menu for tiling, half-screen, minimize others/all, or undo the last tiling",
   "settings.tool.shortcut.label": "Shortcut guide",
   "settings.tool.shortcut.desc": "Detect the app under the search box and list its shortcuts",
-  "settings.tools.hint": "Checked tools appear in Tools. Apps and plugins can be added with \"Add to tools\" in the search results; the order is the Alt+1..9 numbering.",
+  "settings.tools.hint": "Checked tools appear in the panel. Add apps and plugins from their search result with \"Add to pinned tools\".",
   "settings.group.index": "Index",
   "settings.index.count.label": "Index entries",
   "settings.index.meta.loading": "Loading…",
@@ -438,5 +438,16 @@
   "settings.spotlight.removeDir": "Remove",
   "settings.spotlight.defaultTag": "default",
   "settings.spotlight.added": "Added to search scope: ",
-  "settings.spotlight.removed": "Removed from search scope: "
+  "settings.spotlight.removed": "Removed from search scope: ",
+  "settings.tools.order.label": "Panel order",
+  "settings.tools.order.desc": "Drag the handle to reorder; the order is what the panel shows and how Alt+1..9 map.",
+  "settings.tools.order.drag": "Drag to reorder",
+  "settings.tools.order.remove": "Remove",
+  "settings.tools.order.empty": "No pinned tools yet",
+  "settings.tools.order.dirty": "Order changed — click Save to apply",
+  "settings.tools.kind.builtin": "built-in",
+  "settings.tools.kind.app": "app",
+  "settings.tools.kind.plugin": "plugin",
+  "main.tile.reordered": "Order saved",
+  "main.tile.reorderFailed": "Failed to save order: "
 }

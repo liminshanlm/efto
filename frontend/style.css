@@ -921,3 +921,15 @@ button:focus-visible {
     transition: none !important;
   }
 }
+
+/* 常用工具拖动排序：拖动中的卡片抬起，指针全程显示抓手 */
+.tile.dragging {
+  opacity: 0.75;
+  transform: scale(1.04);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+  z-index: 10;
+  cursor: grabbing;
+}
+body.tool-dragging,
+body.tool-dragging .tile { cursor: grabbing; }
+body.tool-dragging .tile-remove { pointer-events: none; }

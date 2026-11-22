@@ -430,6 +430,9 @@
       btn.appendChild(key);
     }
     if (isTool && hit.pin) {
+      // 记录 pin 值：拖动排序结束后按 DOM 顺序读回来写回 settings.tools
+      btn.dataset.pin = hit.pin;
+      attachToolDrag(btn);
       var rm = document.createElement('span');
       rm.className = 'tile-remove';
       rm.setAttribute('role', 'button');
@@ -444,6 +447,8 @@
       btn.appendChild(rm);
     }
     btn.addEventListener('click', function () {
+      // 拖动刚结束时浏览器仍会补一个 click：别把工具跑起来
+      if (suppressTileClick) return;
       active = i;
       updateActive();
       if (isTool) run(i);
@@ -455,6 +460,108 @@
       if (active !== i) { active = i; updateActive(); }
     });
     return btn;
+  }
+
+  // ---------- 常用工具拖动排序（默认面板内直接拖） ----------
+  // 拖动刚结束时浏览器会补一个 click，用它挡掉"松手就把工具跑起来"。
+  var suppressTileClick = false;
+  // 拖动阈值（px）：小于它当点击，避免轻微抖动被当成拖动。
+  var TOOL_DRAG_THRESHOLD = 6;
+
+  /// 给一个常用工具卡片挂上拖动排序。
+  /// 用 pointer 事件而非 HTML5 dnd：WKWebView 里 dragover 不稳。
+  function attachToolDrag(tile) {
+    tile.addEventListener('pointerdown', function (down) {
+      if (down.button !== 0) return;
+      var grid = tile.parentNode;
+      if (!grid || grid.classList.contains('tiles') === false) return;
+      // 点右上角 × 时不该进入拖动
+      if (down.target && down.target.classList && down.target.classList.contains('tile-remove')) return;
+
+      var startX = down.clientX;
+      var startY = down.clientY;
+      var dragging = false;
+      var prevX = startX;
+
+      function onMove(e) {
+        var dx = e.clientX - startX;
+        var dy = e.clientY - startY;
+        if (!dragging) {
+          if (Math.abs(dx) < TOOL_DRAG_THRESHOLD && Math.abs(dy) < TOOL_DRAG_THRESHOLD) return;
+          dragging = true;
+          tile.classList.add('dragging');
+          document.body.classList.add('tool-dragging');
+          tile.setPointerCapture(e.pointerId);
+        }
+        e.preventDefault();
+        var goingRight = e.clientX > prevX;
+        prevX = e.clientX;
+        // 卡片是横向流式排列：按"中点"判断是否越过邻居
+        var items = Array.prototype.slice.call(grid.querySelectorAll('.tile'));
+        for (var i = 0; i < items.length; i++) {
+          var other = items[i];
+          if (other === tile) continue;
+          var r = other.getBoundingClientRect();
+          var midX = r.left + r.width / 2;
+          var midY = r.top + r.height / 2;
+          var sameRow = Math.abs(e.clientY - midY) < r.height / 2;
+          if (!sameRow) {
+            // 跨行：按行中线决定插到该行前还是后
+            if (dy > 0 && e.clientY > midY &&
+                tile.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING) {
+              grid.insertBefore(tile, other.nextSibling);
+              return;
+            }
+            if (dy < 0 && e.clientY < midY &&
+                tile.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_PRECEDING) {
+              grid.insertBefore(tile, other);
+              return;
+            }
+            continue;
+          }
+          if (goingRight && e.clientX > midX &&
+              tile.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING) {
+            grid.insertBefore(tile, other.nextSibling);
+            return;
+          }
+          if (!goingRight && e.clientX < midX &&
+              tile.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_PRECEDING) {
+            grid.insertBefore(tile, other);
+            return;
+          }
+        }
+      }
+
+      function onUp() {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onUp);
+        document.body.classList.remove('tool-dragging');
+        if (!dragging) return;
+        tile.classList.remove('dragging');
+        // 挡掉紧随其后的 click（否则松手会执行工具）
+        suppressTileClick = true;
+        setTimeout(function () { suppressTileClick = false; }, 0);
+        var grid2 = tile.parentNode;
+        if (!grid2) return;
+        var order = Array.prototype.slice
+          .call(grid2.querySelectorAll('.tile'))
+          .map(function (el) { return el.dataset.pin; })
+          .filter(Boolean);
+        if (!order.length) return;
+        invoke('set_settings', { patch: { tools: order } })
+          .then(function () {
+            pinnedTools = order;
+            toast(T('main.tile.reordered', '顺序已保存'));
+            search();
+          })
+          .catch(function (e) { toast(T('main.tile.reorderFailed', '保存顺序失败：') + e, true); search(); });
+      }
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+    });
   }
 
   // ---------- 文件动作菜单 ----------

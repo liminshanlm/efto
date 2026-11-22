@@ -661,3 +661,38 @@ summary:focus-visible {
 .dir-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .dir-tag { flex: 0 0 auto; font-size: 11px; color: var(--text-3); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; }
 .dir-remove { flex: 0 0 auto; height: 28px; padding: 0 10px; font-size: 12px; }
+
+/* 常用工具：面板顺序（拖动排序） */
+.tool-order-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 17px;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  user-select: none;
+}
+.tool-order-item:first-child { border-top: 0; }
+.tool-order-item.dragging {
+  background: var(--ok-soft);
+  opacity: 0.85;
+}
+.tool-grip {
+  flex: 0 0 auto;
+  cursor: grab;
+  color: var(--text-3);
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 2px;
+  touch-action: none;
+}
+.tool-order-item.dragging .tool-grip { cursor: grabbing; }
+.tool-order-no {
+  flex: 0 0 20px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.tool-order-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.tool-order-empty { padding: 12px 17px; color: var(--text-3); font-size: 12px; }

@@ -172,7 +172,15 @@ RFC1123 与中文行的星期/月份名不用 chrono 的 `%a`/`%b`（依赖 loca
    `tile_windows`/`shortcut_guide`/`snippets`/`file_buffer`，即 `config::DEFAULT_TOOLS`），
    按 `KNOWN_TOOLS` 规整、未知 id 丢弃。`color_picker`（颜色提取器）与 `sticky_note`（便签纸）
    在 `KNOWN_TOOLS` 内、可在设置页勾选加入，但**默认不进**常用工具。
-   设置页的工具开关写的也是同一字段。
+   设置页的工具开关写的也是同一字段，**数组顺序就是面板顺序与 Alt+1..9 编号**。
+   设置页的「面板顺序」列表支持鼠标拖动排序（pointer 事件，非 HTML5 dnd ——
+   WKWebView 里 dragover 不稳）；拖动结果直接改写该数组，保存时以它为准，
+   但会把"设置页打开期间主面板新加的 app:/plugin: 条目"追加到末尾而不是丢弃。
+
+**面板内可直接拖动排序**：工具卡片带 `hit.pin`（即 `settings.tools` 里的值），
+拖动结束后按 DOM 顺序读回 `data-pin` 写回 `settings.tools`。用 pointer 事件而非
+HTML5 dnd（WKWebView 里 `dragover` 不稳），6px 阈值区分点击与拖动；拖动结束会
+置 `suppressTileClick` 挡掉浏览器补发的 click —— 否则松手就把工具执行了。
 
 分数只用来保证"最近使用"永远排在工具之前（600 递减 vs 500 递减）。`group` 是
 `Option<String>` 且 `skip_serializing_if` 省略，普通搜索结果完全不带该字段；

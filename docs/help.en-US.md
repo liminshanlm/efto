@@ -101,6 +101,7 @@ The default panel (empty input) contains "Recent" and "Favorite tools":
 - **Color picker**: freezes the current screen when opened, shows the pixel under the cursor in a magnifier with HEX/RGB, and copies HEX on click or `Enter`; `Esc` cancels. Animated/video colors are read from the frozen frame. Not in Quick Tools by default; enable it in Settings → Quick Tools.
 - **Sticky note**: creates a new always-on-top note each time; text autosaves, the title bar drags the window, and `×` closes and deletes that note. Multiple notes can be pinned at once and are restored at their last positions after restart. Not in Quick Tools by default; enable it in Settings → Quick Tools.
 - Custom apps/plugins can also join Quick Tools; run them with `Alt+1..9` on the default panel, or select with `←` `→` and press Enter.
+- Reordering: **drag the tiles directly on the default panel** (saved on drop), or use Settings → General → Quick Tools → Panel order. The order drives the panel layout and the `Alt+1..9` mapping.
 - **File actions**: press `Tab` on a file result (or click the `⋯` at the row end) to open the action menu: open, open with, reveal in Explorer, copy path, copy file, add to buffer, copy to…, move to…, delete to Recycle Bin.
 - Custom apps and plugins can be added as favorite tools; press `Alt+1..9` or use `←` `→` and Enter.
 - **Per-tool hotkeys**: bind global hotkeys to screenshot, clipboard, lock screen, window actions, shortcut guide, snippets, and file buffer in Settings → Tool Hotkeys, so one press runs the tool without opening the search box. They default to `Ctrl+Alt+1…7` in that order; color picker and sticky note do not take a default hotkey but can be bound on the same page. Click a field and press the combination to record it. Leave a field empty to unbind; combinations that duplicate the launcher or Universal Actions hotkey are discarded.
@@ -121,7 +122,7 @@ Settings has seven pages:
 - **General**
   - Appearance: theme (system / dark / light).
   - Launcher: global hotkey, Universal Actions hotkey and toggle, max results, hide on blur, always on top.
-  - Favorite tools: enable and order screenshot, clipboard, lock screen, tile windows, shortcut guide, snippets, and file buffer.
+  - Favorite tools: toggle screenshot, clipboard, lock screen, tile windows, shortcut guide, snippets, file buffer, color picker and sticky note; the "Panel order" list below reorders them by dragging the handle on the left (order = panel layout and `Alt+1..9` mapping).
   - Index: entry sources, auto refresh, registry index, install-folder scan, custom folders.
   - Browser bookmarks: whether to search them.
   - Everything: status of the app and `es.exe`, with one-click `es.exe` install.

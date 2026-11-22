@@ -103,6 +103,9 @@
   ];
   // 上一次读到的完整工具列表：保存时据此保留 app:/plugin: 条目与用户顺序
   var savedTools = [];
+  // 面板顺序（拖动排序的结果）：只含"已勾选的内置工具 + 全部 app:/plugin: 条目"，
+  // 保存时按这个数组原样写回 settings.tools。
+  var toolOrder = [];
 
   // 平台适配信息（宿主 platform_info 下发）：工具/Shell/功能入口都按它展示，
   // 前端不自己猜平台。key = 工具 id，value = 该工具关联的输入控件 id。
@@ -224,6 +227,13 @@
     $('toolShortcutGuide').checked = tools.indexOf('shortcut_guide') >= 0;
     $('toolSnippets').checked = tools.indexOf('snippets') >= 0;
     $('toolFileBuffer').checked = tools.indexOf('file_buffer') >= 0;
+    $('toolColorPicker').checked = tools.indexOf('color_picker') >= 0;
+    $('toolStickyNote').checked = tools.indexOf('sticky_note') >= 0;
+    // 顺序列表必须在勾选框赋值之后算：reconcileToolOrder 依据勾选状态取舍，
+    // 先算会把"还没勾上"的内置工具全删掉（实测只剩 app: 条目）。
+    toolOrder = tools.slice();
+    reconcileToolOrder();
+    renderToolOrder();
     $('uaEnabled').checked = s.universal_actions_enabled !== false;
     $('uaHotkey').value = s.universal_actions_hotkey || 'Ctrl+Alt+Space';
     engines = (s.web_searches || []).slice();
@@ -254,6 +264,195 @@
 
   function dirKey(p) {
     return String(p || '').replace(/[\\/]+$/, '').toLowerCase();
+  }
+
+  // ---------- 常用工具：面板顺序（拖动排序） ----------
+  // 内置工具的中文名（顺序列表要显示可读名字；勾选框那侧用的是静态 HTML 文案）
+  var TOOL_LABELS = {
+    screenshot: ['settings.tool.screenshot.label', '截图'],
+    clipboard: ['settings.tool.clipboard.label', '剪贴板'],
+    lock_screen: ['settings.tool.lock.label', '锁屏'],
+    tile_windows: ['settings.tool.tile.label', '操作窗口'],
+    shortcut_guide: ['settings.tool.shortcut.label', '快捷键指南'],
+    snippets: ['settings.tool.snippets.label', '片段'],
+    file_buffer: ['settings.tool.fileBuffer.label', '文件缓冲'],
+    color_picker: ['settings.tool.colorPicker.label', '颜色提取器'],
+    sticky_note: ['settings.tool.stickyNote.label', '便签纸']
+  };
+
+  /// 把 toolOrder 对齐到"当前勾选状态"：去掉未勾选的内置工具，
+  /// 把新勾选但还不在列表里的内置工具按 BUILTIN_ORDER 追加到末尾。
+  /// app:/plugin: 条目原样保留（它们的增删不在这里做）。
+  function reconcileToolOrder() {
+    var kept = toolOrder.filter(function (t) {
+      if (BUILTIN_TOOLS[t]) return toolCheckbox(t) && toolCheckbox(t).checked;
+      return true;
+    });
+    BUILTIN_ORDER.forEach(function (t) {
+      var box = toolCheckbox(t);
+      if (box && box.checked && kept.indexOf(t) < 0) kept.push(t);
+    });
+    toolOrder = kept;
+  }
+
+  /// 保存前的对齐：以拖动结果 `order` 为准，但把"设置页打开期间主面板新加的
+  /// app:/plugin: 条目"追加到末尾（不静默丢弃）。未勾选的内置工具已被
+  /// reconcileToolOrder 摘掉，这里再过滤一次防勾选框被改动后未同步。
+  function reconcileOrderAgainstFresh(order, fresh) {
+    var out = order.filter(function (t) {
+      if (BUILTIN_TOOLS[t]) {
+        var box = toolCheckbox(t);
+        return !!box && box.checked;
+      }
+      return true;
+    });
+    fresh.forEach(function (t) {
+      if (BUILTIN_TOOLS[t]) return; // 内置工具的顺序与取舍由 toolOrder 决定
+      if (out.indexOf(t) < 0) out.push(t);
+    });
+    return out;
+  }
+
+  function toolCheckbox(id) {
+    var boxId = TOOL_INPUTS[id] && TOOL_INPUTS[id][0];
+    return boxId ? $(boxId) : null;
+  }
+
+  function toolDisplayName(id) {
+    if (BUILTIN_TOOLS[id]) {
+      var l = TOOL_LABELS[id];
+      return l ? T(l[0], l[1]) : id;
+    }
+    if (id.indexOf('app:') === 0) return id.slice(4);
+    if (id.indexOf('plugin:') === 0) return id.slice(7);
+    return id;
+  }
+
+  function toolKindTag(id) {
+    if (BUILTIN_TOOLS[id]) return T('settings.tools.kind.builtin', '内置');
+    if (id.indexOf('app:') === 0) return T('settings.tools.kind.app', '应用');
+    return T('settings.tools.kind.plugin', '插件');
+  }
+
+  // 渲染顺序列表。空列表时给一句提示，避免看起来像"坏了"。
+  function renderToolOrder() {
+    var box = $('toolOrderList');
+    if (!box) return;
+    if (!toolOrder.length) {
+      box.innerHTML = '';
+      var empty = document.createElement('div');
+      empty.className = 'tool-order-empty';
+      empty.textContent = T('settings.tools.order.empty', '还没有加入任何常用工具');
+      box.appendChild(empty);
+      return;
+    }
+    box.innerHTML = '';
+    toolOrder.forEach(function (id, i) {
+      var row = document.createElement('div');
+      row.className = 'tool-order-item';
+      row.dataset.tool = id;
+      row.draggable = false;
+
+      var grip = document.createElement('span');
+      grip.className = 'tool-grip';
+      grip.textContent = '⠿';
+      grip.title = T('settings.tools.order.drag', '拖动调整顺序');
+      row.appendChild(grip);
+
+      var no = document.createElement('span');
+      no.className = 'tool-order-no';
+      no.textContent = String(i + 1);
+      row.appendChild(no);
+
+      var name = document.createElement('span');
+      name.className = 'tool-order-name';
+      name.textContent = toolDisplayName(id);
+      row.appendChild(name);
+
+      var tag = document.createElement('span');
+      tag.className = 'dir-tag';
+      tag.textContent = toolKindTag(id);
+      row.appendChild(tag);
+
+      // app:/plugin: 条目给一个移除入口（内置工具的增删走上面的勾选框）
+      if (!BUILTIN_TOOLS[id]) {
+        var rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'btn ghost dir-remove';
+        rm.textContent = T('settings.tools.order.remove', '移除');
+        rm.addEventListener('click', function () {
+          toolOrder = toolOrder.filter(function (x) { return x !== id; });
+          savedTools = savedTools.filter(function (x) { return x !== id; });
+          renderToolOrder();
+          markToolsDirty();
+        });
+        row.appendChild(rm);
+      }
+
+      attachDragHandlers(row, grip);
+      box.appendChild(row);
+    });
+  }
+
+  /// 指针拖动排序：WKWebView 里 HTML5 dnd 的 dragover 不稳，这里用 pointer 事件。
+  /// 拖动中只在"越过相邻项中线"时交换 DOM 位置，松手后按 DOM 顺序回写 toolOrder。
+  function attachDragHandlers(row, grip) {
+    grip.addEventListener('pointerdown', function (down) {
+      down.preventDefault();
+      var list = row.parentNode;
+      if (!list) return;
+      grip.setPointerCapture(down.pointerId);
+      row.classList.add('dragging');
+      var prevY = down.clientY;
+
+      function onMove(e) {
+        var items = Array.prototype.slice.call(list.querySelectorAll('.tool-order-item'));
+        var cy = e.clientY;
+        var goingDown = cy > prevY;
+        prevY = cy;
+        // 找与当前拖动项最近的兄弟，比较中线决定是否换位
+        for (var i = 0; i < items.length; i++) {
+          var other = items[i];
+          if (other === row) continue;
+          var r = other.getBoundingClientRect();
+          var mid = r.top + r.height / 2;
+          if (goingDown && cy > mid && row.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING) {
+            list.insertBefore(row, other.nextSibling);
+            break;
+          }
+          if (!goingDown && cy < mid && row.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_PRECEDING) {
+            list.insertBefore(row, other);
+            break;
+          }
+        }
+      }
+
+      function onUp() {
+        grip.removeEventListener('pointermove', onMove);
+        grip.removeEventListener('pointerup', onUp);
+        grip.removeEventListener('pointercancel', onUp);
+        row.classList.remove('dragging');
+        // 用 DOM 顺序回写（拖动只改视觉顺序，数据以此为准）
+        var order = Array.prototype.slice
+          .call(list.querySelectorAll('.tool-order-item'))
+          .map(function (el) { return el.dataset.tool; });
+        toolOrder = order;
+        renderToolOrder();
+        markToolsDirty();
+      }
+
+      grip.addEventListener('pointermove', onMove);
+      grip.addEventListener('pointerup', onUp);
+      grip.addEventListener('pointercancel', onUp);
+    });
+  }
+
+  // 顺序/成员变了就提示"未保存"，与勾选框的提示保持一致
+  function markToolsDirty() {
+    var hint = $('toolsDirtyHint');
+    if (!hint) return;
+    hint.hidden = false;
+    hint.textContent = T('settings.tools.order.dirty', '顺序已调整，点“保存设置”生效');
   }
 
   function renderIndexDirs() {
@@ -295,33 +494,15 @@
   function saveSettings() {
     var hint = $('saveHint');
     var dirsChanged = JSON.stringify(indexDirs) !== savedExtraDirs;
-    var checks = {
-      screenshot: $('toolScreenshot').checked,
-      clipboard: $('toolClipboard').checked,
-      lock_screen: $('toolLockScreen').checked,
-      tile_windows: $('toolTileWindows').checked,
-      shortcut_guide: $('toolShortcutGuide').checked,
-      snippets: $('toolSnippets').checked,
-      file_buffer: $('toolFileBuffer').checked
-    };
     hint.className = 'hint';
     hint.textContent = T('settings.common.saving', '保存中…');
-    // 工具顺序即面板顺序与 Alt+编号：自选条目（app:/plugin:）原样保留，
-    // 内置工具按勾选状态取舍；重新读一次设置，避免覆盖主面板刚添加的条目。
+    // 工具顺序即面板顺序与 Alt+编号：以拖动后的 toolOrder 为准。
+    // 重新读一次设置，避免覆盖主面板在设置页打开期间新加的 app:/plugin: 条目：
+    // 它们不在 toolOrder 里时追加到末尾（用户没拖过就不该丢）。
     invoke('get_settings')
       .then(function (cur) {
         var fresh = (cur && cur.tools) || savedTools;
-        var tools = [];
-        fresh.forEach(function (t) {
-          if (BUILTIN_TOOLS[t]) {
-            if (checks[t]) tools.push(t);
-          } else {
-            tools.push(t);
-          }
-        });
-        BUILTIN_ORDER.forEach(function (t) {
-          if (checks[t] && tools.indexOf(t) < 0) tools.push(t);
-        });
+        var tools = reconcileOrderAgainstFresh(toolOrder, fresh);
         var patch = {
           hotkey: $('hotkey').value.trim(),
           max_results: Number($('maxResults').value) || 12,
@@ -890,6 +1071,18 @@
 
   // ---------- 绑定 ----------
   $('save').addEventListener('click', saveSettings);
+
+  // 勾选/取消内置工具时同步"面板顺序"列表：勾上追加到末尾、取消移除。
+  // 用事件委托，省掉 9 个 checkbox 各自的监听（新增工具时也不用再改这里）。
+  Object.keys(BUILTIN_TOOLS).forEach(function (id) {
+    var box = toolCheckbox(id);
+    if (!box) return;
+    box.addEventListener('change', function () {
+      reconcileToolOrder();
+      renderToolOrder();
+      markToolsDirty();
+    });
+  });
   $('addIndexDir').addEventListener('click', addIndexDir);
   $('indexDirList').addEventListener('click', function (e) {
     var btn = e.target.closest('.dir-remove');

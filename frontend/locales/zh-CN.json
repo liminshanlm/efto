@@ -156,7 +156,7 @@
   "settings.tool.tile.desc": "唤起后选择平铺、左右半屏、最小化其他/全部窗口或还原上次平铺",
   "settings.tool.shortcut.label": "快捷键指南",
   "settings.tool.shortcut.desc": "识别唤起前的应用，列出它的快捷键",
-  "settings.tools.hint": "勾选的工具会出现在“常用工具”里。应用和插件在搜索结果里点“加入常用工具”即可添加；顺序即 Alt+1..9 的编号。",
+  "settings.tools.hint": "勾选的工具会出现在“常用工具”里。应用和插件在搜索结果里点“加入常用工具”即可添加。",
   "settings.group.index": "索引",
   "settings.index.count.label": "索引条目",
   "settings.index.meta.loading": "读取中…",
@@ -438,5 +438,16 @@
   "settings.spotlight.removeDir": "移除",
   "settings.spotlight.defaultTag": "默认",
   "settings.spotlight.added": "已加入检索范围：",
-  "settings.spotlight.removed": "已移出检索范围："
+  "settings.spotlight.removed": "已移出检索范围：",
+  "settings.tools.order.label": "面板顺序",
+  "settings.tools.order.desc": "拖动左侧手柄调整顺序；顺序即“常用工具”的展示顺序与 Alt+1..9 编号。",
+  "settings.tools.order.drag": "拖动调整顺序",
+  "settings.tools.order.remove": "移除",
+  "settings.tools.order.empty": "还没有加入任何常用工具",
+  "settings.tools.order.dirty": "顺序已调整，点“保存设置”生效",
+  "settings.tools.kind.builtin": "内置",
+  "settings.tools.kind.app": "应用",
+  "settings.tools.kind.plugin": "插件",
+  "main.tile.reordered": "顺序已保存",
+  "main.tile.reorderFailed": "保存顺序失败："
 }

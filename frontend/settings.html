@@ -200,7 +200,17 @@
                 <label class="switch"><input id="toolStickyNote" type="checkbox" /><span></span></label>
               </div>
             </div>
-            <div class="hint" data-i18n="settings.tools.hint">勾选的工具会出现在“常用工具”里。应用和插件在搜索结果里点“加入常用工具”即可添加；顺序即 Alt+1..9 的编号。</div>
+            <div class="hint" data-i18n="settings.tools.hint">勾选的工具会出现在“常用工具”里。应用和插件在搜索结果里点“加入常用工具”即可添加。</div>
+            <div class="card" id="toolOrderCard" style="margin-top:12px">
+              <div class="row" style="min-height:auto">
+                <div class="row-text">
+                  <div class="label" data-i18n="settings.tools.order.label">面板顺序</div>
+                  <div class="desc" data-i18n="settings.tools.order.desc">拖动左侧手柄调整顺序；顺序即“常用工具”的展示顺序与 Alt+1..9 编号。</div>
+                </div>
+              </div>
+              <div class="dir-list" id="toolOrderList"></div>
+            </div>
+            <div class="hint" id="toolsDirtyHint" hidden></div>
           </div>
 
           <div class="group">
