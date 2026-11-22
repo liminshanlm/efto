@@ -127,12 +127,19 @@ impl NoteStore {
     }
 }
 
+/// 便签 id：纳秒时间戳 + 单调序号后缀。
+///
+/// 只用纳秒不够：macOS 上两次连续调用的时钟读数可能完全相同（实测同一纳秒），
+/// 于是两张便签撞同一个 id —— 之后 `set_text`/`set_geometry` 按 id 定位就会打到
+/// 错误的那张。后缀保证同进程内永不重复，时间戳仍保留"可排序"的语义。
 fn new_id() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    format!("{nanos}")
+    format!("{nanos}-{}", SEQ.fetch_add(1, Ordering::Relaxed))
 }
 
 #[cfg(test)]

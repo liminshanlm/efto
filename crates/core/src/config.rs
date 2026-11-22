@@ -573,9 +573,18 @@ impl Settings {
     pub fn effective_plugin_dirs(&self) -> Vec<PathBuf> {
         let mut dirs = Self::env_plugin_dirs();
         dirs.extend(self.plugin_dirs.iter().cloned());
+        // 数据目录下的 plugins/：用户安装/自建插件的家，优先级高于内置副本
         let builtin = fsutil::data_root().join("plugins");
         if !dirs.contains(&builtin) {
             dirs.push(builtin);
+        }
+        // 随安装包分发的内置插件（只读）。排在最后：同 id 的插件由用户目录里的
+        // 那一份胜出（见 PluginRegistry::discover 的 id 级去重），
+        // 这样"换机器开箱可用"与"用户可覆盖"同时成立。
+        if let Some(bundled) = Self::bundled_plugin_dir() {
+            if !dirs.contains(&bundled) {
+                dirs.push(bundled);
+            }
         }
         let mut seen: Vec<PathBuf> = Vec::new();
         let mut out = Vec::new();
@@ -618,6 +627,36 @@ impl Settings {
             out.push(p);
         }
         out
+    }
+
+    /// 安装包内附带的内置插件目录（不存在时返回 None）。
+    ///
+    /// 打包时 `plugins/` 被放到资源目录下（`bundle.resources`），布局：
+    /// - macOS：`efto.app/Contents/Resources/plugins`
+    /// - Windows / Linux：可执行文件同级的 `plugins/`
+    ///
+    /// 两个候选都探一下而不是只按平台分支：`cargo run` 的 target 目录与将来的
+    /// 绿色版布局可能落在"同级"这条上，按平台写死会让开发态发现不到。
+    /// 也支持 `EFTO_BUNDLED_PLUGINS` 显式指定（测试与调试用）。
+    pub fn bundled_plugin_dir() -> Option<PathBuf> {
+        if let Ok(raw) = std::env::var("EFTO_BUNDLED_PLUGINS") {
+            let p = PathBuf::from(raw);
+            if p.is_dir() {
+                return Some(p);
+            }
+        }
+        let exe = std::env::current_exe().ok()?;
+        let exe_dir = exe.parent()?;
+        let candidates = [
+            // macOS .app：MacOS/efto → Contents/Resources/plugins
+            exe_dir.parent().map(|contents| contents.join("Resources/plugins")),
+            // Windows / Linux / 绿色版：exe 同级 plugins/
+            Some(exe_dir.join("plugins")),
+        ];
+        candidates
+            .into_iter()
+            .flatten()
+            .find(|p| p.is_dir())
     }
 
     /// 解析插件目录环境变量（`EFTO_PLUGIN_DIRS`）。

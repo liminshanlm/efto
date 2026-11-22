@@ -331,6 +331,18 @@ fn push_plugin(
             if !d.enabled {
                 return;
             }
+            // id 级去重：同名插件只保留**先发现**的那一份。目录顺序即优先级
+            //（env → settings.plugin_dirs → ~/.efto/plugins → 安装包内置），
+            // 因此用户装过/改过的插件不会被安装包里的内置副本顶掉。
+            if let Some(existing) = plugins.iter().find(|p| p.id().eq_ignore_ascii_case(&d.id())) {
+                tracing::debug!(
+                    "插件 {} 已在 {:?} 发现，忽略 {:?}",
+                    d.id(),
+                    existing.root,
+                    d.root
+                );
+                return;
+            }
             for p in &d.problems {
                 tracing::debug!("插件 {} 提示: {p}", d.manifest.name);
             }
@@ -715,6 +727,43 @@ mod tests {
         );
         let reg = PluginRegistry::discover(&[dir.path().to_path_buf(), p]);
         assert_eq!(reg.len(), 1);
+    }
+
+    /// 同名插件出现在多个目录时只保留**先发现**的那份（目录顺序即优先级）。
+    ///
+    /// 这就是"安装包内置插件 + 用户自装插件"的冲突规则：用户目录排在
+    /// 内置目录之前，所以用户改过的那份生效，内置副本不会顶掉它。
+    #[test]
+    fn duplicate_id_keeps_the_first_directory() {
+        let user = tempfile::tempdir().unwrap();
+        let bundled = tempfile::tempdir().unwrap();
+        mk_plugin(
+            user.path(),
+            "translate",
+            r#"{"name":"translate","main":"main.js","cmds":[{"label":"用户版","cmd":"fy"}]}"#,
+            &[("main.js", "")],
+        );
+        mk_plugin(
+            bundled.path(),
+            "translate",
+            r#"{"name":"translate","main":"main.js","cmds":[{"label":"内置版","cmd":"fy"}]}"#,
+            &[("main.js", "")],
+        );
+        // 用户目录在前
+        let reg = PluginRegistry::discover(&[user.path().to_path_buf(), bundled.path().to_path_buf()]);
+        assert_eq!(reg.len(), 1, "同名插件必须只保留一份");
+        let p = reg.get("translate").expect("应能取到 translate");
+        assert!(
+            p.root.starts_with(user.path().canonicalize().unwrap_or_else(|_| user.path().to_path_buf())),
+            "应保留用户目录里的那一份，实际 {:?}",
+            p.root
+        );
+        assert_eq!(p.manifest.cmds[0].label, "用户版");
+
+        // 反过来：内置目录在前时保留内置的那份（顺序决定优先级，不靠目录名猜）
+        let reg2 = PluginRegistry::discover(&[bundled.path().to_path_buf(), user.path().to_path_buf()]);
+        assert_eq!(reg2.len(), 1);
+        assert_eq!(reg2.get("translate").unwrap().manifest.cmds[0].label, "内置版");
     }
 
     #[test]

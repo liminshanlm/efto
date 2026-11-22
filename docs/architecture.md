@@ -58,6 +58,10 @@ macOS 支持的总设计见 `docs/macos-support-plan.md`，这里只记施工约
   功能入口都按它显隐）；热键展示文案的平台装饰（`Alt`→`Option` 等）在 i18n 解析出口
   做（Rust `i18n::decorate_keys` 与前端 `decorateKeys` 同规则，改一侧对齐另一侧），
   热键录入/存储始终是 Tauri 语法。
+- **插件目录优先级**：`EFTO_PLUGIN_DIRS` → `settings.plugin_dirs` → `~/.efto/plugins`
+  → **安装包内置**（`Resources/plugins`，macOS；Windows 为 exe 同级 `plugins/`）。
+  `PluginRegistry::discover` 按插件 id 级去重、保留先发现的那份，所以用户装过/改过的
+  插件不会被内置副本顶掉，而新机器上开箱就有全部内置插件。
 - **搜索源成对**：文件检索 Windows 走 `everything.rs`（es.exe）、macOS 走 `spotlight.rs`
   （mdfind，exec 白名单的 `max_lines` 行数封顶——全量枚举实测十几秒）；系统设置搜索
   `win_settings.rs` / `sys_settings.rs` 各守各的前缀，都带"不该触发"反例。

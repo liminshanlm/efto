@@ -1860,3 +1860,26 @@ node --check plugins/ipmsg/main.js / ui.js / service.js      OK
 - macOS 未构建未实测。
 
 
+## 内置插件随包分发（2026-11-22，Apple Silicon / macOS 14.6.1）
+
+`bundle.resources` 把仓库 `plugins/` 打进 `efto.app/Contents/Resources/plugins`
+（打包后 .app 从 54 MiB → 68.5 MiB）。运行时按 `Settings::bundled_plugin_dir()`
+解析：先看 `EFTO_BUNDLED_PLUGINS` 覆盖，再探 `Contents/Resources/plugins`
+与 exe 同级 `plugins/`（后者覆盖 Windows/绿色版布局）。
+
+### 已跑过并看到输出
+
+- **模拟新机器**：`HOME=$(mktemp -d) efto cli plugins` → 发现 **13 个插件**，
+  backend 路径全部指向 `.app/Contents/Resources/plugins/...`，且 `$HOME/.efto/plugins`
+  根本没被创建 —— 证明插件来自安装包而不是用户目录。
+- **用户目录优先**：把 `~/.efto/plugins/translate/efto-plugin.json` 改一个标记后，
+  `cli plugins` 里 `translate` 的 backend 指向 `~/.efto/plugins/translate/main.js`
+  （用户那份胜出）。
+- 单元测试 `duplicate_id_keeps_the_first_directory`：同名插件放在两个目录里，
+  两种目录顺序各测一次，保留的都是"先发现"的那份（不靠目录名猜）。
+
+### 未验证
+
+Windows 侧 `plugins/` 与 exe 同级的布局（本机无 Windows 环境）。代码按同一实现写好
+（`bundled_plugin_dir()` 同时探 `Contents/Resources/plugins` 与 exe 同级 `plugins/`），
+但需在 Windows 上补一次 `scripts/verify.ps1` 冒烟才算验证过。

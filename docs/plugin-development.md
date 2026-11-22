@@ -480,3 +480,18 @@ $env:RUST_LOG = "debug"; ..\..\scripts\dev-run.ps1
 - **启用 = 重新加载**：重新发现该插件并恢复搜索；运行时按需启动（下次唤起时才建 isolate）。
 - CLI 同源：`efto cli search` / `cli plugin-run` 也会跳过停用的插件，
   `cli plugins --json` 里带 `enabled` 字段。
+
+
+## 插件放在哪里
+
+宿主按以下顺序发现插件（先发现者优先，**同名插件只保留先命中的那一份**）：
+
+1. `EFTO_PLUGIN_DIRS` 环境变量（`;` 或 `:` 分隔）
+2. `settings.plugin_dirs`（设置页里加的目录）
+3. `~/.efto/plugins`（用户目录；从 zip 导入、自己写的插件放这里）
+4. **安装包内置插件**：macOS 为 `efto.app/Contents/Resources/plugins`，
+   Windows/Linux 为可执行文件同级的 `plugins/`
+
+第 4 项是只读的随包副本，作用是"换机器开箱可用"。因此想改某个内置插件时，
+把整份复制到 `~/.efto/plugins/<id>/` 再改 —— 用户目录里的那份会覆盖内置副本；
+只改内置目录里的文件会在下次升级安装包时被替换掉。
