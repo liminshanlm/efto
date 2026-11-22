@@ -412,6 +412,111 @@
       });
   }
 
+  // ---------- 文件检索（平台分流） ----------
+  // macOS 走 Spotlight（系统自带，无需安装）；其它平台走 Everything/es.exe。
+  // 两块互斥展示：mac 上不显示 es.exe 下载按钮，避免用户以为"文件检索坏了"。
+  function loadFileSearch() {
+    var isMac = platformCaps && platformCaps.platform === 'macos';
+    var spotlightGroup = $('spotlightGroup');
+    var everythingGroup = $('everythingGroup');
+    if (spotlightGroup) spotlightGroup.hidden = !isMac;
+    if (everythingGroup) everythingGroup.hidden = !!isMac;
+    if (isMac) {
+      loadSpotlight();
+    } else {
+      loadEverything();
+    }
+  }
+
+  function loadSpotlight() {
+    invoke('file_search_status')
+      .then(renderSpotlight)
+      .catch(function (e) {
+        var pill = $('spotlightPill');
+        if (!pill) return;
+        pill.className = 'pill warn';
+        pill.textContent = T('settings.spotlight.notReady', '不可用');
+        $('spotlightMessage').textContent = T('settings.spotlight.checkFailed', '检测失败：') + e;
+      });
+  }
+
+  function renderSpotlight(st) {
+    var msg = $('spotlightMessage');
+    var pill = $('spotlightPill');
+    var scope = $('spotlightScope');
+    if (!msg || !pill) return;
+    pill.className = 'pill';
+    if (st && st.ready) {
+      pill.classList.add('ok');
+      pill.textContent = T('settings.spotlight.ready', '可用');
+      msg.textContent = T('settings.spotlight.readyDesc', 'Spotlight 索引就绪，系统自带无需安装');
+    } else {
+      pill.classList.add('warn');
+      pill.textContent = T('settings.spotlight.notReady', '不可用');
+      msg.textContent = (st && st.message) || T('settings.spotlight.notReadyDesc', '未找到 mdfind 或索引未启用');
+    }
+    renderSpotlightDirs(st);
+  }
+
+  // 目录列表：默认目录只读展示，用户追加的目录带「移除」按钮。
+  // 默认与追加的区分由后端下发（default_dirs），前端不自己猜。
+  function renderSpotlightDirs(st) {
+    var scope = $('spotlightScope');
+    if (!scope) return;
+    scope.innerHTML = '';
+    var dirs = (st && st.dirs) || [];
+    var defaults = (st && st.default_dirs) || [];
+    if (!dirs.length) {
+      scope.textContent = T('settings.spotlight.noDirs', '（没有可检索的目录，文件检索已停用）');
+      return;
+    }
+    dirs.forEach(function (d) {
+      var isDefault = defaults.indexOf(d) >= 0;
+      var line = document.createElement('div');
+      line.className = 'dir-line';
+      var text = document.createElement('span');
+      text.className = 'mono dir-path';
+      text.textContent = d;
+      line.appendChild(text);
+      if (isDefault) {
+        var tag = document.createElement('span');
+        tag.className = 'dir-tag';
+        tag.textContent = T('settings.spotlight.defaultTag', '默认');
+        line.appendChild(tag);
+      } else {
+        var rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'btn ghost dir-remove';
+        rm.textContent = T('settings.spotlight.removeDir', '移除');
+        rm.addEventListener('click', function () { removeSpotlightDir(d); });
+        line.appendChild(rm);
+      }
+      scope.appendChild(line);
+    });
+  }
+
+  function addSpotlightDir() {
+    invoke('pick_plugin_source', { kind: 'dir' })
+      .then(function (picked) {
+        if (!picked) return;
+        return invoke('add_file_search_dir', { path: picked })
+          .then(function (st) {
+            toast(T('settings.spotlight.added', '已加入检索范围：') + picked);
+            renderSpotlight(st);
+          });
+      })
+      .catch(function (e) { toast(String(e), true); });
+  }
+
+  function removeSpotlightDir(dir) {
+    invoke('remove_file_search_dir', { path: dir })
+      .then(function (st) {
+        toast(T('settings.spotlight.removed', '已移出检索范围：') + dir);
+        renderSpotlight(st);
+      })
+      .catch(function (e) { toast(String(e), true); });
+  }
+
   // ---------- Everything ----------
   function loadEverything() {
     invoke('everything_status')
@@ -794,6 +899,10 @@
   });
   $('reindex').addEventListener('click', reindex);
   $('recheckEs').addEventListener('click', loadEverything);
+  var recheckSpotlight = $('recheckSpotlight');
+  if (recheckSpotlight) recheckSpotlight.addEventListener('click', loadSpotlight);
+  var addSpotlightDirBtn = $('addSpotlightDir');
+  if (addSpotlightDirBtn) addSpotlightDirBtn.addEventListener('click', addSpotlightDir);
   $('installEs').addEventListener('click', installEs);
   $('downloadEverything').addEventListener('click', function () {
     invoke('everything_status').then(function (st) {
@@ -1175,7 +1284,7 @@
       .then(function () {
         loadSettings();
         loadIndex();
-        loadEverything();
+        loadFileSearch();
         loadPlugins();
         loadPermissions();
         // 热键占位符是展示文案，按平台装饰（录入/存储仍是 Tauri 语法）

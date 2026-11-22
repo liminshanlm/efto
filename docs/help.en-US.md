@@ -60,7 +60,8 @@ Built-in sources appear only when the input matches their rules, so they never h
 - **Calculator**: the whole line must be a valid expression (`12*3+7`, `sqrt(2)`); plain text with letters never triggers it.
 - **Timestamps**: decimal digits in the valid seconds/milliseconds range; ordinary numbers like `2026` are not misread.
 - **System time formats**: eight fixed formats (`2026-11-19`, `2026/11/19 08:30`, `08:30:00`, …) only when the whole line matches.
-- **Everything file search**: when `es.exe` is available, file rows are appended after app results and score below every app entry; they never push apps out.
+- **File search**: Everything (`es.exe`) on Windows, the built-in Spotlight (`mdfind`) on macOS. File rows are appended after app results and score below every app entry; they never push apps out.
+  - On macOS Desktop / Documents / Downloads are searched by default, with `node_modules`, `.git` and system caches skipped. Add more folders under Settings → General → File Search (Spotlight).
 - **Browser bookmarks**: Chrome / Edge bookmarks participate only when "Search bookmarks" is enabled, and also rank after apps.
 - **Snippets**: appear only when the input exactly equals a snippet keyword; prefixes or extra text never trigger.
 - **Web search**: type `<keyword> <text>`, e.g. `g rust lifetimes` or `wiki Eiffel`. The keyword must be the first token and text must follow; once matched, local results are hidden.

@@ -1419,6 +1419,54 @@ mac 新增/改造的测试重点：
 - **性能发现**：mdfind 全量枚举常见查询 8439 行 / 12.95s——exec `max_lines` 行数封顶后
   提前杀进程返回（测试断言 <3s、行数远小于全量）。
 
+## Spotlight 检索范围收紧（2026-11-22，Apple Silicon / macOS 14.6.1）
+
+### 为什么改
+
+全盘 `mdfind -name` 在真实用户机器上不可用（实测数据）：
+
+| 查询 | 耗时 | 结果数 | 其中 `~/Library` 噪音 |
+|------|------|--------|----------------------|
+| `mdfind -name config`（全盘） | 5.0s | 4135 | 3584（87%） |
+| 同上，限定 Desktop/Documents/Downloads | 0.3s | 166 | 0（全是用户文件） |
+
+1.2s 超时 + `max_lines: 40` 在全盘模式下等于只拿到被截断的垃圾结果。
+
+### 改成了什么
+
+`search/spotlight.rs` 的查询改为「`-onlyin` 常用目录 + `-name` 查询词」；常用目录 =
+`~/Desktop`、`~/Documents`、`~/Downloads` 中存在者；一个都不存在时返回空（**不退化全盘**）。
+噪音过滤扩展到 `node_modules`、`.git`、`~/Library/{Caches,Application Support,Containers,Group Containers}`。
+`exec::rejected_arg_mdfind` 相应允许 `-onlyin`，但要求**绝对路径**、最多 8 个、必须在 `-name` 之前。
+
+### 已跑过并看到输出
+
+- 单元测试：`mdfind_onlyin_requires_absolute_dirs`（相对路径/缺目录/顺序/超量都拒）、
+  `noise_filter_blocks_dependency_and_cache_dirs`（正反例）、`mdfind_args_put_onlyin_before_name`。
+- 真机对比：`cli search config` 修复前 5.0s/4135 条（含 Quark 的 Library 配置）；
+  修复后 0.93s/2 条（`~/Downloads/config`），`cli search 报告` 从 0.68s → 0.075s。
+- `scripts/verify.sh` 新增两条检查（均为主动探针，不依赖用户桌面上恰好有什么）：
+  - **spotlight 文件源**：在 `~/Documents` 建唯一名探针 → 等索引（最多 10s）→
+    `cli search <probe> --kind file` 必须出 `(spotlight)` 行且无 trash/node_modules/.git 噪音；
+  - **检索范围不越界（反例）**：在 `/tmp` 建探针，同样搜索，**不得**出现在结果里。
+- `scripts/verify.sh` ALL CHECKS PASSED。
+
+### 用户可配置目录（2026-11-22）
+
+设置页 设置 → 通用 → 文件检索（Spotlight）可「添加目录 / 移除」。
+
+- **默认目录**（桌面/文档/下载）只读展示，标「默认」；用户追加的目录带「移除」。
+  两者都由 `file_search_status` 下发（`dirs` = 实际生效，`default_dirs` = 默认集合），
+  前端不自己猜。
+- 目录唯一定义在 `Settings::effective_file_search_dirs()`：默认存在目录在前、
+  用户追加在后；相对路径 / 不存在 / 重复一律丢弃。
+- 真机验证：`settings.file_search_dirs = ["/Users/limin/workspace"]` 后，
+  `cli search "config.json.template" --kind file` 立刻能搜到
+  `~/workspace/chatgpt-on-wechat/...` 里的 5 个文件；清空配置后同一条查询回到
+  「无匹配」（证明配置真的驱动了 `-onlyin`，不是缓存）。
+- 单元测试：`file_search_dirs_defaults_then_user_extra`（顺序/相对路径/不存在/去重），
+  有效 247 passed（efto-core）。
+
 ### 没验证（需要人手）
 
 1. 五系统动作实跑（睡眠会真的睡眠！建议先试"屏保"）；确认框与 Automation 授权弹窗。

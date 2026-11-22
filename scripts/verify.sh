@@ -185,20 +185,58 @@ fi
 Check 'plugin-run: unknown plugin must fail loudly' 1 cli plugin-run nope x y
 
 Say 'spotlight inline source (real mdfind + Spotlight index)'
-f="$work/mdfind.txt"
-code=$(Run "$f" cli search json --kind file)
-text=$(cat "$f")
-if echo "$text" | grep -q '(spotlight)'; then
-  if echo "$text" | grep -q '/\.Trash/'; then
-    fail=$((fail + 1)); echo '  FAIL: trash noise leaked into inline rows'
+# 检索已限定在 ~/Desktop、~/Documents、~/Downloads（见 search/spotlight.rs 模块文档），
+# 所以探针必须落在这三个目录里才搜得到。用唯一名字创建 → 等索引 → 搜索 → 清理，
+# 不依赖用户桌面上恰好有什么文件。
+probe_dir="$HOME/Documents/efto-verify-probe"
+probe_name="efto-verify-probe-$RANDOM"
+spotlight_ok=0
+mkdir -p "$probe_dir" 2>/dev/null && printf 'x' > "$probe_dir/$probe_name.txt" 2>/dev/null && {
+  # Spotlight 索引有几秒延迟：最多等 10s，每轮 1s
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if mdfind -onlyin "$HOME/Documents" -name "$probe_name" 2>/dev/null | grep -q "$probe_name"; then
+      spotlight_ok=1
+      break
+    fi
+    sleep 1
+  done
+}
+if [ "$spotlight_ok" = "1" ]; then
+  f="$work/mdfind.txt"
+  code=$(Run "$f" cli search "$probe_name" --kind file)
+  text=$(cat "$f")
+  if echo "$text" | grep -q '(spotlight)' && echo "$text" | grep -q "$probe_name"; then
+    if echo "$text" | grep -qE '/\.Trash/|/node_modules/|/\.git/'; then
+      fail=$((fail + 1)); echo '  FAIL: noise (trash/node_modules/.git) leaked into inline rows'
+    else
+      echo '  OK (probe file found in scoped dirs, file rows merged below app results)'
+    fi
   else
-    echo '  OK (file rows merged below app results, no noise)'
+    fail=$((fail + 1)); echo "  FAIL (exit $code): scoped mdfind did not find the probe file"
+    echo "$text"
   fi
-elif [ "$code" = "3" ]; then
-  echo '  SKIP: no rows at all -- Spotlight index has no match; not counted as pass'
 else
-  fail=$((fail + 1)); echo "  FAIL (exit $code): unexpected search failure"
-  echo "$text"
+  echo '  SKIP: Spotlight did not index the probe file within 10s (index disabled/paused)'
+fi
+rm -rf "$probe_dir"
+
+# 反例（硬性约定 2）：限定目录之外的文件不该被搜到 —— 同时验证"不越界到全盘"。
+Say 'spotlight scope stays inside the allowed dirs'
+outside_dir="/tmp/efto-verify-outside-$$"
+outside_name="efto-outside-probe-$$"
+if mkdir -p "$outside_dir" 2>/dev/null && printf 'x' > "$outside_dir/$outside_name.txt" 2>/dev/null; then
+  sleep 2
+  f="$work/mdfind-outside.txt"
+  Run "$f" cli search "$outside_name" --kind file >/dev/null
+  # 只看路径本身："无匹配: <查询词>" 这类提示也会包含探针名，不能拿名字当判据
+  if grep -qF "$outside_dir" "$f"; then
+    fail=$((fail + 1)); echo '  FAIL: file outside the scoped dirs was returned (scope leaked to full disk)'
+  else
+    echo '  OK (outside-scope path not returned)'
+  fi
+  rm -rf "$outside_dir"
+else
+  echo '  SKIP: cannot create probe under /tmp'
 fi
 
 Step 'macOS system settings source (x-apple.systempreferences:)'

@@ -422,5 +422,21 @@
   "settings.perm.screen.desc": "截图需要它（系统设置 → 隐私与安全性 → 屏幕录制）",
   "settings.perm.grant": "去授权",
   "settings.perm.granted": "已授权",
-  "settings.perm.notGranted": "未授权"
+  "settings.perm.notGranted": "未授权",
+  "settings.group.spotlight": "文件检索（Spotlight）",
+  "settings.spotlight.state.label": "索引状态",
+  "settings.spotlight.scope.label": "检索范围",
+  "settings.spotlight.hint": "使用 macOS 自带的 Spotlight（mdfind），无需安装任何东西。默认检索「桌面 / 文档 / 下载」，可以点「添加目录」把别的文件夹（如移动硬盘、代码仓库）纳入范围。系统缓存与依赖目录（node_modules、.git 等）始终会被过滤掉。",
+  "settings.spotlight.recheck": "重新检测",
+  "settings.spotlight.ready": "可用",
+  "settings.spotlight.readyDesc": "Spotlight 索引就绪，系统自带无需安装",
+  "settings.spotlight.notReady": "不可用",
+  "settings.spotlight.notReadyDesc": "未找到 mdfind 或索引未启用",
+  "settings.spotlight.noDirs": "（没有可检索的目录，文件检索已停用）",
+  "settings.spotlight.checkFailed": "检测失败：",
+  "settings.spotlight.addDir": "添加目录",
+  "settings.spotlight.removeDir": "移除",
+  "settings.spotlight.defaultTag": "默认",
+  "settings.spotlight.added": "已加入检索范围：",
+  "settings.spotlight.removed": "已移出检索范围："
 }

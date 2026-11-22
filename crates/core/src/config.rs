@@ -208,6 +208,11 @@ pub struct Settings {
     pub enable_dir_scan: bool,
     /// 是否把 Chrome / Edge 收藏夹纳入搜索。
     pub enable_bookmarks: bool,
+    /// macOS Spotlight 文件检索的**额外**目录（默认已含桌面/文档/下载）。
+    ///
+    /// 只在 macOS 生效：`mdfind` 用它拼 `-onlyin`。路径必须是绝对路径，
+    /// 相对路径与不存在的目录在 `effective_file_search_dirs` 里被丢弃。
+    pub file_search_dirs: Vec<PathBuf>,
     /// Everything 命令行工具 `es.exe` 的位置（文件或所在目录）。
     /// 留空时按"仓库 tools/es → 数据目录 → PATH → Everything 安装目录"顺序自动发现。
     /// 无论来自哪里，**都必须通过内置 sha256 校验才会被执行**。
@@ -372,6 +377,7 @@ impl Default for Settings {
             plugin_dirs: vec![],
             cmd_aliases: Default::default(),
             disabled_plugins: vec![],
+            file_search_dirs: vec![],
             everything_es_path: None,
             max_results: 12,
             refresh_interval_secs: 600,
@@ -578,6 +584,38 @@ impl Settings {
                 seen.push(d.clone());
                 out.push(d);
             }
+        }
+        out
+    }
+
+    /// macOS Spotlight 的实际检索目录：默认常用目录 + 用户额外配置。
+    ///
+    /// 规则：
+    /// 1. 默认三个（桌面/文档/下载）里**存在**的才加入；
+    /// 2. 用户配置的目录必须是绝对路径、存在且是目录，否则丢弃（不做 glob 展开）；
+    /// 3. 去重后顺序稳定：默认目录在前，用户追加在后 —— 与 `effective_plugin_dirs`
+    ///    同一约定，避免"配置一次顺序就变"。
+    ///
+    /// 只在 macOS 有意义；其它平台返回空（文件源本来就不走 mdfind）。
+    pub fn effective_file_search_dirs(&self) -> Vec<PathBuf> {
+        if !cfg!(target_os = "macos") {
+            return Vec::new();
+        }
+        let mut out: Vec<PathBuf> = Vec::new();
+        if let Some(home) = dirs::home_dir() {
+            for sub in ["Desktop", "Documents", "Downloads"] {
+                let p = home.join(sub);
+                if p.is_dir() && !out.contains(&p) {
+                    out.push(p);
+                }
+            }
+        }
+        for raw in &self.file_search_dirs {
+            let p = raw.clone();
+            if !p.is_absolute() || !p.is_dir() || out.contains(&p) {
+                continue;
+            }
+            out.push(p);
         }
         out
     }
@@ -991,6 +1029,44 @@ mod tests {
         assert!(Settings::validate_models(vec![no_name.clone()]).unwrap_err().contains("缺少名称"));
         no_name.name = "A".into();
         assert!(Settings::validate_models(vec![no_name]).is_ok());
+    }
+
+    /// 文件检索目录：默认常用目录在前，用户追加在后；相对路径/不存在/重复都被丢弃。
+    #[test]
+    fn file_search_dirs_defaults_then_user_extra() {
+        if !cfg!(target_os = "macos") {
+            // 其它平台不启用 mdfind，返回空是明确约定
+            assert!(Settings::default().effective_file_search_dirs().is_empty());
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let extra = tmp.path().to_path_buf();
+
+        // 只配一个真实存在的绝对目录：它必须出现在结果末尾
+        let mut s = Settings::default();
+        s.file_search_dirs = vec![extra.clone()];
+        let dirs = s.effective_file_search_dirs();
+        assert_eq!(dirs.last(), Some(&extra), "用户追加的目录应排在默认目录之后");
+
+        // 相对路径与不存在的目录必须被丢弃
+        let mut s2 = Settings::default();
+        s2.file_search_dirs = vec![
+            PathBuf::from("relative/dir"),
+            PathBuf::from("/this/does/not/exist/efto"),
+        ];
+        assert!(
+            s2.effective_file_search_dirs().is_empty() || !s2
+                .effective_file_search_dirs()
+                .iter()
+                .any(|p| !p.is_absolute() || !p.is_dir()),
+            "相对路径与不存在的目录不该进检索范围"
+        );
+
+        // 重复配置同一个目录只保留一条
+        let mut s3 = Settings::default();
+        s3.file_search_dirs = vec![extra.clone(), extra.clone()];
+        let dirs3 = s3.effective_file_search_dirs();
+        assert_eq!(dirs3.iter().filter(|p| **p == extra).count(), 1);
     }
 
     /// 回归：GUI 路径以前不读 EFTO_PLUGIN_DIRS，导致同一个环境变量在 CLI 能找到插件、

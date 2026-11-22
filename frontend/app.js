@@ -1150,4 +1150,5 @@
     loadPinnedTools();
     search();
   });
+
 })();

@@ -5,6 +5,7 @@
 
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -1928,6 +1929,109 @@ pub fn show_file_buffer(app: AppHandle) {
 #[tauri::command]
 pub fn hide_files(app: AppHandle) {
     windows::hide_files(&app);
+}
+
+/// 非 Windows 平台的文件检索体检（macOS：Spotlight / mdfind）。
+///
+/// 设置页据此把「Everything 文件检索」换成「文件检索（Spotlight）」，
+/// 避免 mac 用户看到 es.exe 下载按钮以为功能坏了。
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct FileSearchStatus {
+    /// 检索通道：spotlight | none
+    pub channel: String,
+    /// 是否可用（mdfind 存在且有可检索目录）
+    pub ready: bool,
+    /// 实际参与检索的目录（默认 + 用户追加，绝对路径）。
+    pub dirs: Vec<String>,
+    /// 默认常用目录中存在的那些（前端据此把"默认"与"用户添加"分开显示）。
+    pub default_dirs: Vec<String>,
+    pub message: String,
+}
+
+#[tauri::command]
+pub fn file_search_status(data: State<'_, Shared>) -> FileSearchStatus {
+    let settings = data.settings.lock().clone();
+    let dirs: Vec<String> = settings
+        .effective_file_search_dirs()
+        .into_iter()
+        .map(|p| p.display().to_string())
+        .collect();
+    let default_dirs: Vec<String> = efto_core::search::spotlight::default_search_dirs()
+        .into_iter()
+        .map(|p| p.display().to_string())
+        .collect();
+    if cfg!(target_os = "macos") {
+        let has_mdfind = efto_core::exec::lookup("mdfind").is_some();
+        let (ready, message) = match (has_mdfind, dirs.is_empty()) {
+            (false, _) => (false, "未找到 /usr/bin/mdfind，文件检索不可用".to_string()),
+            (true, true) => (
+                false,
+                "没有可检索的目录（默认目录不存在且未添加任何目录）".to_string(),
+            ),
+            (true, false) => (true, "Spotlight 索引就绪（系统自带）".to_string()),
+        };
+        return FileSearchStatus {
+            channel: "spotlight".into(),
+            ready,
+            dirs,
+            default_dirs,
+            message,
+        };
+    }
+    FileSearchStatus {
+        channel: "none".into(),
+        ready: false,
+        dirs,
+        default_dirs,
+        message: "当前平台的文件检索通道由 Everything 提供，见下方 Everything 区块".into(),
+    }
+}
+
+/// 追加一个 Spotlight 检索目录（设置页「添加目录」走系统目录选择框后再调这里）。
+///
+/// 只接受**绝对路径且存在**的目录：mdfind 的 `-onlyin` 必须是绝对路径（相对路径
+/// 会按当前工作目录解释），而且不存在的目录加进去只会让设置页显示一条死配置。
+#[tauri::command]
+pub fn add_file_search_dir(
+    path: String,
+    data: State<'_, Shared>,
+) -> Result<FileSearchStatus, String> {
+    let p = PathBuf::from(path.trim());
+    if !p.is_absolute() {
+        return Err("只能添加绝对路径目录".into());
+    }
+    if !p.is_dir() {
+        return Err(format!("不是有效目录：{}", p.display()));
+    }
+    {
+        let mut s = data.settings.lock();
+        if !s.file_search_dirs.contains(&p) {
+            s.file_search_dirs.push(p);
+            s.save().map_err(|e| format!("保存设置失败: {e}"))?;
+        } else {
+            return Err("该目录已在检索范围里".into());
+        }
+    }
+    Ok(file_search_status(data))
+}
+
+/// 移除一个用户追加的检索目录（默认三个目录不受影响）。
+#[tauri::command]
+pub fn remove_file_search_dir(
+    path: String,
+    data: State<'_, Shared>,
+) -> Result<FileSearchStatus, String> {
+    let p = PathBuf::from(path.trim());
+    {
+        let mut s = data.settings.lock();
+        let before = s.file_search_dirs.len();
+        s.file_search_dirs.retain(|d| d != &p);
+        if s.file_search_dirs.len() == before {
+            return Err("该目录不在用户添加列表里（默认目录不能移除）".into());
+        }
+        s.save().map_err(|e| format!("保存设置失败: {e}"))?;
+    }
+    Ok(file_search_status(data))
 }
 
 /// Everything 环境体检：设置页据此显示"就绪 / 只缺 es.exe / 完全没装"。

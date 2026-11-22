@@ -405,13 +405,37 @@ pub fn rejected_arg(key: &str, args: &[String]) -> Option<String> {
     }
 }
 
-/// mdfind（Spotlight CLI）：只允许 `["-name", <查询词>]`。
+/// mdfind（Spotlight CLI）：只允许 `[-onlyin <绝对目录>]... -name <查询词>`。
+///
+/// `-onlyin` 是必要的：全盘 `mdfind -name` 实测 5s 且结果被 `~/Library` 噪音塞满
+/// （见 `search::spotlight` 的模块文档）。目录必须是**绝对路径**——相对路径会让
+/// mdfind 按当前工作目录解释，那等于让调用方间接指定检索范围之外的东西。
+///
 /// 查询词不能以 `-` 开头（否则会被当成选项），长度有上限（防拉爆）。
 fn rejected_arg_mdfind(args: &[String]) -> Option<String> {
-    if args.len() != 2 || args[0] != "-name" {
-        return Some("mdfind 只允许 [-name, 查询词] 形式的参数".into());
+    const MAX_DIRS: usize = 8;
+    let mut dirs = 0usize;
+    let mut i = 0usize;
+    while i < args.len() && args[i] == "-onlyin" {
+        let Some(dir) = args.get(i + 1) else {
+            return Some("mdfind -onlyin 缺少目录参数".into());
+        };
+        if !dir.starts_with('/') {
+            return Some(format!("-onlyin 目录 {dir:?} 必须是绝对路径"));
+        }
+        if dir.len() > 1024 || dir.contains('\0') {
+            return Some(format!("-onlyin 目录 {dir:?} 不合法：过长或含 NUL"));
+        }
+        dirs += 1;
+        if dirs > MAX_DIRS {
+            return Some(format!("-onlyin 最多 {MAX_DIRS} 个目录"));
+        }
+        i += 2;
     }
-    let q = &args[1];
+    if args.len() != i + 2 || args[i] != "-name" {
+        return Some("mdfind 只允许 [-onlyin 目录]... -name 查询词 形式的参数".into());
+    }
+    let q = &args[i + 1];
     if q.is_empty() || q.starts_with('-') || q.len() > 512 {
         return Some(format!(
             "查询词 {q:?} 不合法：不能为空、不能以 - 开头、长度不超过 512"
@@ -1256,7 +1280,8 @@ mod tests {
         assert!(rejected_arg("es", &["-max-results".into(), "500".into(), "x".into()]).is_none());
     }
 
-    /// mdfind 的参数白名单：只允许 `[-name, 查询词]`，查询词不能长得像选项。
+    /// mdfind 的参数白名单：只允许 `[-onlyin 绝对目录]... -name 查询词`，
+    /// 查询词不能长得像选项。
     #[test]
     fn mdfind_only_allows_name_query() {
         assert_eq!(rejected_arg("mdfind", &["-name".into(), "报告".into()]), None);
@@ -1268,6 +1293,53 @@ mod tests {
         assert!(rejected_arg("mdfind", &["-name".into(), long]).is_some(), "超长查询必须拒");
         // 未知条目一律拒绝
         assert!(rejected_arg("nope", &["x".into()]).is_some());
+    }
+
+    /// `-onlyin` 只接受绝对目录，且必须排在 `-name` 之前。
+    ///
+    /// 相对路径会被 mdfind 按当前目录解释，等于让调用方间接扩大检索范围；
+    /// 缺目录参数、目录过多、`-onlyin` 出现在 `-name` 之后都一律拒绝。
+    #[test]
+    fn mdfind_onlyin_requires_absolute_dirs() {
+        let ok = vec![
+            "-onlyin".to_string(),
+            "/Users/x/Desktop".into(),
+            "-name".into(),
+            "报告".into(),
+        ];
+        assert_eq!(rejected_arg("mdfind", &ok), None, "正常的限定目录查询应通过");
+
+        let two = vec![
+            "-onlyin".to_string(),
+            "/a".into(),
+            "-onlyin".into(),
+            "/b".into(),
+            "-name".into(),
+            "x".into(),
+        ];
+        assert_eq!(rejected_arg("mdfind", &two), None, "多个 -onlyin 应通过");
+
+        // 相对路径
+        let rel = vec!["-onlyin".to_string(), "Desktop".into(), "-name".into(), "x".into()];
+        assert!(rejected_arg("mdfind", &rel).is_some(), "相对路径必须拒");
+
+        // 缺目录参数
+        let missing = vec!["-onlyin".to_string(), "-name".into(), "x".into()];
+        assert!(rejected_arg("mdfind", &missing).is_some(), "缺目录必须拒");
+
+        // -onlyin 出现在 -name 之后
+        let late = vec!["-name".to_string(), "x".into(), "-onlyin".into(), "/a".into()];
+        assert!(rejected_arg("mdfind", &late).is_some(), "-onlyin 必须在 -name 前");
+
+        // 目录数量上限
+        let mut many = Vec::new();
+        for i in 0..9 {
+            many.push("-onlyin".to_string());
+            many.push(format!("/d{i}"));
+        }
+        many.push("-name".into());
+        many.push("x".into());
+        assert!(rejected_arg("mdfind", &many).is_some(), "目录过多必须拒");
     }
 
     /// 绝对路径条目免摘要校验；非绝对路径条目缺摘要属于配置错误，必须明确报错。

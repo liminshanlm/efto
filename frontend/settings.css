@@ -654,3 +654,10 @@ summary:focus-visible {
 .snippet-body { width: 100%; min-height: 66px; resize: vertical; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12px; line-height: 1.5; }
 .engine-url { width: 100%; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12px; }
 .snippet-remove { flex: 0 0 auto; }
+
+/* 文件检索（Spotlight）目录列表：默认目录只读，用户追加的带移除按钮 */
+.dir-line { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.dir-line + .dir-line { border-top: 1px solid var(--border); padding-top: 6px; margin-top: 3px; }
+.dir-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.dir-tag { flex: 0 0 auto; font-size: 11px; color: var(--text-3); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; }
+.dir-remove { flex: 0 0 auto; height: 28px; padding: 0 10px; font-size: 12px; }

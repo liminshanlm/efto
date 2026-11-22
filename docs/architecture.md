@@ -329,6 +329,30 @@ Everything 是**一等搜索源**，和 `calc`/`clock` 同一条路：结果直�
 GUI 侧走独立异步命令 `search_files`（`spawn_blocking`），晚到的文件行追加在应用结果之后；
 es 侧超时 1s（`-timeout 1000`）、进程上限 1.2s，不可用时静默返回空（可用性看设置页）。
 
+### macOS 的文件检索范围（`search/spotlight.rs`）
+
+与 Windows 的 es.exe 通道不同，macOS 用系统自带的 `mdfind`，因此**没有"安装/校验"环节**：
+`exec` 白名单里它是绝对路径条目（`/usr/bin/mdfind`，免摘要），安全性靠参数白名单。
+
+查询由「若干 `-onlyin <绝对目录>` + `-name <查询词>`」组成（`-onlyin` 必须是绝对路径，
+否则会被 mdfind 按当前目录解释，等于让调用方间接扩大范围）。目录来自
+`Settings::effective_file_search_dirs()`（唯一事实源）：
+
+1. 默认 `~/Desktop`、`~/Documents`、`~/Downloads` 中**存在**的那些；
+2. 用户在设置页追加的 `settings.file_search_dirs`（必须绝对路径且存在，否则丢弃）；
+3. 去重后默认目录在前、追加目录在后。
+
+一个目录都没有时 `hits()` 直接返回空，**不退化成全盘检索**。
+设置页通过 `file_search_status` / `add_file_search_dir` / `remove_file_search_dir`
+三个命令读改这份配置，显示的目录与实际检索的目录必须一致。
+
+多个 `-onlyin` 是 OR 语义且可合并成一条命令（实测比逐目录调用快 3 倍）。
+结果仍要过 `is_noise()`：垃圾桶、`node_modules`、`.git`、`~/Library` 下的
+Caches / Application Support / Containers 一律丢弃（这些不是"用户文件"）。
+
+设置页在 macOS 上展示「文件检索（Spotlight）」只读状态（`file_search_status`
+命令给出通道、可用性与目录列表），Everything 区块只在其它平台显示。
+
 ### 浏览器收藏夹（`core/src/bookmarks.rs`）
 **默认关闭**，只有设置里打开 `enable_bookmarks` 才会被传入搜索管线。打开后读取
 `%LOCALAPPDATA%` 下 Chrome / Edge 每个 Profile 的 `Bookmarks` JSON，按文件 mtime 缓存，

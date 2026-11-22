@@ -422,5 +422,21 @@
   "settings.perm.screen.desc": "Required by screenshots (System Settings → Privacy & Security → Screen Recording)",
   "settings.perm.grant": "Grant Access",
   "settings.perm.granted": "Granted",
-  "settings.perm.notGranted": "Not granted"
+  "settings.perm.notGranted": "Not granted",
+  "settings.group.spotlight": "File Search (Spotlight)",
+  "settings.spotlight.state.label": "Index status",
+  "settings.spotlight.scope.label": "Search scope",
+  "settings.spotlight.hint": "Uses the built-in macOS Spotlight (mdfind); nothing to install. Desktop / Documents / Downloads are searched by default; use Add folder to include others (external drives, code repos). System caches and dependency folders (node_modules, .git, ...) are always filtered out.",
+  "settings.spotlight.recheck": "Re-check",
+  "settings.spotlight.ready": "Available",
+  "settings.spotlight.readyDesc": "Spotlight index ready (built into macOS)",
+  "settings.spotlight.notReady": "Unavailable",
+  "settings.spotlight.notReadyDesc": "mdfind not found or indexing disabled",
+  "settings.spotlight.noDirs": "(no searchable folders; file search disabled)",
+  "settings.spotlight.checkFailed": "Check failed: ",
+  "settings.spotlight.addDir": "Add folder",
+  "settings.spotlight.removeDir": "Remove",
+  "settings.spotlight.defaultTag": "default",
+  "settings.spotlight.added": "Added to search scope: ",
+  "settings.spotlight.removed": "Removed from search scope: "
 }
