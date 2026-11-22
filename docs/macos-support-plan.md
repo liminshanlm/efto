@@ -293,6 +293,13 @@ exec/shell 与插件清单 `platforms` 差异；`roadmap.md` 挂本计划；`ver
 1. **签名**：`tauri.conf.json` 的 `bundle > macOS > signingIdentity` 填
    `Developer ID Application: …`（或环境变量 `APPLE_SIGNING_IDENTITY`）后
    `tauri build`——tauri-bundler 会做 `codesign --deep --options runtime`。
+   **`bundle > macOS > entitlements` 必须指向 `crates/app/entitlements.plist`**：
+   hardened runtime 下不给 `com.apple.security.cs.allow-jit`，V8 在 isolate 初始化时
+   会报 `Fatal process out of memory: Failed to reserve virtual memory for CodeRange`
+   并直接 abort（表现是：双击 .app 后一唤起插件就闪退；CLI 用未签名的
+   `target/release/efto` 却能跑，因为那条路径没开 hardened runtime）。
+   adhoc 签名（`signingIdentity: "-"`）同样会带 `runtime` flag，所以同样需要这份
+   entitlements——`scripts/release.sh` 的两条签名分支都依赖上面的配置。
 2. **公证**：`xcrun notarytool submit efto.dmg --keychain-profile efto-notary --wait`
    → `xcrun stapler staple efto.dmg`。凭证先用 `xcrun notarytool store-credentials` 录入。
 3. **双架构**：`tauri build --target universal-apple-darwin`；rustup 需装
