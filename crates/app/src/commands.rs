@@ -503,14 +503,70 @@ pub(crate) fn run_action(app: &AppHandle, data: &Shared, name: &str) -> Result<S
             if let Some(lc) = data.long_capture.lock().as_ref() {
                 lc.request_stop();
             }
-            // 先把搜索框收起来，否则它会被截进图里。
-            // hide_main 是投递到主线程的，等一小会儿让它真的消失。
+            // 先把搜索框收起来，否则它会被截进图里（拍进去就再也去不掉了）。
+            //
+            // 判据必须是**窗口服务器**，不是 `is_visible()`：后者在 `orderOut`
+            // 之后立刻为假，但合成器还要再画一两帧——用户看到的正是"截图里
+            // 带着启动器"。最多等 600ms，之后无条件继续（宁可拍到也不能不响应）。
             windows::hide_main(app);
-            std::thread::sleep(std::time::Duration::from_millis(140));
+            // `hide_main` 在主线程上同步把窗口挪出屏 + orderOut，随后等 AppKit 确认
+            // 不可见（通常第一次就过）。**不能**按窗口服务器的在屏列表来等：
+            // 实测有环境里 orderOut 之后服务器仍把窗口列在旧位置好几分钟，
+            // 那条记录只是簿记滞后，画面早就不画了——照它等会一直等到超时。
+            for _ in 0..60 {
+                if !windows::main_visible(app) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            // orderOut 到合成器真正重绘这块屏之间还有一帧间隙
+            std::thread::sleep(std::time::Duration::from_millis(150));
             let shot = crate::screenshot::capture_virtual_screen()?;
+            // 窗口服务器仍把主窗口画在画面上时（AppKit 已 orderOut、服务器表面状态
+            // 卡住），普通显示器捕获会把启动器拍进底图。改从"主窗口之下"合成：
+            // 这样拍不到它，代价是同一层之上的系统菜单栏也不在结果里。
+            #[cfg(target_os = "macos")]
+            let shot = if windows::main_on_screen(app) {
+                tracing::warn!("主窗口已收起但窗口服务器仍画着：{}", windows::main_state(app));
+                match windows::main_window_number(app)
+                    .map(crate::screenshot::capture_virtual_screen_below)
+                {
+                    Some(Ok(alt)) => alt,
+                    Some(Err(e)) => {
+                        tracing::warn!("按下层合成重抓失败，退回普通捕获: {e}");
+                        shot
+                    }
+                    None => shot,
+                }
+            } else {
+                shot
+            };
             // 覆盖层页面会立刻调 screenshot_begin 取图，所以先存再开窗
             *data.shot.lock() = Some(shot.clone());
             windows::open_screenshot_overlay(app, &shot)?;
+            // 截图期间主窗口必须一直收着：会话中万一又被显示出来就重新收起
+            // （插件输出、单实例转发等都可能在会话里请求显示主窗口）。
+            let app2 = app.clone();
+            let _ = std::thread::Builder::new()
+                .name("shot-guard".into())
+                .spawn(move || {
+                    for tick in 0..300 {
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                        if !windows::screenshot_session_active(&app2) {
+                            break;
+                        }
+                        let Some(w) = app2.get_webview_window(windows::MAIN_LABEL) else {
+                            break;
+                        };
+                        if w.is_visible().unwrap_or(false) {
+                            tracing::warn!(
+                                "截图会话中主窗口又显示了（{}ms 后），重新收起",
+                                (tick + 1) * 200
+                            );
+                            windows::hide_main(&app2);
+                        }
+                    }
+                });
             Ok("拖拽选择截图区域".into())
         }
         other => Err(format!("未知指令: {other}")),
@@ -746,18 +802,106 @@ pub struct ShotInfo {
     pub data_url: String,
     pub width: u32,
     pub height: u32,
+    /// 覆盖层窗口在截图坐标系里的偏移与跨度（物理像素）。
+    /// macOS 上窗口会被菜单栏下推、跨屏摆放也未必对齐图原点——
+    /// 前端按这四个值换算选区：图内坐标 = 窗口坐标 × (跨度/窗口宽) + 偏移。
+    pub off_x: i32,
+    pub off_y: i32,
+    pub view_w: u32,
+    pub view_h: u32,
 }
 
-/// 选区窗口启动后取回被截的整屏图。
+/// 选区窗口启动后取回被截的整屏图。`window` 是发起调用的覆盖层窗口（mac 上
+/// 每屏一个），偏移/跨度按它在图内的实际位置换算。
 #[tauri::command]
-pub fn screenshot_begin(data: State<'_, Shared>) -> Result<ShotInfo, String> {
+pub fn screenshot_begin(
+    window: tauri::WebviewWindow,
+    data: State<'_, Shared>,
+) -> Result<ShotInfo, String> {
     let shot = data.shot.lock();
     let shot = shot.as_ref().ok_or("没有待裁剪的截图")?;
+    let (off_x, off_y, view_w, view_h) = overlay_mapping(&window, shot)?;
     Ok(ShotInfo {
         data_url: crate::screenshot::data_url(&shot.to_image()?)?,
         width: shot.width,
         height: shot.height,
+        off_x,
+        off_y,
+        view_w,
+        view_h,
     })
+}
+
+/// 覆盖层窗口在截图坐标系里的偏移与跨度（图内物理像素）。
+///
+/// 图坐标 = 全局点 × 主屏 scale；窗口的物理坐标按**本窗** scale 记，
+/// 混合缩放多屏下二者不同源，先换算到同一单位再作差。
+fn overlay_mapping(
+    window: &tauri::WebviewWindow,
+    shot: &crate::screenshot::Shot,
+) -> Result<(i32, i32, u32, u32), String> {
+    // macOS：覆盖层是"每屏一窗"，窗口就是从 `displays()[idx]` 摆出来的，映射
+    // 直接按显示器矩形算。**不读窗口几何**——tao 的 outer_position/inner_size
+    // 是 async setter 的快照、scale_factor 在 1x 屏上还会报成主屏的 2.0，
+    // "点击瞬间对、一会后偏移"就是读了过期几何（补偿量按旧位置算）。
+    #[cfg(target_os = "macos")]
+    if let Some(m) = display_mapping(window.label(), shot) {
+        return Ok(m);
+    }
+    let pos = window
+        .outer_position()
+        .map_err(|e| format!("取截图窗口位置失败: {e}"))?;
+    let size = window
+        .inner_size()
+        .map_err(|e| format!("取截图窗口尺寸失败: {e}"))?;
+    #[cfg(target_os = "macos")]
+    let k = crate::tile::ax::display_scale() / window.scale_factor().unwrap_or(1.0);
+    #[cfg(not(target_os = "macos"))]
+    let k = 1.0f64;
+    Ok((
+        (pos.x as f64 * k).round() as i32 - shot.origin_x,
+        (pos.y as f64 * k).round() as i32 - shot.origin_y,
+        ((size.width as f64 * k).round() as u32).max(1),
+        ((size.height as f64 * k).round() as u32).max(1),
+    ))
+}
+
+/// macOS 覆盖层窗口 → 图内偏移/跨度，按标签里的显示器下标查 `displays()`。
+///
+/// 图坐标口径是"点 × 主屏 scale"，与 [`crate::screenshot::capture_virtual_screen`]
+/// 的合成槽位一致；窗口几何由 `open_screenshot_overlay` 直接对 NSWindow 设定，
+/// 与之同源，因此这里是确定性映射而不是读回。
+#[cfg(target_os = "macos")]
+fn display_mapping(label: &str, shot: &crate::screenshot::Shot) -> Option<(i32, i32, u32, u32)> {
+    let idx: usize = label
+        .strip_prefix(crate::windows::SCREENSHOT_LABEL)?
+        .strip_prefix('-')?
+        .parse()
+        .ok()?;
+    let displays = crate::tile::ax::displays();
+    let (_, r) = displays.get(idx)?;
+    let s = crate::tile::ax::display_scale();
+    Some((
+        (r.x as f64 * s).round() as i32 - shot.origin_x,
+        (r.y as f64 * s).round() as i32 - shot.origin_y,
+        ((r.width as f64 * s).round() as u32).max(1),
+        ((r.height as f64 * s).round() as u32).max(1),
+    ))
+}
+
+/// 覆盖层窗口落位后偏移会变（异步摆放、菜单栏约束重算都会挪窗口）——
+/// 前端轮询/提交前刷新用的轻量版 [`screenshot_begin`]（不带整图）。
+#[tauri::command]
+pub fn screenshot_offset(
+    window: tauri::WebviewWindow,
+    data: State<'_, Shared>,
+) -> Result<serde_json::Value, String> {
+    let shot = data.shot.lock();
+    let shot = shot.as_ref().ok_or("截图已失效，请重新开始")?;
+    let (off_x, off_y, view_w, view_h) = overlay_mapping(&window, shot)?;
+    Ok(serde_json::json!({
+        "off_x": off_x, "off_y": off_y, "view_w": view_w, "view_h": view_h,
+    }))
 }
 
 /// 完成截图。`x/y/w/h` 是相对该显示器的**物理像素**。
@@ -782,7 +926,7 @@ pub fn screenshot_finish(
     let result = match action.as_str() {
         "copy" => {
             copy_image(&img)?;
-            windows::close_window(&app, windows::SCREENSHOT_LABEL);
+            windows::close_screenshot_overlays(&app);
             Ok("已复制到剪贴板".into())
         }
         "save" => {
@@ -792,7 +936,7 @@ pub fn screenshot_finish(
             }
             std::fs::write(&path, crate::screenshot::png_bytes(&img)?)
                 .map_err(|e| format!("保存截图失败: {e}"))?;
-            windows::close_window(&app, windows::SCREENSHOT_LABEL);
+            windows::close_screenshot_overlays(&app);
             Ok(format!("已保存到 {}", path.display()))
         }
         "pin" => {
@@ -812,7 +956,7 @@ pub fn screenshot_finish(
                 shot.origin_x + x,
                 shot.origin_y + y,
             )?;
-            windows::close_window(&app, windows::SCREENSHOT_LABEL);
+            windows::close_screenshot_overlays(&app);
             Ok("已钉在屏幕上".into())
         }
         other => Err(format!("未知截图动作: {other}")),
@@ -827,7 +971,7 @@ pub fn screenshot_finish(
 #[tauri::command]
 pub fn screenshot_cancel(app: AppHandle, data: State<'_, Shared>) -> Result<(), String> {
     *data.shot.lock() = None;
-    windows::close_window(&app, windows::SCREENSHOT_LABEL);
+    windows::close_screenshot_overlays(&app);
     Ok(())
 }
 
@@ -842,6 +986,7 @@ pub fn screenshot_long_start(
     y: i32,
     w: u32,
     h: u32,
+    window: tauri::WebviewWindow,
     app: AppHandle,
     data: State<'_, Shared>,
 ) -> Result<String, String> {
@@ -861,12 +1006,21 @@ pub fn screenshot_long_start(
         }
         *slot = Some(crate::screenshot::LongCapture::new(stop.clone(), rows.clone()));
     }
-    // 覆盖层留着画边框和提示，但鼠标事件全部透传给底下的窗口，用户才能拖动滚动条；
+    // 只保留发起长图的这一个覆盖层（画边框和提示），其余屏的先关掉；
+    // 鼠标事件全部透传给底下的窗口，用户才能拖动滚动条；
     // 同时把自己从屏幕捕获里排除，否则边框和提示会进结果图。
-    if let Some(win) = app.get_webview_window(windows::SCREENSHOT_LABEL) {
-        let _ = win.set_ignore_cursor_events(true);
-        windows::exclude_from_capture(&win);
+    {
+        let prefix = format!("{}-", windows::SCREENSHOT_LABEL);
+        for (label, w) in app.webview_windows() {
+            if (label == windows::SCREENSHOT_LABEL || label.starts_with(&prefix))
+                && w.label() != window.label()
+            {
+                let _ = w.close();
+            }
+        }
     }
+    let _ = window.set_ignore_cursor_events(true);
+    windows::exclude_from_capture(&window);
     // 整屏图到这里就用完了，先释放（4K 下几十 MB）
     *data.shot.lock() = None;
 
@@ -877,9 +1031,7 @@ pub fn screenshot_long_start(
         .spawn(move || run_long_capture(app2, shared, px, py, w, h, stop, rows))
     {
         *data.long_capture.lock() = None;
-        if let Some(win) = app.get_webview_window(windows::SCREENSHOT_LABEL) {
-            let _ = win.set_ignore_cursor_events(false);
-        }
+        let _ = window.set_ignore_cursor_events(false);
         return Err(format!("无法启动长截图线程: {e}"));
     }
     Ok("长截图已开始：滚动目标窗口，停止滚动 2.5 秒后自动完成".into())
@@ -998,7 +1150,7 @@ fn run_long_capture(
             *slot = None;
         }
     }
-    windows::close_window(&app, windows::SCREENSHOT_LABEL);
+    windows::close_screenshot_overlays(&app);
 
     let cancelled = stop.load(Ordering::SeqCst);
     if cancelled || extra_rows == 0 {

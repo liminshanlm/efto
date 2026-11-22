@@ -701,7 +701,12 @@ fn undo_last(work: Rect, dry_run: bool) -> Result<Report, String> {
 }
 
 #[cfg(target_os = "macos")]
-const AX_PERMISSION_MSG: &str = "缺少辅助功能（Accessibility）权限：无法移动或缩放窗口。请在 系统设置 → 隐私与安全性 → 辅助功能 中勾选 efto";
+fn ax_permission_msg() -> String {
+    format!(
+        "缺少辅助功能（Accessibility）权限：无法移动或缩放窗口。请在 系统设置 → 隐私与安全性 → 辅助功能 中勾选 efto{}",
+        crate::permissions::REGRANT_HINT
+    )
+}
 
 /// 动窗口前的权限闸门：缺辅助功能权限直接报错，绝不"看起来成功"。
 #[cfg(target_os = "macos")]
@@ -709,7 +714,7 @@ fn ensure_ax() -> Result<(), String> {
     if crate::permissions::accessibility_trusted() {
         Ok(())
     } else {
-        Err(AX_PERMISSION_MSG.into())
+        Err(ax_permission_msg())
     }
 }
 

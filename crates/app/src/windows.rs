@@ -151,6 +151,13 @@ static PREVIEW_ACTIVE: AtomicBool = AtomicBool::new(false);
 /// Shift 是否还按着。建窗/显示可能让主窗口短暂失焦，只在这段窗口期豁免 `hide_on_blur`。
 static PREVIEW_HELD: AtomicBool = AtomicBool::new(false);
 /// 两个预览窗口各自只允许一个建窗线程在跑，避免同 label 并发 build 报错。
+/// 截图会话进行中。窗口是异步建的，`webview_windows()` 里可能还没登记，
+/// 所以会话状态要单独记，不能靠"有没有覆盖层窗口"推断。
+static SHOT_SESSION: AtomicBool = AtomicBool::new(false);
+/// 会话开始时刻：覆盖层窗口若异常消失（webview 崩），靠它把"会话中"判据放掉，
+/// 否则守卫会永久挡住主窗口。
+static SHOT_STARTED: once_cell::sync::Lazy<std::sync::Mutex<std::time::Instant>> =
+    once_cell::sync::Lazy::new(|| std::sync::Mutex::new(std::time::Instant::now()));
 static PREVIEW_CREATING: AtomicBool = AtomicBool::new(false);
 static PREVIEW_WEB_CREATING: AtomicBool = AtomicBool::new(false);
 
@@ -164,6 +171,7 @@ pub fn ui_label(plugin_id: &str) -> String {
 }
 
 /// 主窗口"藏"到屏幕外的坐标（虚拟屏幕外，任何显示器都看不到）。
+#[cfg(not(target_os = "macos"))]
 fn park_position() -> tauri::PhysicalPosition<i32> {
     tauri::PhysicalPosition::new(-32_000, -32_000)
 }
@@ -177,6 +185,7 @@ static PARKED_AT: once_cell::sync::Lazy<std::sync::Mutex<Option<tauri::PhysicalP
 /// Windows 上「透明 + 无边框 + 置顶」的 WebView2 窗口调用 `hide()` 后，DWM 偶尔会把
 /// 最后一帧留在屏幕上：肉眼能看到一块半透明的搜索框残影，但 UI 自动化查不到窗口
 /// （`WS_VISIBLE` 已经是 false）。先挪走再隐藏，残留帧就落在屏幕外，用户看不到。
+#[cfg(not(target_os = "macos"))]
 fn park_before_hide(w: &tauri::WebviewWindow) {
     if let Ok(pos) = w.outer_position() {
         // 失焦和 Esc 可能连续触发 hide：已经停在屏幕外时不要用停车位坐标覆盖原位置
@@ -196,16 +205,22 @@ fn restore_after_park(w: &tauri::WebviewWindow) {
 }
 
 pub fn show_main(app: &AppHandle) {
+    // 截图会话期间不弹搜索框：单实例转发、插件输出等任何来源都不该
+    // 在选区覆盖层打开时把主窗口拉起来（实测会打断截图，还触发窗口约束重算）
+    if screenshot_session_active(app) {
+        tracing::info!("截图会话进行中，忽略主窗口显示请求");
+        return;
+    }
     // run_on_main_thread 借用 self，闭包又要拥有句柄：必须用另一个克隆体
     let inner = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(w) = inner.get_webview_window(MAIN_LABEL) {
+            #[cfg(target_os = "macos")]
+            restore_alpha(&w);
             restore_after_park(&w);
             let _ = w.show();
             let _ = w.set_focus();
             let _ = w.emit_to(EventTarget::window(MAIN_LABEL), "main:show", ());
-            // 顺手把预览窗口建好：Shift 按下时不用再等 WebView2 初始化
-            warm_up_preview(&inner);
         } else {
             tracing::warn!("主窗口不存在，无法显示");
         }
@@ -215,6 +230,9 @@ pub fn show_main(app: &AppHandle) {
 /// 显示主窗口，但不发 `main:show`（用于插件内联输出：
 /// 不能让主窗口把搜索列表重置掉，输出行会紧接着推给前端）。
 pub fn show_main_quiet(app: &AppHandle) {
+    if screenshot_session_active(app) {
+        return;
+    }
     let inner = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(w) = inner.get_webview_window(MAIN_LABEL) {
@@ -432,22 +450,108 @@ pub fn close_window(app: &AppHandle, label: &str) {
     });
 }
 
-/// 打开截图选区覆盖层：无边框、置顶、铺满整个虚拟桌面（所有显示器）。
+/// 打开截图选区覆盖层。
+///
+/// Windows：单窗口铺满虚拟桌面，物理像素直通。
+/// macOS：**每屏一个窗口**——WKWebView 不跨混合缩放屏渲染（实测 2x+1x 的跨屏
+/// 窗口只在一块屏上出画面，另一屏像素级无内容），单屏窗口避开该坑；窗口与图的
+/// 映射由 `screenshot_begin` 回传的偏移/跨度切片（前端按窗口对齐图坐标）。
 ///
 /// 与插件 UI 同样的约束：**必须不在主线程 `build()`**（见 [`open_plugin_ui`]）。
-pub fn open_screenshot_overlay(app: &AppHandle, shot: &crate::screenshot::Shot) -> Result<(), String> {
-    if let Some(w) = app.get_webview_window(SCREENSHOT_LABEL) {
-        let _ = w.close();
+pub fn open_screenshot_overlay(
+    app: &AppHandle,
+    shot: &crate::screenshot::Shot,
+) -> Result<(), String> {
+    close_screenshot_overlays(app);
+    *SHOT_STARTED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = std::time::Instant::now();
+    SHOT_SESSION.store(true, Ordering::SeqCst);
+    #[cfg(target_os = "macos")]
+    {
+        // 每屏一个覆盖层，窗口几何 = 显示器点矩形（Logical == 点）
+        let mut made = 0;
+        for (idx, (_id, r)) in crate::tile::ax::displays().into_iter().enumerate() {
+            spawn_screenshot_overlay(
+                app,
+                format!("{SCREENSHOT_LABEL}-{idx}"),
+                tauri::LogicalPosition::new(r.x as f64, r.y as f64).into(),
+                tauri::LogicalSize::new(r.width as f64, r.height as f64).into(),
+                Some(r),
+            );
+            made += 1;
+        }
+        if made == 0 {
+            Err("没有可用的显示器".into())
+        } else {
+            Ok(())
+        }
     }
-    let origin = (shot.origin_x, shot.origin_y);
-    let size = (shot.width, shot.height);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let origin = (shot.origin_x, shot.origin_y);
+        let size = (shot.width, shot.height);
+        spawn_screenshot_overlay(
+            app,
+            SCREENSHOT_LABEL.to_string(),
+            tauri::PhysicalPosition::new(origin.0, origin.1).into(),
+            tauri::PhysicalSize::new(size.0, size.1).into(),
+            None,
+        );
+        Ok(())
+    }
+}
+
+/// 截图会话是否进行中：覆盖层窗口还在，或会话刚开（窗口还在建）5 秒内。
+///
+/// 只认一个布尔值不安全——覆盖层要是异常消失，守卫会把主窗口永久挡掉。
+pub fn screenshot_session_active(app: &AppHandle) -> bool {
+    if !SHOT_SESSION.load(Ordering::SeqCst) {
+        return false;
+    }
+    if screenshot_overlay_open(app) {
+        return true;
+    }
+    let since = SHOT_STARTED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .elapsed();
+    since < std::time::Duration::from_secs(5)
+}
+
+/// 是否有截图覆盖层开着（用于 `show_main` 一类的守卫）。
+pub fn screenshot_overlay_open(app: &AppHandle) -> bool {
+    let prefix = format!("{SCREENSHOT_LABEL}-");
+    app.webview_windows()
+        .keys()
+        .any(|l| l == SCREENSHOT_LABEL || l.starts_with(&prefix))
+}
+
+/// 关闭全部截图覆盖层（mac 上是每屏一个窗口）。
+pub fn close_screenshot_overlays(app: &AppHandle) {
+    SHOT_SESSION.store(false, Ordering::SeqCst);
+    let prefix = format!("{SCREENSHOT_LABEL}-");
+    for (label, w) in app.webview_windows() {
+        if label == SCREENSHOT_LABEL || label.starts_with(&prefix) {
+            let _ = w.close();
+        }
+    }
+}
+
+fn spawn_screenshot_overlay(
+    app: &AppHandle,
+    label: String,
+    pos: tauri::Position,
+    size: tauri::Size,
+    display: Option<crate::tile::Rect>,
+) {
     let app = app.clone();
-    std::thread::Builder::new()
+    let spawned = std::thread::Builder::new()
         .name("screenshot-overlay".into())
         .spawn(move || {
             let builder = WebviewWindowBuilder::new(
                 &app,
-                SCREENSHOT_LABEL,
+                label,
                 WebviewUrl::App("screenshot.html".into()),
             )
             .title("efto 截图")
@@ -464,17 +568,34 @@ pub fn open_screenshot_overlay(app: &AppHandle, shot: &crate::screenshot::Shot) 
             .visible(false);
             match builder.build() {
                 Ok(w) => {
-                    // 用物理像素定位与定尺寸，避免高 DPI 下 inner_size 的逻辑像素换算误差
-                    let _ = w.set_position(tauri::PhysicalPosition::new(origin.0, origin.1));
-                    let _ = w.set_size(tauri::PhysicalSize::new(size.0, size.1));
+                    let _ = w.set_position(pos);
+                    let _ = w.set_size(size);
                     let _ = w.show();
                     let _ = w.set_focus();
+                    // always_on_top 的浮动级没压住同级置顶窗口（实测被普通窗口盖住）——
+                    // 抬到屏幕保护级（NSScreenSaverWindowLevel）
+                    #[cfg(target_os = "macos")]
+                    {
+                        let w2 = w.clone();
+                        let _ = app.run_on_main_thread(move || {
+                            if let Ok(ptr) = w2.ns_window() {
+                                crate::tile::ax::set_window_level(ptr, 1000);
+                                // tao 的 set_position/set_size 是 async setter，落位时机
+                                // 不保证在 show 之前；直接对 NSWindow 设一次几何，
+                                // 覆盖层一定贴住整块屏（否则内容会整体偏一段）。
+                                if let Some(r) = display {
+                                    crate::tile::ax::set_window_frame_quartz(ptr, r);
+                                }
+                            }
+                        });
+                    }
                 }
                 Err(e) => tracing::error!("截图窗口创建失败: {e}"),
             }
-        })
-        .map_err(|e| format!("无法启动截图窗口线程: {e}"))?;
-    Ok(())
+        });
+    if let Err(e) = spawned {
+        tracing::error!("无法启动截图窗口线程: {e}");
+    }
 }
 
 /// 把窗口从屏幕捕获里排除（Windows 10 2004+）。
@@ -502,18 +623,23 @@ pub fn exclude_from_capture(w: &tauri::WebviewWindow) {
 /// 长截图时覆盖层必须留在屏幕上给用户看边框和提示，但它自己不能被抓进结果图。
 #[cfg(target_os = "macos")]
 pub fn exclude_from_capture(w: &tauri::WebviewWindow) {
-    use objc2::msg_send;
-    match w.ns_window() {
-        Ok(ptr) => {
-            let obj = ptr as *mut objc2::runtime::AnyObject;
-            // SAFETY: ns_window 返回的是有效的 NSWindow*；setSharingType: 是它的公开
-            // setter，NSWindowSharingNone = 0，无副作用可回读（sharingType 可再查）。
-            unsafe {
-                let _: () = msg_send![obj, setSharingType: 0usize];
+    // setSharingType: 是 AppKit 调用，必须回主线程——后台线程调用会撞上
+    // WindowManagement 的主线程断言直接 SIGTRAP（实测崩溃报告）。
+    let inner = w.clone();
+    let _ = w.run_on_main_thread(move || {
+        use objc2::msg_send;
+        match inner.ns_window() {
+            Ok(ptr) => {
+                let obj = ptr as *mut objc2::runtime::AnyObject;
+                // SAFETY: 闭包在主线程执行，ns_window 在此刻取用、生命周期有效；
+                // setSharingType: 是 NSWindow 的公开 setter，NSWindowSharingNone = 0
+                unsafe {
+                    let _: () = msg_send![obj, setSharingType: 0usize];
+                }
             }
+            Err(e) => tracing::warn!("取 NSWindow 失败，无法排除捕获: {e}"),
         }
-        Err(e) => tracing::warn!("取 NSWindow 失败，无法排除捕获: {e}"),
-    }
+    });
 }
 
 #[cfg(not(any(windows, target_os = "macos")))]
@@ -567,14 +693,146 @@ pub fn open_pin(
     Ok(())
 }
 
+/// 主窗口的三个视角（AppKit 可见性 / Cocoa 坐标 / 窗口服务器在屏与否）。
+///
+/// 排查"收不起来"时要能分辨是 hide 没落地还是合成器滞后。
+#[cfg(target_os = "macos")]
+pub fn main_state(app: &AppHandle) -> String {
+    let Some(w) = app.get_webview_window(MAIN_LABEL) else {
+        return "main 不存在".into();
+    };
+    let Ok(ptr) = w.ns_window() else {
+        return "ns_window 取不到".into();
+    };
+    let obj = ptr as *mut objc2::runtime::AnyObject;
+    // SAFETY: 都是 NSWindow 的只读属性
+    unsafe {
+        let num: i64 = objc2::msg_send![obj, windowNumber];
+        let vis: bool = objc2::msg_send![obj, isVisible];
+        let frame: crate::tile::ax::NsRect = objc2::msg_send![obj, frame];
+        format!(
+            "tao={} nsVisible={vis} cocoa=({:.0},{:.0}) num={num} cg={:?}",
+            w.is_visible().unwrap_or(false),
+            frame.x,
+            frame.y,
+            crate::tile::ax::window_bounds()
+                .get(&(num as u32))
+                .copied()
+        )
+    }
+}
+
+/// 主窗口的 CGWindowID（窗口服务器口径）；取不到返回 None。
+#[cfg(target_os = "macos")]
+pub fn main_window_number(app: &AppHandle) -> Option<u32> {
+    let w = app.get_webview_window(MAIN_LABEL)?;
+    let ptr = w.ns_window().ok()?;
+    let obj = ptr as *mut objc2::runtime::AnyObject;
+    // SAFETY: windowNumber 是 NSWindow 的只读属性
+    let num: i64 = unsafe { objc2::msg_send![obj, windowNumber] };
+    (num > 0).then_some(num as u32)
+}
+
+/// 主窗口在 AppKit 看来可见吗（native hide 之后立刻为假）。
+#[cfg(target_os = "macos")]
+pub fn main_visible(app: &AppHandle) -> bool {
+    app.get_webview_window(MAIN_LABEL)
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn main_visible(app: &AppHandle) -> bool {
+    app.get_webview_window(MAIN_LABEL)
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn main_state(app: &AppHandle) -> String {
+    format!(
+        "tao={:?}",
+        app.get_webview_window(MAIN_LABEL)
+            .and_then(|w| w.is_visible().ok())
+    )
+}
+
+/// 主窗口还在窗口服务器画面上吗。
+///
+/// `WebviewWindow::is_visible()` 只反映 AppKit 的窗口状态，比合成器早——
+/// 截屏读的是窗口服务器的画面，所以"有没有被拍进去"要看在屏窗口列表。
+#[cfg(target_os = "macos")]
+pub fn main_on_screen(app: &AppHandle) -> bool {
+    let Some(w) = app.get_webview_window(MAIN_LABEL) else {
+        return false;
+    };
+    let Ok(ptr) = w.ns_window() else {
+        return false;
+    };
+    let obj = ptr as *mut objc2::runtime::AnyObject;
+    // SAFETY: windowNumber 是 NSWindow 的只读属性
+    let num: i64 = unsafe { objc2::msg_send![obj, windowNumber] };
+    num > 0 && crate::tile::ax::window_bounds().contains_key(&(num as u32))
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn main_on_screen(app: &AppHandle) -> bool {
+    app.get_webview_window(MAIN_LABEL)
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false)
+}
+
+/// macOS：把主窗口的 alpha 恢复成 1（`hide_main_native` 会把它降到 0）。
+#[cfg(target_os = "macos")]
+fn restore_alpha(w: &tauri::WebviewWindow) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    if let Ok(ptr) = w.ns_window() {
+        let obj = ptr as *mut AnyObject;
+        // SAFETY: 调用方在主线程；setAlphaValue: 是 NSWindow 的公开 setter
+        unsafe {
+            let _: () = msg_send![obj, setAlphaValue: 1.0f64];
+        }
+    }
+}
+
+/// macOS：直接对 NSWindow 收主窗口（挪出屏 + `orderOut:`）。
+///
+/// 不走 tao 的 `set_position`/`hide()`：实测出现过"AppKit 说不可见、窗口服务器
+/// 仍在原位置画着"的残留（`cocoa=(488,276)` 没被挪走、`cg` 里还在），用户看到
+/// 的就是截图底图里带着启动器。这里在主线程上同步调用，两个动作都在返回前落地。
+#[cfg(target_os = "macos")]
+fn hide_main_native(w: &tauri::WebviewWindow) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+
+    let Ok(ptr) = w.ns_window() else {
+        return;
+    };
+    let obj = ptr as *mut AnyObject;
+    // SAFETY: 调用方在主线程；都是 NSWindow 的公开 API
+    unsafe {
+        // 不再把窗口挪到 (-32000,-32000)：那种极端坐标在部分环境（远程控制、
+        // 窗口管理守护进程在场时）会让窗口事务卡住——AppKit 状态改了、窗口服务器
+        // 却一直按旧位置画着，截图底图里就带着启动器。只做"透明 + orderOut"。
+        let _: () = msg_send![obj, setAlphaValue: 0.0f64];
+        let _: () = msg_send![obj, orderOut: std::ptr::null_mut::<AnyObject>()];
+    }
+}
+
 pub fn hide_main(app: &AppHandle) {
     PREVIEW_ACTIVE.store(false, Ordering::SeqCst);
     PREVIEW_HELD.store(false, Ordering::SeqCst);
     let inner = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(w) = inner.get_webview_window(MAIN_LABEL) {
-            park_before_hide(&w);
-            let _ = w.hide();
+            #[cfg(target_os = "macos")]
+            hide_main_native(&w);
+            #[cfg(not(target_os = "macos"))]
+            {
+                park_before_hide(&w);
+                let _ = w.hide();
+            }
         }
         for label in [PREVIEW_LABEL, PREVIEW_WEB_LABEL] {
             if let Some(w) = inner.get_webview_window(label) {

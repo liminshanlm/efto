@@ -338,10 +338,10 @@ mod imp {
     /// 发送 Cmd+<vk>（vk 按 win32 VK 码，仅 ASCII 字母）。
     pub fn send_chord(vk: u16) -> Result<(), String> {
         if !accessibility_trusted() {
-            return Err(
-                "缺少辅助功能（Accessibility）权限：无法模拟键盘按键。请在 系统设置 → 隐私与安全性 → 辅助功能 中勾选 efto"
-                    .into(),
-            );
+            return Err(format!(
+                "缺少辅助功能（Accessibility）权限：无法模拟键盘按键。请在 系统设置 → 隐私与安全性 → 辅助功能 中勾选 efto{}",
+                crate::permissions::REGRANT_HINT
+            ));
         }
         post_cmd_key(mac_keycode_for_vk(vk)?)
     }

@@ -29,6 +29,98 @@ pub(crate) fn cocoa_to_quartz(
     }
 }
 
+/// NSRect（4×f64），`msg_send` 收发结构体用。
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct NsRect {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) width: f64,
+    pub(crate) height: f64,
+}
+// SAFETY: NsRect 是 4×f64 的 repr(C) 结构，与 NSRect（CGPoint+CGSize）布局一致。
+unsafe impl objc2::encode::Encode for NsRect {
+    const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct(
+        "NSRect",
+        &[
+            <f64 as objc2::encode::Encode>::ENCODING,
+            <f64 as objc2::encode::Encode>::ENCODING,
+            <f64 as objc2::encode::Encode>::ENCODING,
+            <f64 as objc2::encode::Encode>::ENCODING,
+        ],
+    );
+}
+// SAFETY: 同上。
+unsafe impl objc2::encode::RefEncode for NsRect {
+    const ENCODING_REF: objc2::encode::Encoding =
+        objc2::encode::Encoding::Pointer(&<Self as objc2::encode::Encode>::ENCODING);
+}
+
+/// 主屏的 Cocoa 高度（点）——Quartz（左上原点）→ Cocoa（左下原点）换算用。
+pub(crate) fn primary_height() -> f64 {
+    use objc2::msg_send;
+    use objc2::rc::autoreleasepool;
+    use objc2::runtime::{AnyClass, AnyObject};
+
+    autoreleasepool(|_pool| {
+        let Some(cls) = AnyClass::get(c"NSScreen") else {
+            return 0.0;
+        };
+        // SAFETY: screens 是无参类方法，返回 NSArray（+0）；指针只在池作用域内使用。
+        let screens: *const AnyObject = unsafe { msg_send![cls, screens] };
+        if screens.is_null() {
+            return 0.0;
+        }
+        // SAFETY: screens 是有效 NSArray，主屏固定在 [0]。
+        let count: usize = unsafe { msg_send![screens, count] };
+        if count == 0 {
+            return 0.0;
+        }
+        let primary: *const AnyObject = unsafe { msg_send![screens, objectAtIndex: 0usize] };
+        // SAFETY: 主屏对象有效；frame 返回 NSRect。
+        let frame: NsRect = unsafe { msg_send![primary, frame] };
+        frame.height
+    })
+}
+
+/// 直接把窗口层级设成 `level`（1000 = `NSScreenSaverWindowLevel`）。
+///
+/// tao 的 `always_on_top` 只把窗口放进浮动级，压不住同级置顶窗口；层级要在
+/// 主线程上对 NSWindow 直设。
+pub(crate) fn set_window_level(ns_window: *mut c_void, level: isize) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+
+    let obj = ns_window as *mut AnyObject;
+    // SAFETY: 调用方保证 ns_window 是有效 NSWindow*，且本函数在主线程执行。
+    unsafe {
+        let _: () = msg_send![obj, setLevel: level];
+    }
+}
+
+/// 把窗口 frame 直接摆到 Quartz（左上原点）点矩形上。
+///
+/// tao 的 `set_position` / `set_size` 是 async setter，且坐标换算只锚定主屏——
+/// 覆盖层这种"必须精确贴住整块屏"的窗口用它兜底，避免显示后再被挪动。
+pub(crate) fn set_window_frame_quartz(ns_window: *mut c_void, r: Rect) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+
+    let primary = primary_height();
+    let frame = NsRect {
+        x: r.x as f64,
+        y: primary - (r.y as f64 + r.height as f64),
+        width: r.width as f64,
+        height: r.height as f64,
+    };
+    let obj = ns_window as *mut AnyObject;
+    // SAFETY: 调用方保证 ns_window 是有效 NSWindow*，且本函数在主线程执行；
+    // setFrame:display: 是 NSWindow 的公开 setter。
+    unsafe {
+        let _: () = msg_send![obj, setFrame: frame, display: true];
+    }
+}
+
 /// 与 `MonitorFromWindow(MONITOR_DEFAULTTONULL)` 对齐：返回与 `bounds` 相交面积
 /// 最大的显示器下标；完全不相交时返回 `None`。
 pub(crate) fn best_display(bounds: Rect, displays: &[(u32, Rect)]) -> Option<usize> {
@@ -443,36 +535,9 @@ pub(crate) fn target_display(main_hwnd: Option<isize>) -> Result<u32, String> {
 /// 工作区取 `NSScreen.visibleFrame`；屏幕按边界与 `CGDisplayBounds` 对齐
 /// （同一块屏的 Cocoa / Quartz 两种坐标表示）。
 pub(crate) fn work_area(display_id: u32) -> Result<Rect, String> {
-    use objc2::encode::{Encode, Encoding, RefEncode};
+    use objc2::msg_send;
     use objc2::rc::autoreleasepool;
     use objc2::runtime::{AnyClass, AnyObject};
-    use objc2::msg_send;
-
-    /// NSRect（4×f64），msg_send 结构体返回用。
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct NsRect {
-        x: f64,
-        y: f64,
-        width: f64,
-        height: f64,
-    }
-    // SAFETY: NsRect 是 4×f64 的 repr(C) 结构，与 NSRect（CGPoint+CGSize）布局一致。
-    unsafe impl Encode for NsRect {
-        const ENCODING: Encoding = Encoding::Struct(
-            "NSRect",
-            &[
-                f64::ENCODING,
-                f64::ENCODING,
-                f64::ENCODING,
-                f64::ENCODING,
-            ],
-        );
-    }
-    // SAFETY: 同上。
-    unsafe impl RefEncode for NsRect {
-        const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
-    }
 
     let target = displays()
         .into_iter()

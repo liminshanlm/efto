@@ -48,6 +48,17 @@ else
   TAURI=(npx -y "@tauri-apps/cli@2")
 fi
 
+# 有本地开发签名身份（scripts/sign-dev.sh）就用它签：签名身份稳定后，
+# TCC 权限（屏幕录制/辅助功能）不会随重编译失效。没有则产出 adhoc（见脚本头注释）。
+SIGN_ARGS=()
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "efto-dev"; then
+  echo "==> 使用开发签名身份: efto-dev"
+  SIGN_ARGS=(--config '{"bundle":{"macOS":{"signingIdentity":"efto-dev"}}}')
+else
+  echo "!! 未找到 efto-dev 签名身份：产出 adhoc 签名（重编译会丢 TCC 授权）"
+  echo "!! 运行 scripts/sign-dev.sh 创建本地开发签名身份"
+fi
+
 cd "$root/crates/app"
-echo "==> ${TAURI[*]} build $*"
-exec "${TAURI[@]}" build "$@"
+echo "==> ${TAURI[*]} build ${SIGN_ARGS[*]} $*"
+exec "${TAURI[@]}" build "${SIGN_ARGS[@]}" "$@"

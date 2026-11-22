@@ -1468,12 +1468,10 @@ log:error 事件、线程回收），**全部通过、零报错**：
   crop 正确、alpha 全 255；`mac_capture_errors_without_permission` 反向路径 skip。
 - 单测 app 144 / core 241 / jsrt 48 全绿；GUI 冒烟 `Ctrl+Alt+1 -> screenshot`，
   mac 工具 7 项与 Windows 完全对齐。
-- **没验证**（人工清单新增）：截图交互全链路（框选/标注/复制/保存/钉图）与
-  长截图滚动拼接；覆盖层窗口跨屏显示的实际形态（捕获映射已逐屏精确，若覆盖层
-  只盖一屏则是窗口摆放问题，再报再修）；CGDisplayCreateImage/CGWindowListCreateImage
-  均已 deprecated（macOS 14 仍工作），后续可换 ScreenCaptureKit。
-- **语言修复**：macOS 语言探测改走 CFLocale（GUI 不继承 LANG，原先回退英文）——
-  `env -i` 下插件 locale 实测 `zh-CN`，GUI 界面显示中文留人工确认。
+- **人工验证通过（2026-11-21，用户实测）**：GUI 中文界面正常（CFLocale 探测生效）；
+  截图两块屏都能截、方向正确（逐屏合成生效），覆盖层跨屏形态无问题。
+- **没验证**：截图交互全链路（标注/复制/保存/钉图）与长截图滚动拼接；
+  CGDisplayCreateImage 已 deprecated（macOS 14 仍工作），后续可换 ScreenCaptureKit。
 
 
 ## macOS release 构建（2026-11-21）
@@ -1485,3 +1483,119 @@ log:error 事件、线程回收），**全部通过、零报错**：
   `codesign -dv` = adhoc（linker-signed），外部分发会被 Gatekeeper 拦——
   签名/公证待 Apple Developer 证书（plan 附录）。Intel 产物未构建。
 - 顺手收掉 CGDisplayBounds 重复声明（显示器层归 crate::tile::ax 共用）。
+
+
+## 图标损坏与权限反复提示（2026-11-21，用户实测发现）
+
+- **图标**：系统权限列表里应用图标是彩条——tauri ico→icns 转换把小尺寸图块打坏
+  （iconutil 逐档解剖实证：48px 坏、128px 好）。改为 gen-icons.js 程序化生成
+  iconset 全 10 档 + iconutil 打 `icons/efto.icns`，bundle.icon 首位直用；
+  重打包后逐档验干净。见 bug-fix note `2026-11-21-app-icon-icns-corrupt.md`。
+- **权限反复提示**：屏幕录制已勾选仍报缺权限——adhoc 签名每次重编译都换应用身份，
+  TCC 授权对不上新产物。缓解：系统弹窗每进程最多一次 + 三处权限文案统一补
+  "adhoc 重编译需重新勾选"指引（REGRANT_HINT 单点维护）；根治需 Developer ID 签名。
+  见 bug-fix note `2026-11-21-permission-adhoc-churn.md`。
+- 验证：测试 145/241/48 绿；新打包产物（.app 54.36 MiB / .dmg 20.07 MiB）已重出。
+
+
+## 双屏截图覆盖层修复（2026-11-21，用户报"只能截一个屏幕"）
+
+- 根因：跨屏单一覆盖层窗口的 WKWebView 只在一块屏上渲染（frame/level 读数正常、
+  另一屏像素级无痕迹，亮度对比 1.004 实证）；伴生 tao 菜单栏下推 25 点的选区偏移。
+- 修复：mac **每屏一个覆盖层窗口**（screenshot-0..n），`screenshot_begin` 回传
+  窗口在图内的偏移/跨度（Rust 侧做混合缩放换算），前端切片自愈；覆盖层抬到
+  NSScreenSaverWindowLevel。
+- 实证：诊断钩子显示每屏窗口几何精确；**两屏截图均出现压暗+提示条**
+  （d1 平均亮度 109→83）。测试 145/241/48 绿；verify.sh ALL CHECKS PASSED；
+  新包已重打（.app 54.40 MiB / .dmg 20.08 MiB，efto-dev 签名）。
+- **待人工**：实际拖选跨两屏各框一次，确认裁剪内容正确；长截图跨屏场景。
+
+
+## 截图会话被弹出搜索框/内容下移打断（2026-11-22，用户实测发现）
+
+- 根因：单实例转发 `show_main` 在截图会话中把搜索框拉起来，并触发窗口约束重算使
+  覆盖层下移 25pt（内容跟着下移）——两个症状同源；窗口落位异步也使 begin 时读偏移
+  可能读早。排查中发现用户机器长期运行 /Applications/efto.app，诊断实例的二次启动
+  正好反复触发该路径。
+- 修复：`show_main`/`show_main_quiet` 在截图覆盖层打开期间忽略显示请求；新增
+  `screenshot_offset` 轻量命令，前端落位后轮询 + 提交前强制刷新偏移（映射自愈）。
+- 验证：测试 145/241/48 绿；verify.sh ALL CHECKS PASSED；新包已重打
+  （.app 54.38 MiB / .dmg 20.08 MiB）。
+- **待人工**：截图过程中故意再开一个 efto 实例（或点 Dock 图标），搜索框不应出现、
+  选区内容不偏移；两屏各框选一次确认裁剪正确。
+
+## 双屏截图"一屏内容整体下移"（2026-11-22，用户复测发现）
+
+- 真因（像素级实证）：`capture_region` 逐屏合成时把**左下原点**的 CGBitmapContext
+  当成左上原点用——每块屏的图按左上 y 画进画布，实际落到"距画布底边"的位置。
+  虚拟桌面高 1080 点、主屏只有 900 点，于是主屏那块整幅下沉 180 点，顶部留一条
+  180 点空槽（alpha 被置 255 后是纯黑）。用户截图里"黑条 + 菜单栏跑到中间"就是它；
+  1080 点的副屏刚好等于画布高，所以**只有一屏**中招。
+- 实证方法：把覆盖层在屏实拍（`screencapture -x -D n`）与撤掉覆盖层后的实时桌面
+  做边缘图互相关，找最佳纵向位移。修复前 display1 = **+180 点**、display2 = 0；
+  修复后两屏都是 **0 点**（同一台机器、同一份桌面内容）。
+- 修复：合成矩形 y 换成 `画布高 - 左上 y - 该屏高`（`screenshot.rs`）。
+- 伴生加固：
+  - 覆盖层几何改为**确定性下发**：窗口建好后直接对 NSWindow `setLevel:` +
+    `setFrame:display:`（`ax::set_window_level` / `set_window_frame_quartz`），
+    `screenshot_begin`/`screenshot_offset` 在 mac 上按标签里的显示器下标查
+    `displays()` 换算，不再读 tao 的 `outer_position`/`scale_factor`（实测 1x 屏上
+    scale 报成 2.0、位置是 async setter 的快照）。
+  - 截图前等主窗口**真的不可见**（最多 400ms）再捕获，不再固定 sleep 140ms——
+    搜索框一旦被拍进底图就再也去不掉。
+- 验证：测试 145/241/48 绿；`verify.sh` ALL CHECKS PASSED。
+- **待人工**：两屏各框选一次确认裁剪内容与所见一致；长截图跨屏场景。
+
+## 截图底图里带着启动器（2026-11-22，用户复现三轮后抓到实锤）
+
+- 现象：截图会话期间"搜索框冒出来"，点复制后消失；`is_visible()` 全程 false，
+  窗口服务器的在屏列表里也从来没有主窗口——API 与肉眼观察矛盾。
+- 真因：**启动器被拍进了冻结底图**。`hide_main` 之后合成器还要再画一两帧，
+  而 `capture_virtual_screen` 读的就是窗口服务器当前画面；判据用了 AppKit 的
+  `is_visible()`（`orderOut` 之后立刻为假），于是"窗口已经隐藏"并不等于
+  "画面上没有它"。旧实现只 sleep 80~140ms，用户机器上不够。
+- 实证：哨兵脚本 `tail -F` 监听日志里的 `session start`，随后每 0.6s
+  `screencapture -x -D 1/2` 连拍。会话进行中的帧里，启动器完整出现在压暗的
+  底图中（中心最亮 139 ≈ 255×0.55 的压暗值），而同一时刻日志记录
+  `main appkit_visible=false cg_onscreen=false`——两者一对，就是"拍进去的"。
+  点复制后覆盖层关闭、整块屏重绘，于是看起来"搜索框消失了"。
+- 深挖后确认的两层原因：
+  1. **`hide_main` 的收窗口不落地**：`park_before_hide` 走 tao 的 `set_position`，
+     实测出现过"AppKit 报 `isVisible=false`、窗口却仍在原坐标
+     `cocoa=(488,276)` 被服务器画着"（对应 `cg=Some(Rect{x:488,y:303,...})`）。
+  2. **主线程被预览窗口预热占住**：`show_main` 里顺手 `warm_up_preview`，
+     WKWebView 初始化在 macOS 上要 1~3 秒；用户唤起启动器后马上点截图，
+     `hide_main` 的投递排在预热后面 → 抓图时启动器还在画面上。
+- 修复：
+  1. mac 上 `hide_main` 改为**直接对 NSWindow 操作**（`setFrameOrigin:`
+     + `orderOut:`，主线程同步完成），不经 tao 的异步投递；
+  2. mac 上**完全不预热预览窗口**（`warm_up_preview` 仅 Windows 保留）：
+     移到"启动后 2 秒"仍会和"刚启动就点截图"撞上（实测 3000ms 超时），
+     而 WKWebView 初始化要占主线程 1~3 秒；Shift 首次预览慢一点可以接受；
+  3. 截图前仍等窗口服务器（`main_on_screen()` 轮询 `CGWindowList` 窗口号，
+     最长 3 秒），超时时先记一行主窗口三视角（`nsVisible` / `cocoa` / `cg`）、
+     再重收一次（主线程可能刚忙完），仍不行才**明确报错**，不拍带启动器的图；
+  4. 顺带修掉 `exclude_from_capture` 在后台线程调 `setSharingType:` 导致的
+     SIGTRAP（崩溃报告 `efto-2026-11-22-122048.ips`，长截图路径也会踩）。
+- 验证：本地复刻"唤起启动器 300ms 后点截图"连续 3 次，`hide→server 等 25ms`、
+  零超时，冻结底图里不再有启动器（中心亮度 14/p99.9=131，只有压暗的终端内容）。
+  测试 145/241/48 绿；`verify.sh` ALL CHECKS PASSED。
+- **待人工**：再走一遍 截图→拖选→复制，底图里不应再出现启动器。
+
+## 启动器被画进截图底图：窗口服务器表面状态卡住（2026-11-22，追加）
+
+- 现象：`hide_main` 之后 `AppKit` 认为窗口已 `orderOut`（`tao=false nsVisible=false
+  cocoa=(-32000,-32000)`），但 `CGWindowList` 仍把同一个窗口号列在旧位置
+  `(488,303) 520x321`，且**普通显示器捕获真的会把它拍进底图**（启动器区域亮度
+  225，正常应 ~13-23）。alpha 降到 0 也无效——该窗口的服务器侧更新整体没生效。
+- 处置：
+  1. mac 的 `hide_main` 不再把窗口挪到 `(-32000,-32000)`（极端坐标是这类窗口事务
+     卡死的常见诱因），只做 `setAlphaValue:0` + `orderOut:`；`show_main` 恢复 alpha。
+  2. 兜底捕获：检测到"AppKit 已收起但服务器仍列着"时，改用
+     `CGWindowListCreateImage(.optionOnScreenBelowWindow)` 从**主窗口之下**逐屏合成，
+     拍不到主窗口。实测同一时刻：普通捕获启动器区域 225 → 兜底捕获 23。
+  3. 兜底图里本来会缺系统菜单栏（它在本窗口层级之上）——用一张普通捕获把每块屏
+     顶部"菜单栏那一条"拼回去（`work_area` 的上边界就是菜单栏下沿）。实测同一时刻：
+     启动器区域 225→24，菜单栏区域 208（完整）。仅在异常环境触发。
+- 验证：测试 145/241/48 绿；`verify.sh` ALL CHECKS PASSED。
+- **待人工**：异常环境里底图不应再有启动器。

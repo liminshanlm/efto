@@ -25,6 +25,9 @@
   // 整屏图是物理像素；页面是 CSS 像素。scale = 物理 / CSS。
   var shotW = 0;
   var shotH = 0;
+  // 覆盖层窗口在截图坐标系里的偏移与跨度（物理像素）——macOS 窗口会被菜单栏
+  // 下推、跨屏摆放也未必对齐图原点，选区换算一律以这四个值为准
+  var offX = 0, offY = 0, viewW = 0, viewH = 0;
   var scale = 1;
   var dpr = window.devicePixelRatio || 1;
 
@@ -68,11 +71,24 @@
     errorEl.style.display = 'block';
   }
 
+  function layoutBg() {
+    if (!scale) return;
+    // 整图按 scale 缩放后，窗口 (0,0) 对应图内 (offX, offY)：背景整体平移
+    bg.style.position = 'absolute';
+    bg.style.inset = 'auto';
+    bg.style.left = (-offX / scale) + 'px';
+    bg.style.top = (-offY / scale) + 'px';
+    bg.style.width = (shotW / scale) + 'px';
+    bg.style.height = (shotH / scale) + 'px';
+    bg.style.objectFit = 'fill';
+  }
+
   function resize() {
     dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(window.innerWidth * dpr);
     canvas.height = Math.round(window.innerHeight * dpr);
-    scale = shotW && window.innerWidth ? shotW / window.innerWidth : 1;
+    scale = viewW && window.innerWidth ? viewW / window.innerWidth : 1;
+    layoutBg();
     draw();
   }
 
@@ -175,7 +191,7 @@
       mosaicCanvas.height = th;
       var mg = mosaicCanvas.getContext('2d');
       mg.clearRect(0, 0, tw, th);
-      mg.drawImage(bg, s.x * scale, s.y * scale, sw, sh, 0, 0, tw, th);
+      mg.drawImage(bg, s.x * scale + offX, s.y * scale + offY, sw, sh, 0, 0, tw, th);
       g.imageSmoothingEnabled = false;
       g.drawImage(mosaicCanvas, 0, 0, tw, th, s.x, s.y, s.w, s.h);
       g.imageSmoothingEnabled = true;
@@ -431,7 +447,7 @@
     c.width = W;
     c.height = H;
     var g = c.getContext('2d');
-    g.drawImage(bg, sel.x * scale, sel.y * scale, sel.w * scale, sel.h * scale, 0, 0, W, H);
+    g.drawImage(bg, sel.x * scale + offX, sel.y * scale + offY, sel.w * scale, sel.h * scale, 0, 0, W, H);
     g.scale(scale, scale);
     g.translate(-sel.x, -sel.y);
     drawAnnotations(g);
@@ -444,8 +460,18 @@
       return;
     }
     if (textEditing) commitText();
-    var x = Math.round(sel.x * scale);
-    var y = Math.round(sel.y * scale);
+    // 提交前刷新偏移：窗口可能在落位/约束重算后挪过，坐标必须按最终位置换算
+    invoke('screenshot_offset')
+      .then(applyOffset)
+      .catch(function () {})
+      .then(function () {
+        submitNow(action);
+      });
+  }
+
+  function submitNow(action) {
+    var x = Math.round(sel.x * scale + offX);
+    var y = Math.round(sel.y * scale + offY);
     var w = Math.max(1, Math.round(sel.w * scale));
     var h = Math.max(1, Math.round(sel.h * scale));
     var payload = { action: action, x: x, y: y, w: w, h: h };
@@ -473,8 +499,17 @@
       showError('请先拖拽选择一块区域');
       return;
     }
-    var x = Math.round(sel.x * scale);
-    var y = Math.round(sel.y * scale);
+    invoke('screenshot_offset')
+      .then(applyOffset)
+      .catch(function () {})
+      .then(function () {
+        startLongNow();
+      });
+  }
+
+  function startLongNow() {
+    var x = Math.round(sel.x * scale + offX);
+    var y = Math.round(sel.y * scale + offY);
     var w = Math.max(1, Math.round(sel.w * scale));
     var h = Math.max(1, Math.round(sel.h * scale));
     invoke('screenshot_long_start', { x: x, y: y, w: w, h: h })
@@ -713,12 +748,35 @@
   buildPalette();
   refreshWidthDot();
 
+  function applyOffset(o) {
+    if (!o) return;
+    var nx = o.off_x | 0, ny = o.off_y | 0;
+    var nw = o.view_w || 0, nh = o.view_h || 0;
+    if (nx === offX && ny === offY && nw === viewW && nh === viewH) return;
+    offX = nx; offY = ny;
+    if (nw) viewW = nw;
+    if (nh) viewH = nh;
+    resize();
+  }
+
+  // 窗口落位是异步的（菜单栏约束重算还会再挪），落位后刷新映射
+  function pollOffset() {
+    invoke('screenshot_offset')
+      .then(applyOffset)
+      .catch(function () {});
+  }
+
   invoke('screenshot_begin')
     .then(function (info) {
       shotW = info.width;
       shotH = info.height;
+      offX = info.off_x || 0;
+      offY = info.off_y || 0;
+      viewW = info.view_w || shotW;
+      viewH = info.view_h || shotH;
       bg.src = info.data_url;
       resize();
+      [300, 800, 1500].forEach(function (ms) { setTimeout(pollOffset, ms); });
     })
     .catch(function (e) {
       showError('读取截图失败：' + e);

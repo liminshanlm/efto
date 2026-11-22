@@ -45,6 +45,22 @@ pub fn request_screen_recording() {
     {}
 }
 
+/// 同 [`request_screen_recording`]，但每个进程最多触发一次系统弹窗。
+/// 捕获失败路径用它：授权没生效时反复弹系统框只会变成骚扰（错误文案里有指引）。
+pub fn request_screen_recording_once() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static PROMPTED: AtomicBool = AtomicBool::new(false);
+    if PROMPTED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    request_screen_recording();
+}
+
+/// 权限错误文案的统一补充：TCC 授权按签名身份认应用，身份变了（未签名/换证书
+/// 的构建）旧授权就对不上。开发构建请先跑 scripts/sign-dev.sh 拿稳定身份。
+pub const REGRANT_HINT: &str =
+    "（若已勾选仍见此提示：签名身份变过（未签名或换了证书的构建），在列表中移除该条目后重新勾选；开发构建可先运行 scripts/sign-dev.sh 拿稳定签名身份）";
+
 /// 权限状态（给设置页与 CLI 的机器可读形状）。
 pub fn status() -> serde_json::Value {
     serde_json::json!({

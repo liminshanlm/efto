@@ -140,8 +140,36 @@ fs.writeFileSync(path.join(outDir, 'icon.png'), png(64));
 fs.writeFileSync(path.join(outDir, '32x32.png'), png(32));
 fs.writeFileSync(path.join(outDir, '128x128.png'), png(128));
 fs.writeFileSync(path.join(outDir, 'icon.ico'), ico([16, 32, 48]));
+
+const written = ['icon.png', '32x32.png', '128x128.png', 'icon.ico'];
+
+// ---- macOS：程序化画出各尺寸 → iconutil 打成 efto.icns ----
+// tauri-bundler 的 ico→icns 转换会把小尺寸图块打坏（48px 实测变彩条，
+// 系统权限列表里就是花的），所以直接给 bundler 现成的 icns，不给它转换的机会。
+if (process.platform === 'darwin') {
+  const { execFileSync } = require('child_process');
+  const os = require('os');
+  // iconutil 要求目录名以 .iconset 结尾
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'efto-icons-'));
+  const iconset = path.join(tmpRoot, 'efto.iconset');
+  fs.mkdirSync(iconset);
+  const sizes = [
+    ['icon_16x16.png', 16], ['icon_16x16@2x.png', 32],
+    ['icon_32x32.png', 32], ['icon_32x32@2x.png', 64],
+    ['icon_128x128.png', 128], ['icon_128x128@2x.png', 256],
+    ['icon_256x256.png', 256], ['icon_256x256@2x.png', 512],
+    ['icon_512x512.png', 512], ['icon_512x512@2x.png', 1024],
+  ];
+  for (const [name, size] of sizes) {
+    fs.writeFileSync(path.join(iconset, name), png(size));
+  }
+  execFileSync('iconutil', ['-c', 'icns', iconset, '-o', path.join(outDir, 'efto.icns')]);
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+  written.push('efto.icns');
+}
+
 console.log('icons written to', outDir);
-for (const f of ['icon.png', '32x32.png', '128x128.png', 'icon.ico']) {
+for (const f of written) {
   const st = fs.statSync(path.join(outDir, f));
   console.log(' ', f, st.size, 'bytes');
 }

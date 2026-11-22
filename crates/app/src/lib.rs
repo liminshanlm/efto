@@ -139,6 +139,20 @@ pub fn run() {
             pump::start(&handle);
             clipwatch::start(handle.clone());
             spawn_refresher(handle.clone(), data.clone());
+            // Windows 上预热预览窗口很便宜（WebView2 初始化快）；macOS 上建一个
+            // WKWebView 要占用主线程 1~3 秒，正好会和"唤起启动器后立刻点截图"撞上
+            // ——hide_main 的投递排队、启动器被拍进底图、甚至截图界面起不来。
+            // 所以 mac 上不预热，Shift 首次预览慢一点可以接受。
+            #[cfg(not(target_os = "macos"))]
+            {
+                let h = handle.clone();
+                let _ = std::thread::Builder::new()
+                    .name("preview-warmup".into())
+                    .spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(2000));
+                        windows::warm_up_preview(&h);
+                    });
+            }
 
             // 首次启动不抢焦点，但告知用户热键在哪
             if let Some(w) = handle.get_webview_window(windows::MAIN_LABEL) {
@@ -180,6 +194,7 @@ pub fn run() {
             commands::open_plugin_dir,
             commands::open_data_dir,
             commands::screenshot_begin,
+            commands::screenshot_offset,
             commands::screenshot_finish,
             commands::screenshot_cancel,
             commands::screenshot_long_start,

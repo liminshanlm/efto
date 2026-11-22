@@ -230,9 +230,20 @@ mod ffi {
     pub const BITMAP_RGBA: u32 = 1 | (4 << 12);
 
     // 显示器枚举 / scale 在 crate::tile::ax（与平铺共用一套 CG 声明，避免符号重复声明）
+    /// kCGWindowListOptionOnScreenBelowWindow：只合成"这个窗口之下"的内容
+    pub const WINDOW_LIST_ON_SCREEN_BELOW: u32 = 1 << 2;
+    /// kCGWindowImageBestResolution
+    pub const WINDOW_IMAGE_BEST_RESOLUTION: u32 = 1 << 3;
+
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {
         pub fn CGDisplayCreateImage(display: u32) -> CGImageRef;
+        pub fn CGWindowListCreateImage(
+            screen_bounds: CGRect,
+            list_option: u32,
+            window_id: u32,
+            image_option: u32,
+        ) -> CGImageRef;
         pub fn CGImageRelease(img: CGImageRef);
         pub fn CGColorSpaceCreateDeviceRGB() -> CGColorSpaceRef;
         pub fn CGColorSpaceRelease(space: CGColorSpaceRef);
@@ -255,11 +266,12 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Shot, S
     let width = width.max(1);
     let height = height.max(1);
     if !crate::permissions::screen_recording_allowed() {
-        crate::permissions::request_screen_recording();
-        return Err(
-            "缺少屏幕录制（Screen Recording）权限：请在 系统设置 → 隐私与安全性 → 屏幕录制 中勾选 efto"
-                .into(),
-        );
+        // 系统弹窗每个进程只触发一次；反复弹只会变成骚扰
+        crate::permissions::request_screen_recording_once();
+        return Err(format!(
+            "缺少屏幕录制（Screen Recording）权限：请在 系统设置 → 隐私与安全性 → 屏幕录制 中勾选 efto{}",
+            crate::permissions::REGRANT_HINT
+        ));
     }
     let s = crate::tile::ax::display_scale();
     unsafe {
@@ -291,12 +303,18 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Shot, S
                 continue;
             }
             captured += 1;
+            // CGBitmapContext 的绘制矩形是**左下原点**（缓冲行序读起来自顶向下是
+            // 因为图像本身被上下翻转画进去的）。显示器矩形是全局左上原点，y 必须
+            // 换成"距画布底边的高度"：较矮的那块屏（如 900 点 + 1080 点双屏）直接
+            // 用左上 y 画会整块下沉 180 点，顶部留一条空槽。
+            let top = r.y as f64 * s - y as f64;
+            let bottom = height as f64 - top - r.height as f64 * s;
             ffi::CGContextDrawImage(
                 ctx,
                 ffi::CGRect {
                     origin: ffi::CGPoint {
                         x: r.x as f64 * s - x as f64,
-                        y: r.y as f64 * s - y as f64,
+                        y: bottom,
                     },
                     size: ffi::CGSize {
                         width: r.width as f64 * s,
@@ -377,6 +395,153 @@ pub fn capture_virtual_screen() -> Result<Shot, String> {
     let right = rects.iter().map(|r| r.2).max().unwrap();
     let bottom = rects.iter().map(|r| r.3).max().unwrap();
     capture_region(x, y, (right - x).max(1) as u32, (bottom - y).max(1) as u32)
+}
+
+/// macOS：逐屏合成，但**排除 `exclude_window` 及其之上的窗口**。
+///
+/// 用 `CGWindowListCreateImage(.optionOnScreenBelowWindow)`：窗口服务器把某个
+/// 窗口的表面状态卡住时（AppKit 已 `orderOut`、服务器仍按旧位置画），普通显示器
+/// 捕获会把启动器一起拍进底图；从"它下面"合成就能保证拿到干净的桌面。
+/// 代价是同一层之上的系统菜单栏也不在结果里，所以只在检测到残留时兜底。
+#[cfg(target_os = "macos")]
+pub fn capture_virtual_screen_below(exclude_window: u32) -> Result<Shot, String> {
+    let displays = crate::tile::ax::displays();
+    if displays.is_empty() {
+        return Err("无法读取显示器信息".into());
+    }
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
+    for (_, r) in &displays {
+        min_x = min_x.min(r.x);
+        min_y = min_y.min(r.y);
+        max_x = max_x.max(r.x + r.width);
+        max_y = max_y.max(r.y + r.height);
+    }
+    let s = crate::tile::ax::display_scale();
+    let x = (min_x as f64 * s).round() as i32;
+    let y = (min_y as f64 * s).round() as i32;
+    let width = ((max_x - min_x) as f64 * s).round().max(1.0) as u32;
+    let height = ((max_y - min_y) as f64 * s).round().max(1.0) as u32;
+    if !crate::permissions::screen_recording_allowed() {
+        crate::permissions::request_screen_recording_once();
+        return Err(format!(
+            "缺少屏幕录制（Screen Recording）权限：请在 系统设置 → 隐私与安全性 → 屏幕录制 中勾选 efto{}",
+            crate::permissions::REGRANT_HINT
+        ));
+    }
+    unsafe {
+        let mut rgba = vec![0u8; (width * height * 4) as usize];
+        let space = ffi::CGColorSpaceCreateDeviceRGB();
+        let ctx = ffi::CGBitmapContextCreate(
+            rgba.as_mut_ptr(),
+            width as usize,
+            height as usize,
+            8,
+            width as usize * 4,
+            space,
+            ffi::BITMAP_RGBA,
+        );
+        if ctx.is_null() {
+            ffi::CGColorSpaceRelease(space);
+            return Err("创建位图上下文失败".into());
+        }
+        let mut captured = 0u32;
+        for (_, r) in displays {
+            // 参数是全局"点"矩形（与 CGDisplayBounds 同口径）
+            let rect = ffi::CGRect {
+                origin: ffi::CGPoint {
+                    x: r.x as f64,
+                    y: r.y as f64,
+                },
+                size: ffi::CGSize {
+                    width: r.width as f64,
+                    height: r.height as f64,
+                },
+            };
+            let img = ffi::CGWindowListCreateImage(
+                rect,
+                ffi::WINDOW_LIST_ON_SCREEN_BELOW,
+                exclude_window,
+                ffi::WINDOW_IMAGE_BEST_RESOLUTION,
+            );
+            if img.is_null() {
+                continue;
+            }
+            captured += 1;
+            let top = r.y as f64 * s - y as f64;
+            let bottom = height as f64 - top - r.height as f64 * s;
+            ffi::CGContextDrawImage(
+                ctx,
+                ffi::CGRect {
+                    origin: ffi::CGPoint {
+                        x: r.x as f64 * s - x as f64,
+                        y: bottom,
+                    },
+                    size: ffi::CGSize {
+                        width: r.width as f64 * s,
+                        height: r.height as f64 * s,
+                    },
+                },
+                img,
+            );
+            ffi::CGImageRelease(img);
+        }
+        ffi::CGContextRelease(ctx);
+        ffi::CGColorSpaceRelease(space);
+        if captured == 0 {
+            return Err("屏幕捕获失败（CGWindowListCreateImage 无输出）".into());
+        }
+        for px in rgba.chunks_exact_mut(4) {
+            px[3] = 255;
+        }
+        let mut shot = Shot {
+            width,
+            height,
+            origin_x: x,
+            origin_y: y,
+            rgba,
+        };
+        // 系统菜单栏在本窗口层级之上，"从它下面合成"拿不到——用一张普通捕获把
+        // 每块屏顶部那条菜单栏拼回来（普通捕获里那一块不含启动器，启动器在屏幕中部）。
+        if let Ok(normal) = capture_virtual_screen() {
+            patch_top_strips(&mut shot, &normal);
+        }
+        Ok(shot)
+    }
+}
+
+/// 把 `normal` 里每块屏顶部"菜单栏那一条"复制进 `shot`（两者几何一致）。
+#[cfg(target_os = "macos")]
+fn patch_top_strips(shot: &mut Shot, normal: &Shot) {
+    if normal.width != shot.width || normal.height != shot.height {
+        return;
+    }
+    let s = crate::tile::ax::display_scale();
+    for (id, r) in crate::tile::ax::displays() {
+        // 工作区的上边界就是菜单栏下沿（visibleFrame 已扣掉菜单栏与 Dock）
+        let Ok(work) = crate::tile::ax::work_area(id) else {
+            continue;
+        };
+        let inset_pt = (work.y - r.y).max(0) as f64;
+        if inset_pt <= 0.0 {
+            continue;
+        }
+        let x0 = (r.x as f64 * s).round() as i64 - shot.origin_x as i64;
+        let x1 = ((r.x + r.width) as f64 * s).round() as i64 - shot.origin_x as i64;
+        let y0 = (r.y as f64 * s).round() as i64 - shot.origin_y as i64;
+        let y1 = y0 + (inset_pt * s).round() as i64;
+        let (x0, x1) = (x0.max(0), x1.min(shot.width as i64));
+        let (y0, y1) = (y0.max(0), y1.min(shot.height as i64));
+        if x1 <= x0 || y1 <= y0 {
+            continue;
+        }
+        for row in y0..y1 {
+            let start = ((row * shot.width as i64 + x0) * 4) as usize;
+            let end = ((row * shot.width as i64 + x1) * 4) as usize;
+            if end <= shot.rgba.len() && end <= normal.rgba.len() {
+                shot.rgba[start..end].copy_from_slice(&normal.rgba[start..end]);
+            }
+        }
+    }
 }
 
 /// macOS：所有活动显示器的包围盒（点）× 主屏缩放 = 虚拟桌面物理像素。
