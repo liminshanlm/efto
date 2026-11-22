@@ -5,6 +5,8 @@
 :root {
   color-scheme: dark;
   --bg: rgba(17, 19, 26, 0.9);
+  /* 不透明面板底色：浮层（文件动作菜单）不能透出下层列表 */
+  --panel: #1a1d26;
   --bg-soft: rgba(255, 255, 255, 0.055);
   --bg-hover: rgba(255, 255, 255, 0.075);
   --line: rgba(255, 255, 255, 0.08);
@@ -28,6 +30,7 @@
 html[data-theme="light"] {
   color-scheme: light;
   --bg: rgba(250, 251, 254, 0.94);
+  --panel: #ffffff;
   --bg-soft: rgba(15, 23, 42, 0.045);
   --bg-hover: rgba(15, 23, 42, 0.07);
   --line: rgba(15, 23, 42, 0.1);
@@ -870,6 +873,9 @@ body {
   position: fixed;
   z-index: 60;
   min-width: 176px;
+  /* 主窗口只有 320 高：9 项菜单会超出窗口，限高后可滚动，避免最末项被裁掉 */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   padding: 5px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;

@@ -518,11 +518,15 @@
       menu.appendChild(btn);
     });
     document.body.appendChild(menu);
-    var rect = anchor ? anchor.getBoundingClientRect() : { left: 8, bottom: 80 };
-    var left = Math.min(rect.left + 8, window.innerWidth - menu.offsetWidth - 8);
-    var top = Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8);
-    menu.style.left = Math.max(8, left) + 'px';
-    menu.style.top = Math.max(8, top) + 'px';
+    // 菜单右对齐「⋯」按钮，避免从行首盖住标题；下方放不下时翻到按钮上方。
+    var rect = anchor ? anchor.getBoundingClientRect() : null;
+    var left = rect ? rect.right - menu.offsetWidth : 8;
+    var top = rect ? rect.bottom + 4 : 44;
+    if (rect && top + menu.offsetHeight > window.innerHeight - 8) {
+      top = rect.top - menu.offsetHeight - 4;
+    }
+    menu.style.left = Math.max(8, Math.min(left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+    menu.style.top = Math.max(8, Math.min(top, window.innerHeight - menu.offsetHeight - 8)) + 'px';
     fileMenuEl = menu;
   }
 
@@ -594,7 +598,7 @@
           e.stopPropagation();
           active = i;
           updateActive();
-          openFileMenu(hit, li);
+          openFileMenu(hit, fileBtn);
         });
         fileBtn.addEventListener('dblclick', function (e) { e.stopPropagation(); });
         li.appendChild(fileBtn);
@@ -987,7 +991,10 @@
       var fileHit = hits[active];
       if (isFileHit(fileHit)) {
         e.preventDefault();
-        openFileMenu(fileHit, list.querySelector('[data-index="' + active + '"]'));
+        openFileMenu(
+          fileHit,
+          list.querySelector('[data-index="' + active + '"] .row-file')
+        );
         return;
       }
     }
