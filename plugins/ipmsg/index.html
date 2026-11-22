@@ -51,6 +51,12 @@
           <span>在线设备</span>
           <span id="peerCount" class="count">0</span>
         </div>
+        <form id="probeForm" class="probe" autocomplete="off">
+          <input id="probeIp" class="probe-input" type="text" inputmode="decimal" placeholder="按 IP 查询，如 192.168.1.20"
+            spellcheck="false" />
+          <button class="btn mini" type="submit">查询</button>
+        </form>
+        <p id="probeResult" class="probe-result" hidden></p>
         <div id="requests" class="requests" hidden></div>
         <ul id="peers" class="peers"></ul>
         <p id="emptyPeers" class="empty-hint">同网段打开本插件的设备会出现在这里…</p>
@@ -68,7 +74,7 @@
             </svg>
           </div>
           <p class="empty-title">从左侧选择一台设备开始聊天</p>
-          <p class="empty-sub">首次发送消息需要对方同意接收。</p>
+          <p class="empty-sub">首次发送消息需要对方同意接收；收到的文件保存在下载目录的 efto-ipmsg 下。</p>
         </div>
 
         <div id="chatPane" class="chat-pane" hidden>
@@ -93,6 +99,7 @@
             <div id="composerHint" class="composer-hint" hidden></div>
             <div id="composerRow" class="composer-row">
               <textarea id="input" rows="2" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+              <button id="fileBtn" class="btn" type="button" title="发送文件">文件</button>
               <button id="sendBtn" class="btn primary" type="button">发送</button>
             </div>
           </div>

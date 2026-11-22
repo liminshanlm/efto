@@ -196,6 +196,10 @@ RFC1123 与中文行的星期/月份名不用 chrono 的 `%a`/`%b`（依赖 loca
   `screenshot_finish` 的 `overlay` 参数交回宿主，`screenshot.rs::overlay_png` 解码后直接替代对
   整屏图的裁剪——复制/保存/钉图共用这一个入口，宿主不做第二套绘制。没有标注时 `overlay` 缺省，
   走原来的 `Shot::crop` 路径。长图模式不支持叠加标注（有标注时按钮置灰）。
+- **选区移动**：在没有激活标注工具时，指针落在选区内按下并拖动会整体平移选区（尺寸不变，
+  边缘夹紧在窗口内），已提交的标注按同一位移量平移，保持相对选区的排版；因此马赛克会重新
+  采样移动后的底层画面。移动位置本身不进标注撤销栈（Ctrl+Z 只回退标注），选区内单击/双击
+  不会产生多余历史；长图模式选区固定，不参与移动。选区外按下仍然是重新框选。
 - **长截图**：覆盖层工具栏的「长图」按钮把选区（物理像素）交给 `screenshot_long_start`。
   覆盖层**留在屏幕上**（`transparent(true)` 窗口，藏掉整屏图后只画遮罩、边框和滚动提示），
   同时 `set_ignore_cursor_events(true)` 让鼠标穿透，并用 `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`

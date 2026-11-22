@@ -86,7 +86,7 @@ Built-in sources appear only when the input matches their rules, so they never h
 
 The default panel (empty input) contains "Recent" and "Favorite tools":
 
-- **Screenshot**: select a region, then annotate from the toolbar — rectangle/ellipse/arrow/pen/highlighter/mosaic/text/eraser (number keys `1-8`), an 8-color palette, three stroke widths, and `Ctrl+Z`/`Ctrl+Y` undo/redo. Annotations are baked into the copy/save/pin output. Scrolling long screenshots are also supported (not combinable with annotations).
+- **Screenshot**: select a region, then drag inside the selection to move it as a whole (annotations move with it) or drag the empty area to select again; annotate from the toolbar — rectangle/ellipse/arrow/pen/highlighter/mosaic/text/eraser (number keys `1-8`), an 8-color palette, three stroke widths, and `Ctrl+Z`/`Ctrl+Y` undo/redo. Annotations are baked into the copy/save/pin output. Scrolling long screenshots are also supported (not combinable with annotations).
 - **Clipboard**: records text, images, and file lists; click to copy, `Ctrl+Enter` to copy and paste into the foreground window, `P` to pin, `Delete` to remove.
 - **Lock screen**: lock Windows immediately.
 - **Window actions**: selecting it opens a submenu — grid tiling (Tile windows), minimize other windows (keeping the one under the search box), minimize all windows, left/right half, and undo the last tiling. Grid tiling only touches the search box's monitor; minimizing applies to all monitors; minimized windows are skipped, and efto, the desktop, and the taskbar never participate. Per-tool hotkeys still tile directly without opening the menu.

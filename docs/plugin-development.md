@@ -209,7 +209,7 @@ await efto.python.run({ code: 'print(1 + 1)' });
 4. 生命周期：bootstrap 先探测旧实例避免重复启动；UI `pagehide` 用
    `navigator.sendBeacon('/stop')`；服务端再加一道空闲自退兜底。
 
-参考实现：`plugins/ipmsg`（UDP 发现 + TCP 文本消息 + 首次通信授权）与
+参考实现：`plugins/ipmsg`（UDP 发现 + 按 IP 探测 + TCP 文本/文件传输 + 首次通信授权）与
 `plugins/file-share`（只读 HTTP 文件共享，数据口 5421 / 控制口 5422）。
 注意这类插件**依赖本机 Node**：未安装或设置里未检测通过时，UI 必须明确提示
 "需要 Node"并给出重试入口，不能静默失败。

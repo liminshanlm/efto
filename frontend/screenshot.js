@@ -37,6 +37,12 @@
   var anchor = null;
   // 纯点击（没拖出选区）时恢复上一个选区，双击复制才能工作
   var selBeforeDrag = null;
+  // 选区内拖动整体移动：记住拖动起点时的选区与标注，移动量与边界夹紧后再套用
+  var moving = false;
+  var moveStarted = false;
+  var moveAnchor = null;
+  var moveSel = null;
+  var moveShapes = null;
   // 长截图状态：模式标志、已拼接行数、进度轮询定时器
   var longMode = false;
   var longRows = 0;
@@ -633,6 +639,29 @@
 
   // ---------- 鼠标 ----------
 
+  function insideSel(p) {
+    return !!(sel && sel.w >= 3 && sel.h >= 3 &&
+      p.x >= sel.x && p.x <= sel.x + sel.w &&
+      p.y >= sel.y && p.y <= sel.y + sel.h);
+  }
+
+  function shiftShape(s, dx, dy) {
+    var c = {};
+    for (var k in s) c[k] = s[k];
+    if (s.t === 'pen' || s.t === 'marker') {
+      c.pts = s.pts.map(function (pt) { return { x: pt.x + dx, y: pt.y + dy }; });
+    } else if (s.t === 'arrow') {
+      c.x1 = s.x1 + dx;
+      c.y1 = s.y1 + dy;
+      c.x2 = s.x2 + dx;
+      c.y2 = s.y2 + dy;
+    } else {
+      c.x = s.x + dx;
+      c.y = s.y + dy;
+    }
+    return c;
+  }
+
   canvas.addEventListener('pointerdown', function (e) {
     if (e.button !== 0) return;
     if (textEditing) {
@@ -641,15 +670,22 @@
     }
     canvas.setPointerCapture(e.pointerId);
     var p = { x: e.clientX, y: e.clientY };
-    var inSel = sel && sel.w >= 3 && sel.h >= 3 &&
-      p.x >= sel.x && p.x <= sel.x + sel.w &&
-      p.y >= sel.y && p.y <= sel.y + sel.h;
+    var inSel = insideSel(p);
     if (tool && inSel) {
       // 文字工具：pointerdown 的默认动作会把焦点移到 body，刚 focus() 的
       // textarea 紧接着就 blur，blur 里又 commitText 掉空内容——表现为
       // "点了没反应、打不了字"。取消默认动作，焦点才能留在 textarea 里。
       if (tool === 'text') e.preventDefault();
       startShape(tool, p);
+      return;
+    }
+    if (inSel && !longMode) {
+      // 已有选区：拖选区内是整体移动位置（长图模式选区固定，不参与移动）
+      moving = true;
+      moveStarted = false;
+      moveAnchor = p;
+      moveSel = { x: sel.x, y: sel.y, w: sel.w, h: sel.h };
+      moveShapes = shapes;
       return;
     }
     dragging = true;
@@ -669,7 +705,31 @@
       moveShape(p);
       return;
     }
-    if (!dragging || !anchor) return;
+    if (moving) {
+      var nx = Math.min(Math.max(0, moveSel.x + p.x - moveAnchor.x), Math.max(0, window.innerWidth - moveSel.w));
+      var ny = Math.min(Math.max(0, moveSel.y + p.y - moveAnchor.y), Math.max(0, window.innerHeight - moveSel.h));
+      var dx = nx - moveSel.x;
+      var dy = ny - moveSel.y;
+      sel = { x: nx, y: ny, w: moveSel.w, h: moveSel.h };
+      if (dx || dy) {
+        if (!moveStarted) {
+          // 第一次真正移动时才收起浮层，避免单击/双击时闪烁。
+          // 移动位置本身不进标注撤销栈（撤销只回退标注），否则会在原地留下错位的标注。
+          moveStarted = true;
+          bar.style.display = 'none';
+          hint.style.display = 'none';
+          palette.style.display = 'none';
+          errorEl.style.display = 'none';
+        }
+        shapes = moveShapes.map(function (s) { return shiftShape(s, dx, dy); });
+      }
+      draw();
+      return;
+    }
+    if (!dragging || !anchor) {
+      canvas.style.cursor = (!tool && insideSel(p)) ? 'move' : 'crosshair';
+      return;
+    }
     sel = {
       x: Math.min(anchor.x, p.x),
       y: Math.min(anchor.y, p.y),
@@ -687,6 +747,14 @@
     }
     if (erasing) {
       endErase();
+      return;
+    }
+    if (moving) {
+      moving = false;
+      moveAnchor = null;
+      moveSel = null;
+      moveShapes = null;
+      placeBar();
       return;
     }
     if (!dragging) return;

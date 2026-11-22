@@ -1,7 +1,7 @@
 {
   "name": "ipmsg",
-  "version": "0.1.0",
-  "description": "局域网即时消息：自动发现同网段设备，仅发文本；首次通信需对方同意",
+  "version": "0.2.0",
+  "description": "局域网即时消息：自动发现同网段设备，支持按 IP 查询、文本与文件传输；首次通信需对方同意",
   "main": "main.js",
   "index": "index.html",
   "author": { "name": "efto" },

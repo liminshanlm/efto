@@ -12,6 +12,9 @@
   var errorEl = document.getElementById('error');
   var errorTextEl = document.getElementById('errorText');
   var retryBtnEl = document.getElementById('retryBtn');
+  var probeFormEl = document.getElementById('probeForm');
+  var probeIpEl = document.getElementById('probeIp');
+  var probeResultEl = document.getElementById('probeResult');
   var requestBoxEl = document.getElementById('requests');
   var peersEl = document.getElementById('peers');
   var peerCountEl = document.getElementById('peerCount');
@@ -31,11 +34,21 @@
   var composerRowEl = document.getElementById('composerRow');
   var inputEl = document.getElementById('input');
   var sendBtnEl = document.getElementById('sendBtn');
+  var fileBtnEl = document.getElementById('fileBtn');
   var toastEl = document.getElementById('toast');
 
   var svc = { state: 'waiting', port: 24251, token: '' };
   var localReady = false; // kv 里的信任列表必须先载入，之后才能 /init，否则会覆盖服务端状态
-  var state = { running: false, port: 24250, self: null, peers: [], requests: [], error: '', unread: {} };
+  var state = {
+    running: false,
+    port: 24250,
+    downloads: '',
+    self: null,
+    peers: [],
+    requests: [],
+    error: '',
+    unread: {}
+  };
   var threads = {};
   var trusted = [];
   var approved = [];
@@ -229,6 +242,7 @@
   function apply(st) {
     state.self = st.self || state.self;
     state.port = st.port || state.port;
+    state.downloads = st.downloads || state.downloads;
     state.peers = Array.isArray(st.peers) ? st.peers : [];
     state.requests = Array.isArray(st.requests) ? st.requests : [];
 
@@ -385,7 +399,7 @@
     if (svc.state === 'error') {
       emptyPeersEl.textContent = '消息服务未启动：需要本机安装 Node 并在 设置 → 运行时 中配置。';
     } else if (state.running) {
-      emptyPeersEl.textContent = '正在发现同网段设备…若一直为空，请检查 Windows 防火墙是否允许 node.exe 访问专用网络。';
+      emptyPeersEl.textContent = '正在发现同网段设备…若一直为空，可在上方按 IP 查询，或检查 Windows 防火墙是否允许 node.exe 访问专用网络。';
     } else {
       emptyPeersEl.textContent = '正在启动本机消息服务…';
     }
@@ -527,6 +541,7 @@
     }
 
     portInfoEl.textContent = state.running ? ('监听端口 ' + state.port) : '';
+    portInfoEl.title = state.running && state.downloads ? ('收到的文件保存到：' + state.downloads) : '';
     errorTextEl.textContent = state.error || '';
     errorEl.hidden = !state.error;
     retryBtnEl.hidden = !(svc.state === 'error' || (state.error && !connected));
@@ -582,6 +597,84 @@
     });
   }
 
+  function doProbe() {
+    var ip = probeIpEl.value.trim();
+    if (!ip) return;
+    if (!connected) {
+      toast('消息服务尚未启动');
+      return;
+    }
+    probeResultEl.hidden = false;
+    probeResultEl.className = 'probe-result';
+    probeResultEl.textContent = '正在查询 ' + ip + '…';
+    api('/probe', { ip: ip }).then(function (r) {
+      if (!r.ok) {
+        probeResultEl.textContent = r.error || '查询失败';
+        return;
+      }
+      var p = r.peer || {};
+      probeResultEl.className = 'probe-result ok';
+      probeResultEl.textContent = (p.name || p.id) + ' 在线 · ' + (p.addr || ip);
+      poll();
+    }).catch(function (e) {
+      probeResultEl.textContent = '查询失败：' + errText(e);
+    });
+  }
+
+  function sendFiles(peerId, paths, index) {
+    if (index >= paths.length) {
+      fileBtnEl.disabled = false;
+      fileBtnEl.textContent = '文件';
+      return;
+    }
+    var full = paths[index];
+    var name = full.split(/[\\/]/).pop() || full;
+    api('/sendfile', { peerId: peerId, path: full }).then(function (r) {
+      if (!r.ok) {
+        toast('发送文件失败：' + (r.error || '未知错误'));
+        fileBtnEl.disabled = false;
+        fileBtnEl.textContent = '文件';
+        return;
+      }
+      var t = ensureThread(peerId);
+      t.messages.push({ dir: 'out', text: '文件：' + name, ts: Date.now(), pending: !!r.pending });
+      trimThread(t);
+      saveThreads();
+      renderChat();
+      if (r.pending) toast('对方尚未同意，文件已暂存');
+      poll();
+      sendFiles(peerId, paths, index + 1);
+    }).catch(function (e) {
+      toast('发送文件失败：' + errText(e));
+      fileBtnEl.disabled = false;
+      fileBtnEl.textContent = '文件';
+    });
+  }
+
+  function sendFile() {
+    if (!selected) {
+      toast('请先选择联系人');
+      return;
+    }
+    if (!connected) {
+      toast('消息服务尚未启动');
+      return;
+    }
+    if (typeof efto.pickFiles !== 'function') {
+      toast('当前宿主不支持选择文件');
+      return;
+    }
+    var peerId = selected;
+    efto.pickFiles().then(function (paths) {
+      if (!paths || !paths.length) return;
+      fileBtnEl.disabled = true;
+      fileBtnEl.textContent = '发送中…';
+      sendFiles(peerId, paths, 0);
+    }).catch(function (e) {
+      toast('选择文件失败：' + errText(e));
+    });
+  }
+
   function doRespond(peerId, accept) {
     if (!connected) {
       toast('消息服务尚未启动');
@@ -608,6 +701,12 @@
   }
 
   sendBtnEl.addEventListener('click', sendText);
+  fileBtnEl.addEventListener('click', sendFile);
+
+  probeFormEl.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    doProbe();
+  });
 
   inputEl.addEventListener('keydown', function (ev) {
     if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) {

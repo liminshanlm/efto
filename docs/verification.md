@@ -1668,8 +1668,8 @@ log:error 事件、线程回收），**全部通过、零报错**：
 
 ## 局域网消息插件 ipmsg（2026-11-22）
 
-精简版飞鸽传书：只发文本、不传文件。**宿主没有任何改动**——局域网能力全部由插件通过
-`efto.node.run` 拉起本机 Node 常驻服务实现，因此必须先在本机安装 Node 并在
+精简版飞鸽传书：UDP 广播发现 + 按 IP 探测，TCP 发文本与文件。**宿主没有任何改动**——局域网能力
+全部由插件通过 `efto.node.run` 拉起本机 Node 常驻服务实现，因此必须先在本机安装 Node 并在
 设置 → 运行时 配置与检测通过，插件才可用。
 
 分工：
@@ -1678,20 +1678,28 @@ log:error 事件、线程回收），**全部通过、零报错**：
   24251 上的旧实例，没有就 `spawn(process.execPath, ['service.js', token], {detached:true})`
   起常驻服务；令牌存插件 kv，通过 `ipcMessage('svc', {state, port, token})` 下发给 UI。
 - `plugins/ipmsg/service.js`（本机 Node）：UDP 24250 广播发现（2s 信标 / 9s TTL）、
-  TCP 24250 单行 JSON（`request/msg/approve/reject/hello`）、HTTP `127.0.0.1:24251`
-  控制口（`/status /init /send /respond /stop`，查询串校验令牌）。
-- `plugins/ipmsg/ui.js`（webview）：800ms 轮询控制口，直接 `fetch` 发消息与处理授权；
+  TCP 24250 单行 JSON（`request/msg/file-offer/approve/reject/hello`）、
+  按 IP 的 `hello` 探测（手动 peer 每 4s 续探）、HTTP `127.0.0.1:24251`
+  控制口（`/status /init /send /sendfile /probe /respond /stop`，查询串校验令牌）。
+- `plugins/ipmsg/ui.js`（webview）：800ms 轮询控制口，直接 `fetch` 发消息 / 发文件 / 按 IP 查询；
   `trusted/approved/threads` 落插件 kv；页面关闭时 `sendBeacon('/stop')`，
   服务另有 30 分钟无人轮询自退兜底。
 
 协议仍是自定义的，**不与标准 IPMSG 互通**；首次发送先 `request`，对方在 `requests`
-里同意后回 `approve`，暂存消息（上限 20 条）自动补发。
+里同意后回 `approve`，暂存消息与待发文件（上限 20 条）自动补发。
+
+文件传输：发送端在一条新 TCP 连接上先发 `file-offer{name,size}`，接收端只接受 `trusted`
+里的对方，回 `accept` 后把后续字节按声明大小流式写入 `下载目录/efto-ipmsg/<name>.part`，
+写完改名并回 `saved`；超过声明大小立即中断并删除半成品。文件名只保留 basename 并替换
+Windows 非法字符（`..\..\pwn.txt` → `pwn.txt`），同名自动加 ` (n)`。收到的文件作为一条
+聊天回执出现，路径即落盘位置。发送端路径来自 `efto.pickFiles()`，由本机 Node 直接读盘，
+不经 webview 搬运字节。
 
 已跑过并看到输出：
 
 ```
 node --check plugins/ipmsg/main.js / ui.js / service.js      OK
-单机端到端脚本（真起 service.js + 模拟对端 TCP/UDP）          23 项全部 PASS
+单机端到端脚本（真起 service.js + 模拟对端 TCP/UDP）          文本 23 项 + 探测/文件 19 项，全部 PASS
 ```
 
 单机端到端覆盖（同一台机器上模拟同网段对端）：
@@ -1704,15 +1712,36 @@ node --check plugins/ipmsg/main.js / ui.js / service.js      OK
   `peers[].allowed=true`；
 - 已授权对端发 `msg` → 收下并只在首次 `/status` 返回（取走即清空）；
 - `/init` 清空信任后对端再发 `msg` → `not_allowed`；
+- `/probe {ip, port}` → `hello` 识别对端（自定义端口），非法 IP 明确报错；手动 peer
+  超过 9s TTL 后仍 `online`（TCP 续探生效）；
+- 未同意时 `/sendfile` → `{ok:true,pending:true}` 且 `/status.outbox=1`；对端发 `approve`
+  后暂存文件自动补发，对端收到的字节一致；
+- 未授权 `file-offer` → `not_allowed`；授权后 300KB 文件完整落盘、字节一致、
+  `/status.messages` 有收文件回执（含落盘路径）；`..\..\pwn.txt` 只落在 `efto-ipmsg/pwn.txt`；
+- `/sendfile` 200KB 文件到达对端且字节一致；文件不存在 → 明确报错；
 - `/stop` → 200，服务以 0 退出。
 
 **没验证的**：
 
 - 两台真实机器同网段的发现与收发；Windows 防火墙首次放行 node.exe 的弹窗与放行后行为；
   多网卡/虚拟网卡下 `255.255.255.255` 是否覆盖目标网段。
+- 真实大文件（GB 级）的吞吐、对端中途掉线/取消时的半成品清理观感。
+- 接收端下载目录被 OneDrive 等重定向时仍按 `os.homedir()/Downloads` 落盘（路径未走已知文件夹 API）。
 - WebView2 里 `http://efto.localhost` 的页面 `fetch` 到 `http://127.0.0.1` 的
   CORS / Private Network Access 实况（服务端已回 OPTIONS 204 + `Allow-Private-Network`，
   但未在真实插件窗口点过）。
-- 插件窗口的渲染与交互（在线列表、未读、待同意条、Enter 发送、「重试启动」按钮）。
+- 插件窗口的渲染与交互（在线列表、未读、待同意条、Enter 发送、「文件」按钮走
+  `efto.pickFiles()`、上方 IP 查询表单、「重试启动」按钮）。
 - 24250/24251 被其它程序占用时的报错文案与实际观感。
+
+## 截图选区内拖动移动（2026-11-22）
+
+- 实现：`frontend/screenshot.js` 在没有激活标注工具时，pointerdown 落在选区（>=3px）内进入
+  整体移动：位移按窗口边界夹紧，`shiftShape` 同步平移所有标注（画笔/荧光笔的点集、箭头两端、
+  文字/马赛克的原点）；移动位置本身不进标注撤销栈（Ctrl+Z 只回退标注），选区内单击/双击
+  不产生移动；长图模式选区固定不参与移动；选区外按下仍然是重新框选。鼠标在选区内悬停时
+  `cursor: move`。
+- 已跑：`node --check frontend/screenshot.js`；`node scripts/check-frontend.js`（前端守卫通过）。
+- **没验证**：真实 GUI 里拖动的观感——多屏/DPI 缩放下的边界夹紧、标注随动后的相对位置、
+  拖动后双击复制与保存结果、文字编辑态下拖动不抢焦点。
 
