@@ -22,7 +22,7 @@ plugins/       示例插件：hello-js、timestamp-ts、file-share（局域网�
 plugin-sdk/    efto.d.ts
 scripts/       构建/验证脚本（.ps1 必须保持纯 ASCII）
 docs/          architecture / plugin-development / roadmap / verification
-vendor/        rusty_v8 预编译静态库（离线构建用）
+vendor/        rusty_v8 预编译静态库落地点（bootstrap 下载，不入库）
 ```
 
 依赖单向：`app → {jsrt, core}`，`jsrt` 与 `core` 互不依赖。jsrt 通过 `ipc::Host` trait

@@ -10,6 +10,7 @@
 //!   "logo": "logo.png",
 //!   "index": "index.html",      // UI 页面
 //!   "fileTypes": ["md", "markdown"],   // 声明可打开的扩展名（用于"打开方式"）
+//!   "engines": { "efto": ">=0.1.0" },  // 宿主版本要求，缺省 = 不限制
 //!   "platform": [{ "os": "win32" }],   // 插件级平台限定，空/缺省 = 全平台
 //!   "cmds": [
 //!     { "type": "input", "label": "你好", "cmd": "你好", "icon": "icon.png" },
@@ -140,9 +141,18 @@ struct RawManifest {
     #[serde(default, rename = "fileTypes")]
     file_types: Vec<String>,
     #[serde(default)]
+    engines: Option<EnginesSection>,
+    #[serde(default)]
     platform: Vec<PlatformSpec>,
     #[serde(default)]
     plugin: Option<PluginSection>,
+}
+
+/// 清单里的 `engines`：目前只认 `efto`（宿主版本要求）。
+#[derive(Debug, Clone, Default, Deserialize)]
+struct EnginesSection {
+    #[serde(default)]
+    efto: Option<String>,
 }
 
 fn default_version() -> String {
@@ -174,9 +184,70 @@ pub struct PluginManifest {
     /// 设置页也用它决定是否提供"注册打开方式"。
     #[serde(default, rename = "fileTypes")]
     pub file_types: Vec<String>,
+    /// 宿主版本要求（清单 `engines.efto`），如 `>=0.1.0`；缺省 = 不限制。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_requirement: Option<String>,
     /// 插件级平台限定（与 cmds[].platform 同一套词汇），空 = 全平台。
     #[serde(default)]
     pub platform: Vec<PlatformSpec>,
+}
+
+/// 宿主自身版本，用于校验清单 `engines.efto`。
+pub const HOST_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// 校验 `engines.efto` 是否被当前宿主满足。
+///
+/// 只支持单条比较：`>=x.y.z` / `>x.y.z` / `<=x.y.z` / `<x.y.z` / `=x.y.z`
+/// （省略操作符等价 `=`）。`^`、`~`、`||` 等其它写法明确报错，不会当作通过。
+pub fn check_host_requirement(requirement: &str) -> std::result::Result<(), String> {
+    let req = requirement.trim();
+    let (op, rest) = if let Some(r) = req.strip_prefix(">=") {
+        (">=", r)
+    } else if let Some(r) = req.strip_prefix("<=") {
+        ("<=", r)
+    } else if let Some(r) = req.strip_prefix('>') {
+        (">", r)
+    } else if let Some(r) = req.strip_prefix('<') {
+        ("<", r)
+    } else if let Some(r) = req.strip_prefix('=') {
+        ("=", r)
+    } else {
+        ("=", req)
+    };
+    let Some(want) = parse_version(rest.trim()) else {
+        return Err(format!(
+            "engines.efto 无法解析: {requirement:?}（只支持 >= > <= < = 加 x.y.z）"
+        ));
+    };
+    let have = parse_version(HOST_VERSION).expect("宿主版本号必须可解析");
+    let ok = match op {
+        ">=" => have >= want,
+        ">" => have > want,
+        "<=" => have <= want,
+        "<" => have < want,
+        _ => have == want,
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("需要 efto 宿主 {requirement}，当前 {HOST_VERSION}"))
+    }
+}
+
+/// 解析 `x.y.z`（允许 1~3 段，缺省段按 0）；预发布等额外语法不支持。
+fn parse_version(raw: &str) -> Option<(u64, u64, u64)> {
+    let parts: Vec<&str> = raw.split('.').collect();
+    if parts.is_empty() || parts.len() > 3 {
+        return None;
+    }
+    let mut nums = [0u64; 3];
+    for (i, part) in parts.iter().enumerate() {
+        if part.is_empty() || !part.chars().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        nums[i] = part.parse().ok()?;
+    }
+    Some((nums[0], nums[1], nums[2]))
 }
 
 impl PluginManifest {
@@ -236,6 +307,11 @@ impl PluginManifest {
             author,
             cmds,
             file_types,
+            host_requirement: raw
+                .engines
+                .and_then(|e| e.efto)
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty()),
             platform: raw.platform,
         })
     }
@@ -255,6 +331,10 @@ pub struct PluginDescriptor {
     pub problems: Vec<String>,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// 清单 `engines.efto` 与当前宿主不匹配。仍会列出（设置页能看到原因），
+    /// 但不进搜索、不能被唤起。
+    #[serde(default)]
+    pub host_incompatible: bool,
 }
 
 fn default_true() -> bool {
@@ -291,6 +371,16 @@ impl PluginDescriptor {
     pub fn supported_on_this_os(&self) -> bool {
         self.manifest.available_on_this_os()
     }
+
+    /// 宿主版本是否满足清单 `engines.efto`。
+    pub fn host_compatible(&self) -> bool {
+        !self.host_incompatible
+    }
+
+    /// 是否可以被搜索到、被唤起：启用 + 平台匹配 + 宿主版本匹配。
+    pub fn usable(&self) -> bool {
+        self.enabled && self.supported_on_this_os() && self.host_compatible()
+    }
 }
 
 /// 目录里是否有插件清单。
@@ -307,6 +397,17 @@ pub fn load_descriptor(root: &PathBuf) -> Result<PluginDescriptor> {
     let manifest = PluginManifest::from_json(&text)?;
 
     let mut problems = Vec::new();
+    // 宿主版本不匹配：明确记录原因并整插件停用，不做"尽力加载"
+    let host_incompatible = match manifest.host_requirement.as_deref() {
+        Some(req) => match check_host_requirement(req) {
+            Ok(()) => false,
+            Err(msg) => {
+                problems.push(msg);
+                true
+            }
+        },
+        None => false,
+    };
 
     let main_entry = resolve_entry(root, manifest.main.as_deref(), &mut problems);
     let preload_entry = manifest
@@ -342,6 +443,7 @@ pub fn load_descriptor(root: &PathBuf) -> Result<PluginDescriptor> {
         ui_entry,
         problems,
         enabled: true,
+        host_incompatible,
     })
 }
 
@@ -425,6 +527,50 @@ mod tests {
         // 与 cmds[].platform 同一套词汇：win32 / darwin / linux
         let m = PluginManifest::from_json(r#"{"name":"h","platform":[{"os":"win32"},{"os":"darwin"},{"os":"linux"}]}"#).unwrap();
         assert!(m.available_on_this_os(), "枚举了所有平台就要在任一平台可用");
+    }
+
+    /// `engines.efto`：只支持单条比较；不满足或写法不认识都必须报错，不能当作通过。
+    #[test]
+    fn host_requirement_comparisons() {
+        assert!(check_host_requirement(">=0.1.0").is_ok());
+        assert!(check_host_requirement(">=0.0.1").is_ok());
+        assert!(check_host_requirement("<=0.1.0").is_ok());
+        assert!(check_host_requirement("=0.1.0").is_ok());
+        assert!(check_host_requirement("0.1.0").is_ok());
+        assert!(check_host_requirement("0.1").is_ok(), "缺省段按 0");
+        assert!(check_host_requirement(">0.1.0").is_err());
+        assert!(check_host_requirement("<0.1.0").is_err());
+        assert!(check_host_requirement(">9.0.0").is_err());
+        // 不支持的写法明确报错
+        assert!(check_host_requirement("^0.1.0").is_err());
+        assert!(check_host_requirement("~0.1").is_err());
+        assert!(check_host_requirement(">=0.1.0 || <0.3.0").is_err());
+        assert!(check_host_requirement("latest").is_err());
+    }
+
+    #[test]
+    fn incompatible_host_marks_descriptor_unusable() {
+        let dir = tempfile::tempdir().unwrap();
+        write_plugin(
+            dir.path(),
+            r#"{"name":"future","version":"1.0.0","main":"main.js","engines":{"efto":">9.0.0"}}"#,
+            &[("main.js", "")],
+        );
+        let d = load_descriptor(&dir.path().to_path_buf()).unwrap();
+        assert!(!d.host_compatible());
+        assert!(!d.usable());
+        assert!(
+            d.problems.iter().any(|p| p.contains("需要 efto 宿主")),
+            "{:?}",
+            d.problems
+        );
+
+        // 缺省 engines 与满足要求都不受影响
+        let dir2 = tempfile::tempdir().unwrap();
+        write_plugin(dir2.path(), r#"{"name":"legacy","main":"main.js"}"#, &[("main.js", "")]);
+        let d2 = load_descriptor(&dir2.path().to_path_buf()).unwrap();
+        assert!(d2.host_compatible() && d2.usable());
+        assert_eq!(d2.manifest.host_requirement, None);
     }
 
     #[test]

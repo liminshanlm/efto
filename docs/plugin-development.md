@@ -41,6 +41,7 @@ my-plugin/
 | `cmds[].cmd` | 触发词，缺省等于 `label`；两者都可作为搜索关键字 |
 | `cmds[].platform` | 同插件级 `platform`，只限定这一条 cmd 的可见性 |
 | `fileTypes` | 可打开的扩展名数组，例如 `["md", "markdown"]`。宿主统一成小写、去掉前导点，用于系统「打开方式」与 `efto.exe --open-file` 路由；不写表示不参与 |
+| `engines.efto` | 宿主版本要求，例如 `">=0.1.0"`。只支持单条比较 `>=` `>` `<=` `<` `=`（省略操作符等价 `=`，可写 `x.y` 缺省段按 0）；`^`/`~`/`||` 等写法会被判为不兼容并报错。不写表示不限制。**不满足时插件仍出现在 `cli plugins`（标注"宿主版本不匹配"），但不进搜索、不能被唤起**，`plugin-run` 报 `host_version_mismatch` |
 
 ### 用插件打开文件（系统「打开方式」）
 
@@ -68,6 +69,16 @@ efto.onPluginEnter((info) => {
   // 普通触发词…
 });
 ```
+
+### 打包与分发
+
+插件目录本身就是分发包：`scripts/package-plugins.ps1` 会把 `plugins/<name>/` 压成
+`dist/plugins/<name>-<version>.zip`（zip 根是插件目录，不是 `plugins/` 这一层）。安装有两条路：
+
+- 设置 → 插件 → 导入，选 zip（宿主会深度优先收集包内所有插件根，支持单个包带多个插件）；
+- 直接解压到 `~/.efto/plugins/<name>/`，或用 `EFTO_PLUGIN_DIRS` 指向你的开发目录。
+
+升级时同名目录覆盖即可；用户目录的同名插件优先于 exe 同级 `plugins/`。
 
 ### 没有 UI 时怎么反馈
 

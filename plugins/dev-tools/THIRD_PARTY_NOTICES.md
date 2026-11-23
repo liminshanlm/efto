@@ -18,9 +18,8 @@ If an asset is ever replaced or re-minified, keep the upstream license header.
 
 ## Icons
 
-`icon/` is copied from upstream. `icon_utools.png` and `icon_chrome.png` are upstream
-assets; efto's UI does not reference them. `favicon.ico` and `icon/icon_1024.png` are the
-upstream Ctool icon assets, covered by the upstream MIT license.
+`icon/` is copied from upstream. `favicon.ico` and `icon/icon_1024.png` are the upstream
+Ctool icon assets, covered by the upstream MIT license.
 
 efto does not provide a uTools compatibility layer, and this plugin does not claim
 compatibility with any third-party launcher.

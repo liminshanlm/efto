@@ -170,8 +170,8 @@ impl PluginRegistry {
     pub fn get(&self, id: &str) -> Option<&PluginDescriptor> {
         self.plugins
             .iter()
-            // 平台不支持的插件和已停用一样"不能被唤起"；要区分报错时用 plugins() 自查
-            .find(|p| p.id().eq_ignore_ascii_case(id) && p.enabled && p.supported_on_this_os())
+            // 平台/宿主版本不支持的插件和已停用一样"不能被唤起"；要区分报错时用 plugins() 自查
+            .find(|p| p.id().eq_ignore_ascii_case(id) && p.usable())
     }
 
     pub fn is_empty(&self) -> bool {
@@ -201,11 +201,7 @@ impl PluginRegistry {
             return Vec::new();
         }
         let mut hits: Vec<SearchHit> = Vec::new();
-        for plugin in self
-            .plugins
-            .iter()
-            .filter(|p| p.enabled && p.supported_on_this_os())
-        {
+        for plugin in self.plugins.iter().filter(|p| p.usable()) {
             if !plugin.has_backend() && !plugin.has_ui() {
                 continue;
             }
@@ -577,6 +573,25 @@ mod tests {
 
         let hits = reg.search("timer", 10);
         assert!(hits.iter().any(|h| h.title == "计时"));
+    }
+
+    /// 宿主版本不匹配的插件：仍被列出（设置页要能显示原因），但不进搜索、不能被唤起。
+    #[test]
+    fn host_mismatch_plugin_is_listed_but_not_usable() {
+        let dir = tempfile::tempdir().unwrap();
+        mk_plugin(
+            dir.path(),
+            "future",
+            r#"{"name":"future","main":"main.js","engines":{"efto":">9.0.0"},"cmds":[{"type":"input","label":"未来","cmd":"future"}]}"#,
+            &[("main.js", "")],
+        );
+        let reg = PluginRegistry::discover(&[dir.path().to_path_buf()]);
+        assert_eq!(reg.len(), 1, "不匹配的插件仍要出现在列表里");
+        assert!(reg.get("future").is_none(), "不能被唤起");
+        assert!(
+            reg.search("future", 10).is_empty(),
+            "不能被搜索到（反例：不该出结果）"
+        );
     }
 
     #[test]

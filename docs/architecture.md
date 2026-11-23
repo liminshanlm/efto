@@ -413,6 +413,17 @@ GUI 与 CLI 共用 `runtime_capability`，CLI 的解释器同样从 settings.jso
 
 ## 插件运行时（crates/jsrt）
 
+插件进入运行时之前有两道闸门，都只影响"能不能被搜到 / 被唤起"，不影响是否列出：
+
+| 闸门 | 依据 | 不满足时 |
+| --- | --- | --- |
+| 平台 | 清单 `platform`（插件级与 `cmds[].platform`） | `cli plugins` 标注"不支持当前平台"；`plugin-run` 报 `unsupported_platform` |
+| 宿主版本 | 清单 `engines.efto`，只支持单条比较（`>=` `>` `<=` `<` `=`） | `cli plugins` 标注"宿主版本不匹配"并给出原因；`plugin-run` 报 `host_version_mismatch` |
+
+两者都走 `PluginDescriptor::usable()`（启用 + 平台 + 宿主版本），`registry.get()` 与 `search()`
+共用这一个判据，因此不存在"搜索不到但能唤起"或反过来的分叉；`registry.plugins()` 仍返回全量，
+设置页据此展示停用原因。`engines.efto` 语法不认识时按不兼容处理（明确报错，不静默放行）。
+
 ```
 spawn(plugin)
   └─ 线程 efto-plugin-<id>

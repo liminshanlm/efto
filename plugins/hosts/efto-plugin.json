@@ -1,6 +1,7 @@
 {
   "name": "hosts",
   "version": "0.1.0",
+  "engines": { "efto": ">=0.1.0" },
   "platform": [
     {
       "os": "win32"

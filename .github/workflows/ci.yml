@@ -5,9 +5,7 @@
 #   Windows: scripts/bootstrap.ps1（可跳过，runner 自带 MSVC）+ test + scripts/verify.ps1
 #   macOS:   scripts/bootstrap.sh  + test + scripts/verify.sh
 #
-# 本仓库托管在 Codeup（git@codeup.aliyun.com:.../efto.git）时本文件不被 Codeup 执行：
-# 云效流水线照此配置两个任务即可——windows-latest 与 macos-latest（arm64）各跑
-# 上面对应的两条命令。V8 预编译库在 vendor/rusty_v8/（离线可用，不依赖下载）。
+# V8 预编译库不入库：bootstrap 会先把它下载到 vendor/rusty_v8/，后续步骤复用。
 name: ci
 
 on:

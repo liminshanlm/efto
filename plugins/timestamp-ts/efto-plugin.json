@@ -1,6 +1,7 @@
 {
   "name": "timestamp-ts",
   "version": "3.0.0",
+  "engines": { "efto": ">=0.1.0" },
   "description": "时间与时间戳互转：ts 2026-11-17 14:30 给出秒/毫秒时间戳，ts 1700000000 给出本地时间与 ISO",
   "main": "main.ts",
   "logo": "logo.png",

@@ -30,7 +30,8 @@ voidtools 的 `es.exe`/`es.zip`；仓库声明 MIT 但没有 LICENSE，也没有
    - `efto-app`、`efto-jsrt` 补 `license.workspace = true`。
 4. **dev-tools**
    - 新增 `THIRD_PARTY_NOTICES.md`，记录 Ctool MIT 来源与 assets 内嵌库的许可标记。
-   - `icon_utools.png` / `icon_chrome.png` 按用户要求保留，未再被 efto UI 引用；风险已在 notices 记录。
+   - `icon_utools.png` / `icon_chrome.png` 当次按用户要求保留（未被 efto UI 引用）；2026-11-23
+     开源整备时两者均已从工作区与 Git 历史中移除，见 `.agents/notes/implemented/architecture/2026-11-23-open-source-history-purge.md`。
 5. **uTools 遗留清理**
    - 删除 `plugin-sdk/utools.d.ts`、`scripts/check-compat.js`、`scripts/prove-compat-guard.py`。
    - `crates/core/src/plugins/registry.rs` 的 `DynamicItem` 注释改为指向 `efto.setSearchItems`。

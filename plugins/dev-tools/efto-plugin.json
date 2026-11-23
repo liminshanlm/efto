@@ -1,6 +1,7 @@
 {
   "name": "dev-tools",
   "version": "2.3.0",
+  "engines": { "efto": ">=0.1.0" },
   "description": "Ctool 程序开发常用工具：哈希、加解密、编解码、时间日期、二维码、JSON、正则、文本比对、单位换算等 46 个工具",
   "main": "main.js",
   "index": "index.html",

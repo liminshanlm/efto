@@ -1,6 +1,7 @@
 {
   "name": "text-beautify",
   "version": "0.1.0",
+  "engines": { "efto": ">=0.1.0" },
   "description": "文本美化：把 JSON / XML / SQL / JS 原文本整理成规范缩进的多行格式，左侧贴原文、右侧看结果",
   "main": "main.js",
   "index": "index.html",

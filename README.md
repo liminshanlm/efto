@@ -7,7 +7,9 @@
 Alt+Space 唤起 → 输入 → 回车启动应用 / 唤起插件
 ```
 
-> **关于名字**：产品身份统一用 **efto**——cargo 包名 `efto-core` / `efto-jsrt` / `efto-app`、产物 `efto.exe`、
+> **关于名字**：**efto** 取自 **Efficiency Tools**（效率工具），目标是把"找应用、开文件、跑小工具"这类高频操作压到一个输入框里。
+>
+> 产品身份统一用 **efto**——cargo 包名 `efto-core` / `efto-jsrt` / `efto-app`、产物 `efto.exe`、
 > 窗口标题与托盘、bundle id `app.efto.launcher`、数据目录 `~/.efto`（Windows: `C:\Users\<name>\.efto`）、
 > 环境变量 `EFTO_*`。
 >
@@ -44,8 +46,8 @@ crates/
 frontend/   搜索框（纯静态 HTML/CSS/JS，无打包器）
 plugins/    示例插件：hello-js（JS）、timestamp-ts（TS + require）
 plugin-sdk/ efto.d.ts —— 给 TS 插件作者做类型提示
-scripts/    vsenv / cargo / gen-icons / dev-run / bootstrap
-vendor/     rusty_v8 预编译静态库（本网络环境 GitHub 直连不通，见下文）
+scripts/    vsenv / cargo / gen-icons / dev-run / bootstrap / package-plugins
+vendor/     V8 预编译静态库落地点（bootstrap 下载，不入库，见下文）
 ```
 
 ## 构建
@@ -66,7 +68,7 @@ powershell -ExecutionPolicy Bypass -File scripts/dev-run.ps1
 ### 两个环境坑（已经踩过并写进脚本）
 
 1. **Git Bash 的 `link.exe` 会抢走 MSVC 链接器**。`/usr/bin/link.exe` 是 coreutils 的硬链接工具，rustc 只按 PATH 找 `link.exe`，于是所有 build script 链接失败并报 `link: extra operand`。`scripts/vsenv.ps1` 会先导入 `VsDevCmd.bat` 环境，再把 `\usr\bin`、`\mingw64\bin` 从 PATH 里剔掉。**不要**在 Git Bash 里直接跑 cargo。
-2. **rusty_v8 的预编译库默认从 GitHub Releases 下载**，本机直连 GitHub 超时。仓库把 `rusty_v8_release_x86_64-pc-windows-msvc.lib.gz`（38MB）放进 `vendor/`，`.cargo/config.toml` 用 `RUSTY_V8_ARCHIVE` + `RUSTY_V8_ARCHIVE_SHA256` 指向它，构建可离线。换网络环境时改成镜像：
+2. **rusty_v8 的预编译库默认从 GitHub Releases 下载**，部分网络环境直连会超时。`scripts/bootstrap.ps1` 会把它下到 `vendor/rusty_v8/`（38MB，已 gitignore，不入库），`.cargo/config.toml` 用 `RUSTY_V8_ARCHIVE` + `RUSTY_V8_ARCHIVE_SHA256` 指向该路径，之后构建可离线。直连不通时先改镜像再跑 bootstrap：
    ```powershell
    $env:RUSTY_V8_MIRROR = "https://gh-proxy.com/https://github.com/denoland/rusty_v8/releases/download/{tag}/{file}"
    ```
@@ -209,6 +211,15 @@ efto.onPluginEnter(({ code, payload }) => {
 
 完整 API 表、TS 写法、UI 页面通信方式与调试技巧见 **`docs/plugin-development.md`**；两个可运行示例在 `plugins/hello-js` 与 `plugins/timestamp-ts`。
 
+插件可加 `"engines": { "efto": ">=0.1.0" }` 声明宿主版本要求；不满足时插件仍会列出（附原因），但不会进搜索、也不能被唤起。把插件目录打包成可分发的 zip：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/package-plugins.ps1            # 全部插件
+powershell -ExecutionPolicy Bypass -File scripts/package-plugins.ps1 -Only markdown
+```
+
+产物在 `dist/plugins/<name>-<version>.zip`，zip 根即插件目录，可直接在 设置 → 插件 导入，或解压到 `~/.efto/plugins/`。
+
 ## 明确的边界
 
 - 没有 Node.js 运行时：不能 `require('fs')`、不能装 npm 包。需要文件/系统的场景走 `efto.*` 能力（`shell*`、`kv` / `db`、`node` / `python`），需要大模型走设置里配置的 `efto.ai`。
@@ -226,3 +237,5 @@ MIT，全文见 [LICENSE](LICENSE)。示例插件可自由参考与修改。
 
 随二进制分发的第三方组件（V8、Tauri、deno_ast/SWC、MPL-2.0 与 Unicode 数据等）及其许可文本见
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
+
+想参与开发见 [CONTRIBUTING.md](CONTRIBUTING.md)；安全问题与插件信任模型见 [SECURITY.md](SECURITY.md)。

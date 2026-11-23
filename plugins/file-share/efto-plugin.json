@@ -1,6 +1,7 @@
 {
   "name": "file-share",
   "version": "0.1.0",
+  "engines": { "efto": ">=0.1.0" },
   "description": "局域网文件共享：把文件/文件夹以只读 HTTP 方式分享给同网段设备",
   "main": "main.js",
   "index": "index.html",

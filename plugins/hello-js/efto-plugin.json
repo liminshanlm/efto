@@ -1,6 +1,7 @@
 {
   "name": "hello-js",
   "version": "1.0.0",
+  "engines": { "efto": ">=0.1.0" },
   "description": "最简 JS 插件：演示 onPluginEnter、db、通知与 UI 页面往返",
   "main": "main.js",
   "index": "index.html",

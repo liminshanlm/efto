@@ -9,6 +9,9 @@
 .env.local
 .cargo/config.local.toml
 
+# V8 预编译静态库：由 scripts/bootstrap.ps1 / bootstrap.sh 下载到本地，不入库
+/vendor/rusty_v8/
+
 # 编辑器
 .idea/
 .vscode/

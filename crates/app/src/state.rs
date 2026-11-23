@@ -503,6 +503,8 @@ pub struct PluginView {
     pub has_backend: bool,
     pub cmds: Vec<PluginCmdView>,
     pub problems: Vec<String>,
+    /// 清单 `engines.efto` 与当前宿主是否兼容（false 时不进搜索、不能被唤起）。
+    pub host_compatible: bool,
     pub root: String,
     /// 清单声明的可打开扩展名（fileTypes），空 = 不参与「打开方式」。
     pub file_types: Vec<String>,
@@ -544,6 +546,7 @@ pub fn plugin_views(data: &AppData) -> Vec<PluginView> {
                     })
                     .collect(),
                 problems: p.problems.clone(),
+                host_compatible: p.host_compatible(),
                 root: p.root.to_string_lossy().to_string(),
                 file_types: p.manifest.file_types.clone(),
                 assoc: exe.as_deref().is_some_and(|e| {

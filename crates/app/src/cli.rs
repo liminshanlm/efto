@@ -18,6 +18,7 @@ use efto_core::config::Settings;
 use efto_core::plugins::registry::{
     normalize_dynamic_items, DynamicItem, PluginRegistry,
 };
+use efto_core::plugins::HOST_VERSION;
 use efto_core::search::HitPayload;
 use efto_core::store::StoreManager;
 use efto_core::usage::UsageStore;
@@ -861,6 +862,8 @@ fn cmd_plugins(settings: &Settings, f: &CliFlags) -> i32 {
                 "problems": p.problems,
                 "enabled": p.enabled,
                 "supported": p.supported_on_this_os(),
+                "hostCompatible": p.host_compatible(),
+                "hostRequirement": p.manifest.host_requirement,
             })
         })
         .collect();
@@ -896,6 +899,7 @@ fn cmd_plugins(settings: &Settings, f: &CliFlags) -> i32 {
         if r["supported"] == serde_json::Value::Bool(false) {
             println!("  ! 不支持当前平台（清单 platform 未包含本平台）");
         }
+        // 宿主版本不匹配的具体原因已经在 problems 里逐条打印，这里不重复
     }
     0
 }
@@ -922,6 +926,23 @@ fn cmd_plugin_run(settings: &Settings, f: &CliFlags) -> i32 {
             f.as_json,
             "unsupported_platform",
             format!("插件 {} 不支持当前平台", p.id()),
+            EXIT_NOT_FOUND,
+        );
+    }
+    // 宿主版本不匹配：同样报精确原因（registry.get 会把它过滤掉）
+    if let Some(p) = registry
+        .plugins()
+        .iter()
+        .find(|p| p.id().eq_ignore_ascii_case(id) && !p.host_compatible())
+    {
+        return report_error(
+            f.as_json,
+            "host_version_mismatch",
+            format!(
+                "插件 {} 需要 efto 宿主 {}，当前 {HOST_VERSION}",
+                p.id(),
+                p.manifest.host_requirement.as_deref().unwrap_or("?")
+            ),
             EXIT_NOT_FOUND,
         );
     }

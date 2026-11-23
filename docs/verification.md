@@ -1398,6 +1398,45 @@ mac 新增/改造的测试重点：
   无新增 C 工具链。
 - clipboard.html 的 `Ctrl+Enter` 保持 Control 语义（mac 键盘可按，Cmd 适配留待后续）。
 
+## 插件清单宿主版本约束 `engines.efto`（2026-11-23）
+
+- 解析与校验：`plugins::manifest::check_host_requirement` 只接受单条比较（`>=` `>` `<=` `<` `=`，
+  省略操作符等价 `=`，`x.y` 缺省段按 0）；`^` / `~` / `||` / 非数字一律判为不兼容并写进
+  `problems`，不静默放行。
+- 门禁一致：`PluginDescriptor::usable()` = 启用 + 平台 + 宿主版本，`registry.get()` 与
+  `registry.search()` 共用它；`registry.plugins()` 仍返回全量，供设置页与 `cli plugins` 展示原因。
+- 单测（`scripts/cargo.ps1 -Cmd "test -p efto-core"`，266 通过 / 0 失败）：
+  - `host_requirement_comparisons`：六种比较、`0.1` 缺省段、四种非法写法。
+  - `incompatible_host_marks_descriptor_unusable`：不匹配时 `!usable()` 且 `problems` 有原因；
+    缺省 `engines` 不受影响。
+  - `host_mismatch_plugin_is_listed_but_not_usable`：仍列出、`get()` 为 `None`、`search()` 为空
+    （"不该出结果"的反例）。
+- 内置 13 个插件清单已加 `"engines": { "efto": ">=0.1.0" }`，全部能 `ConvertFrom-Json` 解析。
+- `scripts/package-plugins.ps1`：`-Only markdown,hello-js` 实跑成功，产出
+  `dist/plugins/markdown-0.1.0.zip` 与 `hello-js-1.0.0.zip`，zip 根是插件目录（`efto-plugin.json`
+  在顶层，无 `plugins/` 外层），与设置页导入/手工解压的预期一致。
+- 真机 CLI（`target\debug\efto.exe`，`EFTO_PLUGIN_DIRS` 指向临时目录里的 `engines.efto = ">9.0.0"`
+  插件）：`cli plugins` 正常列出并打印 `! 需要 efto 宿主 >9.0.0，当前 0.1.0`；
+  `cli plugin-run incompat run` 退出码 3 且给出同一条原因；`cli search 未来` 没有该插件条目
+  （只剩 websearch 兜底）。
+- 没验证：设置页里该插件停用原因的展示未 GUI 手测。
+
+## 开源前仓库整备（2026-11-23）
+
+- 历史清洗：`git filter-branch --index-filter` 分两次改写全部 46 个提交，移除 `tools/es/`
+  （含 `es.exe`）、`plugin-sdk/utools.d.ts`、`scripts/check-compat.js`、
+  `scripts/prove-compat-guard.py`、`plugins/quickweb/res/`、`plugins/quickweb/LICENSE.txt`、
+  `plugins/dev-tools/icon/icon_utools.png`、`plugins/dev-tools/icon/icon_chrome.png`、
+  `vendor/rusty_v8/*.gz`，以及初版 quickweb logo 的 blob（`403939d`）。
+- 结果：`git log --all --name-only` 已匹配不到上述路径；`git count-objects -vH` 的 `size-pack`
+  为 5.70 MiB（清洗前整仓 bundle 82 MB）；提交数仍为 46；`git fsck --full` 无输出。
+  备份 bundle 在 `.tmp/oss-backup/pre-oss-all.bundle` 与 `pre-icon-chrome.bundle`（`.tmp/` 不入库）。
+- 构建配置：`vendor/rusty_v8/` 已进 `.gitignore`，`.cargo/config.toml` 仍指向该路径，由
+  `scripts/bootstrap.ps1` 落盘，因此本地与公开仓库的构建路径一致（未实测"空 vendor + 直连下载"，
+  本机 GitHub 直连不通）。
+- 待人工完成：新建公开仓库后 `git remote set-url origin <GitHub URL>` 并强推（历史已重写，
+  不能推到旧 Codeup 仓）；在 GitHub 开启私有漏洞报告。
+
 
 
 

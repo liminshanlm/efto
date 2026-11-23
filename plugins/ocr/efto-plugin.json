@@ -1,6 +1,7 @@
 {
   "name": "ocr",
   "version": "0.1.0",
+  "engines": { "efto": ">=0.1.0" },
   "description": "OCR 文字识别：选图或拖图，用 设置 → 模型 里配置的模型提取文字 / 表格 / 公式（模型需支持图片输入）",
   "main": "main.js",
   "index": "index.html",

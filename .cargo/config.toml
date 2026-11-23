@@ -1,10 +1,11 @@
 # Cargo 项目级配置。
 #
-# rusty_v8 的预编译静态库默认从 GitHub Releases 拉取，本网络环境直连 GitHub 会超时，
-# 因此这里指向仓库内 vendor/ 目录的副本（38MB，构建时可离线复用）。
+# rusty_v8 的预编译静态库由 scripts/bootstrap.ps1 下载到 vendor/rusty_v8/（该目录不入库），
+# 这里固定指向那份本地副本，构建时直接复用，无需联网。
 # 换机器时两种选择：
-#   1. 用镜像重新下载：curl -L -o vendor/rusty_v8/rusty_v8_release_x86_64-pc-windows-msvc.lib.gz \
-#        "https://gh-proxy.com/https://github.com/denoland/rusty_v8/releases/download/v152.2.0/rusty_v8_release_x86_64-pc-windows-msvc.lib.gz"
+#   1. 跑一次 scripts/bootstrap.ps1（可直连 GitHub 时它会自己下；否则先用镜像下载：
+#        curl -L -o vendor/rusty_v8/rusty_v8_release_x86_64-pc-windows-msvc.lib.gz \
+#        "https://gh-proxy.com/https://github.com/denoland/rusty_v8/releases/download/v152.2.0/rusty_v8_release_x86_64-pc-windows-msvc.lib.gz"）
 #   2. 改 RUSTY_V8_ARCHIVE 为任意本地路径，或设 RUSTY_V8_MIRROR 模板（build.rs 支持 {tag}/{file} 占位符）。
 [env]
 RUSTY_V8_ARCHIVE = { value = "vendor/rusty_v8/rusty_v8_release_x86_64-pc-windows-msvc.lib.gz", relative = true }

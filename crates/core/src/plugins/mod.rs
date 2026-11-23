@@ -7,8 +7,8 @@ pub mod registry;
 
 pub use import::{import_path, ImportBatch, ImportFailure, ImportReport};
 pub use manifest::{
-    has_manifest, load_descriptor, CmdType, PluginCmd, PluginDescriptor, PluginManifest,
-    PlatformSpec, NATIVE_MANIFEST,
+    check_host_requirement, has_manifest, load_descriptor, CmdType, PluginCmd, PluginDescriptor,
+    PluginManifest, PlatformSpec, HOST_VERSION, NATIVE_MANIFEST,
 };
 pub use output::hits_from_rows;
 pub use registry::{extract_feature, PluginRegistry};
