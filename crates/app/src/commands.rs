@@ -337,7 +337,7 @@ impl InvokeOutcome {
 }
 
 /// 唤起插件：必要时启动后端 + 打开 UI 窗口。
-fn open_plugin(
+pub(crate) fn open_plugin(
     app: &AppHandle,
     data: &Shared,
     plugin_id: &str,
@@ -411,6 +411,92 @@ fn open_plugin(
         message: format!("已唤起 {plugin_id}"),
         wait_output: snapshot.has_backend && !snapshot.has_ui,
     })
+}
+
+/// 打开 `--open-file` 传入的文件：优先用注册时指定的插件，否则按扩展名路由。
+///
+/// 由系统「打开方式」直接调用时没有前端参与，所以这里自己收起主窗口。
+pub(crate) fn open_file_with_plugin(
+    app: &AppHandle,
+    data: &Shared,
+    path: &str,
+    plugin: Option<&str>,
+) -> Result<(), String> {
+    let ext = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .ok_or_else(|| format!("无法识别文件类型: {path}"))?;
+    let plugin_id = match plugin {
+        Some(id) => {
+            let registry = data.registry.read();
+            let p = registry
+                .get(id)
+                .ok_or_else(|| format!("插件未安装或清单无效: {id}"))?;
+            if !p.manifest.file_types.iter().any(|t| t == &ext) {
+                return Err(format!("插件 {id} 未声明打开 .{ext} 文件"));
+            }
+            id.to_string()
+        }
+        None => {
+            let registry = data.registry.read();
+            registry
+                .plugins()
+                .iter()
+                .find(|p| p.enabled && p.manifest.file_types.iter().any(|t| t == &ext))
+                .map(|p| p.id())
+                .ok_or_else(|| format!("没有插件声明打开 .{ext} 文件"))?
+        }
+    };
+    // 用户是为这个文件点的「打开方式」，等同于拖入：授权该插件读回这份文件
+    data.file_grants
+        .grant(&plugin_id, [PathBuf::from(path)]);
+    windows::hide_main(app);
+    open_plugin(app, data, &plugin_id, "open-file", path)?;
+    Ok(())
+}
+
+/// 取插件声明的扩展名；空清单直接报错，避免写一堆没用的注册表项。
+fn assoc_exts(data: &Shared, plugin: &str) -> Result<Vec<String>, String> {
+    let registry = data.registry.read();
+    let p = registry
+        .get(plugin)
+        .ok_or_else(|| format!("插件未安装或清单无效: {plugin}"))?;
+    if p.manifest.file_types.is_empty() {
+        return Err(format!("插件 {plugin} 没有在清单里声明 fileTypes"));
+    }
+    Ok(p.manifest.file_types.clone())
+}
+
+fn current_exe() -> Result<String, String> {
+    std::env::current_exe()
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| format!("取 exe 路径失败: {e}"))
+}
+
+/// 把插件的扩展名注册到系统「打开方式」（HKCU，免管理员，不改默认程序）。
+#[tauri::command]
+pub fn register_file_assoc(
+    plugin: String,
+    data: State<'_, Shared>,
+) -> Result<Vec<state::PluginView>, String> {
+    let exts = assoc_exts(&data, &plugin)?;
+    let title = format!("{} (efto)", data.plugin_name(&plugin));
+    let exe = current_exe()?;
+    efto_core::apps::assoc::register(&plugin, &title, &exe, &exts)
+        .map_err(|e| e.to_string())?;
+    Ok(state::plugin_views(&data))
+}
+
+/// 取消注册：只删本插件写的项，不动 `.md` 键上的其他程序。
+#[tauri::command]
+pub fn unregister_file_assoc(
+    plugin: String,
+    data: State<'_, Shared>,
+) -> Result<Vec<state::PluginView>, String> {
+    let exts = assoc_exts(&data, &plugin)?;
+    efto_core::apps::assoc::unregister(&plugin, &exts).map_err(|e| e.to_string())?;
+    Ok(state::plugin_views(&data))
 }
 
 struct PluginSnapshot {

@@ -492,6 +492,13 @@
       switchMode('source');
       setStatus('已载入输入内容');
     });
+    // 资源管理器「打开方式」传来的文件
+    host.onMessage('open-file', function (data) {
+      var p = data && typeof data.path === 'string' ? data.path : '';
+      if (!p) return;
+      if (!confirmDiscard()) return;
+      loadPath(p);
+    });
   }
 
   // ---------- 初始化 ----------

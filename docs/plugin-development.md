@@ -40,6 +40,34 @@ my-plugin/
 | `cmds[].type` | `input`（关键字后接输入） / `over`（内容覆盖） / `regex` / `word`；未知值按 `input` 处理，不会报错 |
 | `cmds[].cmd` | 触发词，缺省等于 `label`；两者都可作为搜索关键字 |
 | `cmds[].platform` | 同插件级 `platform`，只限定这一条 cmd 的可见性 |
+| `fileTypes` | 可打开的扩展名数组，例如 `["md", "markdown"]`。宿主统一成小写、去掉前导点，用于系统「打开方式」与 `efto.exe --open-file` 路由；不写表示不参与 |
+
+### 用插件打开文件（系统「打开方式」）
+
+插件声明 `fileTypes` 后，设置 → 插件 里该插件会出现「注册到「打开方式」」按钮：
+
+- 写入 `HKCU\Software\Classes\efto.<name>`（默认值 = 显示名、`DefaultIcon`、`shell\open\command`），
+  并在每个 `.md` 等的 `OpenWithProgids` 下登记 `efto.<name>`；**免管理员、不改默认程序**，
+  「取消注册」只删 efto 自己写的项。
+- 注册的命令行是 `"<efto.exe>" --open-file "%1" --plugin "<name>"`。用户从资源管理器选中后：
+  - 已运行实例由单实例机制接管，不会开第二个进程；
+  - 宿主按 `--plugin`（缺省时按扩展名）找到插件，以 `cmd = "open-file"`、`payload = 文件绝对路径`
+    调用 `onPluginEnter`。
+- 插件侧判断 `info.code === 'open-file'`，用 `info.payload` 拿到路径；再按自己的 UI 协议
+  把路径推给页面（markdown 插件用 `efto.ipcMessage('open-file', { path })`，并在 `init` 握手时补发一次）。
+  宿主会把该路径**自动授权给这个插件**（等同拖入），所以插件的 `efto.file.read/write` 能直接读写它。
+  插件 UI 窗口会被显式提到前台并激活（跨进程唤起时 Windows 前台锁会拦下普通的 `show/focus`）。
+
+```js
+efto.onPluginEnter((info) => {
+  if (info.code === 'open-file') {
+    efto.showUI({ title: 'Markdown', width: 1120, height: 760 });
+    efto.ipcMessage('open-file', { path: String(info.payload) });
+    return;
+  }
+  // 普通触发词…
+});
+```
 
 ### 没有 UI 时怎么反馈
 
@@ -105,7 +133,7 @@ efto.output([{ title: '42', copy: '42' }]);
 
 | 分类 | API | 备注 |
 | --- | --- | --- |
-| 生命周期 | `onPluginEnter` `onPluginOut` `onMainMessage` `onMessage` `onWindowHide/Show` | `Enter` 的 `payload` 是关键字之后的输入 |
+| 生命周期 | `onPluginEnter` `onPluginOut` `onMainMessage` `onMessage` `onWindowHide/Show` | `Enter` 的 `payload` 是关键字之后的输入；`code === 'open-file'` 时是待打开的绝对路径 |
 | **内联输出** | `efto.output(rows)` | 行格式见第 1 节，调用后搜索框保持可见 |
 | 存储(旧) | `kv.get/set/remove/all/keys/size/clear` | KV，值为任意 JSON |
 | 存储(新) | `db.put/get/remove/bulkGet/bulkPut/allDocs/info/changes/changeEmitter` | 文档形式（`_id`/`_rev`），底层就是上面那套 KV，`_rev` 自动递增 |

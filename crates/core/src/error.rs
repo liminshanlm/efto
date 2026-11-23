@@ -20,6 +20,9 @@ pub enum CoreError {
 
     #[error("启动失败: {0}")]
     Launch(String),
+
+    #[error("文件关联失败: {0}")]
+    Assoc(String),
 }
 
 pub type Result<T> = std::result::Result<T, CoreError>;

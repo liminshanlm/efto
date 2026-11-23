@@ -504,6 +504,10 @@ pub struct PluginView {
     pub cmds: Vec<PluginCmdView>,
     pub problems: Vec<String>,
     pub root: String,
+    /// 清单声明的可打开扩展名（fileTypes），空 = 不参与「打开方式」。
+    pub file_types: Vec<String>,
+    /// 当前 exe 是否已为该插件注册扩展名（设置页显示状态用）。
+    pub assoc: bool,
 }
 
 pub fn plugin_views(data: &AppData) -> Vec<PluginView> {
@@ -511,6 +515,9 @@ pub fn plugin_views(data: &AppData) -> Vec<PluginView> {
     let aliases = data.settings.lock().cmd_aliases.clone();
     let registry = data.registry.read();
     let runtime = data.runtime.lock();
+    let exe = std::env::current_exe()
+        .ok()
+        .map(|p| p.to_string_lossy().to_string());
     registry
         .plugins()
         .iter()
@@ -538,6 +545,10 @@ pub fn plugin_views(data: &AppData) -> Vec<PluginView> {
                     .collect(),
                 problems: p.problems.clone(),
                 root: p.root.to_string_lossy().to_string(),
+                file_types: p.manifest.file_types.clone(),
+                assoc: exe.as_deref().is_some_and(|e| {
+                    efto_core::apps::assoc::is_registered(&p.id(), e, &p.manifest.file_types)
+                }),
             }
         })
         .collect()

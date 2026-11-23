@@ -1188,6 +1188,43 @@ pub fn hide_preview(app: &AppHandle) {
     });
 }
 
+/// 把窗口提到前台并激活。
+///
+/// 「打开方式」由资源管理器（另一个进程）发起，Windows 的前台锁会拦下
+/// `show()/set_focus()`：窗口已经在屏幕上，却没有激活，用户会以为没打开。
+/// 借前台线程的输入队列再 `SetForegroundWindow`，是这套锁唯一稳定的绕法。
+#[cfg(windows)]
+fn force_foreground(w: &tauri::WebviewWindow) {
+    use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowThreadProcessId, IsIconic, SetForegroundWindow, ShowWindow,
+        SW_RESTORE,
+    };
+
+    let Ok(hwnd) = w.hwnd() else { return };
+    let hwnd = hwnd.0 as *mut core::ffi::c_void;
+    unsafe {
+        if IsIconic(hwnd) != 0 {
+            ShowWindow(hwnd, SW_RESTORE);
+        }
+        let fg = GetForegroundWindow();
+        let tid = GetCurrentThreadId();
+        let fg_tid = if fg.is_null() {
+            0
+        } else {
+            GetWindowThreadProcessId(fg, std::ptr::null_mut())
+        };
+        let attached = fg_tid != 0 && fg_tid != tid && AttachThreadInput(tid, fg_tid, 1) != 0;
+        SetForegroundWindow(hwnd);
+        if attached {
+            AttachThreadInput(tid, fg_tid, 0);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn force_foreground(_w: &tauri::WebviewWindow) {}
+
 fn hide_window(app: &AppHandle, label: &str) {
     if let Some(w) = app.get_webview_window(label) {
         let _ = w.hide();
@@ -1318,6 +1355,7 @@ pub fn open_plugin_ui(
     if let Some(w) = app.get_webview_window(&label) {
         let _ = w.show();
         let _ = w.set_focus();
+        force_foreground(&w);
         return Ok(());
     }
     let url = format!(
@@ -1359,7 +1397,10 @@ pub fn open_plugin_ui(
             let t0 = std::time::Instant::now();
             tracing::info!("正在创建插件 UI 窗口: {label}");
             match builder.build() {
-                Ok(_) => {
+                Ok(w) => {
+                    // 系统「打开方式」转发进来的窗口默认不会激活，显式提到前台
+                    let _ = w.set_focus();
+                    force_foreground(&w);
                     tracing::info!("插件 UI 窗口已打开: {label}（{}ms）", t0.elapsed().as_millis())
                 }
                 Err(e) => tracing::error!("插件 UI 窗口创建失败 {label}: {e}"),

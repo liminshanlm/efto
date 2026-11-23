@@ -29,6 +29,23 @@ fn hide_own_console() {
 #[cfg(not(windows))]
 fn hide_own_console() {}
 
+/// 把「允许设置前台窗口」的权限交给当前实例。
+///
+/// 资源管理器「打开方式」拉起的是一个新进程：它拿着用户的前台权限，但真正要
+/// 显示的插件窗口在已运行的实例里。不转交这份权限，`SetForegroundWindow` 会被
+/// 前台锁拦下，插件窗口只出现在后面，用户以为没打开。
+/// `ASFW_ANY` = 0xFFFF_FFFF：允许任意进程接管这一次前台切换。
+#[cfg(windows)]
+fn allow_foreground() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow;
+    unsafe {
+        AllowSetForegroundWindow(0xFFFF_FFFF);
+    }
+}
+
+#[cfg(not(windows))]
+fn allow_foreground() {}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     // UAC 提权助手：由 hosts 保存流程拉起，写完后立即退出，不进入 GUI。
@@ -41,6 +58,13 @@ fn main() {
         // CLI 通道保持控制台可见，输出照常走 stdout
         // 传 args[2..]：cli::main 的第一个参数应该是子命令本身
         std::process::exit(efto_app::cli::main(&args[2..]));
+    }
+    // 资源管理器「打开方式」：`efto.exe --open-file "<路径>" [--plugin <id>]`
+    if let Some((path, plugin)) = efto_app::parse_open_file(&args) {
+        hide_own_console();
+        allow_foreground();
+        efto_app::run_with_file(path, plugin);
+        return;
     }
     hide_own_console();
     efto_app::run();

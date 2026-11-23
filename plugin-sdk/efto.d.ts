@@ -36,10 +36,10 @@ interface ChangeEmitter {
 }
 
 interface PluginEnterInfo {
-  /** 命中的关键字 */
+  /** 命中的关键字；系统「打开方式」唤起时为 `open-file` */
   code: string;
   type: string;
-  /** 关键字之后的输入内容 */
+  /** 关键字之后的输入内容；`code === 'open-file'` 时是被打开文件的绝对路径 */
   payload: unknown;
   msg: unknown;
 }

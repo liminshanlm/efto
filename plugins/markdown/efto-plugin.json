@@ -6,6 +6,7 @@
   "index": "index.html",
   "logo": "logo.png",
   "author": { "name": "efto" },
+  "fileTypes": ["md", "markdown"],
   "cmds": [
     { "type": "input", "label": "Markdown 编辑器", "cmd": "md" },
     { "type": "input", "label": "Markdown", "cmd": "markdown" }

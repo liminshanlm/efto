@@ -9,6 +9,7 @@
 //!   "preload": "preload.js",    // UI 页面前置脚本
 //!   "logo": "logo.png",
 //!   "index": "index.html",      // UI 页面
+//!   "fileTypes": ["md", "markdown"],   // 声明可打开的扩展名（用于"打开方式"）
 //!   "platform": [{ "os": "win32" }],   // 插件级平台限定，空/缺省 = 全平台
 //!   "cmds": [
 //!     { "type": "input", "label": "你好", "cmd": "你好", "icon": "icon.png" },
@@ -136,6 +137,8 @@ struct RawManifest {
     author: Option<serde_json::Value>,
     #[serde(default)]
     cmds: Vec<PluginCmd>,
+    #[serde(default, rename = "fileTypes")]
+    file_types: Vec<String>,
     #[serde(default)]
     platform: Vec<PlatformSpec>,
     #[serde(default)]
@@ -167,6 +170,10 @@ pub struct PluginManifest {
     pub homepage: Option<String>,
     pub author: Option<String>,
     pub cmds: Vec<PluginCmd>,
+    /// 可打开的扩展名（小写、不含点）。宿主据此把 `--open-file` 路由到插件，
+    /// 设置页也用它决定是否提供"注册打开方式"。
+    #[serde(default, rename = "fileTypes")]
+    pub file_types: Vec<String>,
     /// 插件级平台限定（与 cmds[].platform 同一套词汇），空 = 全平台。
     #[serde(default)]
     pub platform: Vec<PlatformSpec>,
@@ -207,6 +214,14 @@ impl PluginManifest {
             c.cmd = c.cmd.trim().to_string();
             c.label = c.label.trim().to_string();
         }
+        // 扩展名统一成小写、不含前导点，去重保序：清单里写 ".MD" / " md " 都能用
+        let mut file_types: Vec<String> = Vec::new();
+        for raw in raw.file_types {
+            let ext = raw.trim().trim_start_matches('.').to_ascii_lowercase();
+            if !ext.is_empty() && !file_types.contains(&ext) {
+                file_types.push(ext);
+            }
+        }
         Ok(Self {
             name,
             version: raw.version,
@@ -220,6 +235,7 @@ impl PluginManifest {
             homepage: raw.homepage,
             author,
             cmds,
+            file_types,
             platform: raw.platform,
         })
     }
@@ -409,6 +425,18 @@ mod tests {
         // 与 cmds[].platform 同一套词汇：win32 / darwin / linux
         let m = PluginManifest::from_json(r#"{"name":"h","platform":[{"os":"win32"},{"os":"darwin"},{"os":"linux"}]}"#).unwrap();
         assert!(m.available_on_this_os(), "枚举了所有平台就要在任一平台可用");
+    }
+
+    #[test]
+    fn normalizes_file_types() {
+        let m = PluginManifest::from_json(
+            r#"{"name":"md","fileTypes":[" .MD ","markdown","md",""]}"#,
+        )
+        .unwrap();
+        assert_eq!(m.file_types, vec!["md", "markdown"]);
+        // 未声明时为空，不得凭空给出扩展名
+        let m = PluginManifest::from_json(r#"{"name":"h"}"#).unwrap();
+        assert!(m.file_types.is_empty());
     }
 
     fn write_plugin(dir: &std::path::Path, manifest: &str, files: &[(&str, &str)]) {

@@ -1,6 +1,7 @@
 //! 应用发现与启动。
 
 pub mod appbundle;
+pub mod assoc;
 pub mod indexer;
 pub mod launch;
 pub mod lnk;

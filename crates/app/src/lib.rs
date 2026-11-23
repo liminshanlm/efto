@@ -42,7 +42,7 @@ mod winproc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tauri::{Manager, WindowEvent};
+use tauri::{AppHandle, Manager, WindowEvent};
 use tauri_plugin_global_shortcut::Builder as ShortcutBuilder;
 
 use crate::host::TauriHost;
@@ -98,15 +98,60 @@ fn adopt_accessory_mode() {
 #[cfg(not(target_os = "macos"))]
 fn adopt_accessory_mode() {}
 
+/// 系统「打开方式」传给 efto 的参数名：`efto.exe --open-file "<路径>"`。
+pub const OPEN_FILE_ARG: &str = "--open-file";
+
+/// 从命令行里取 `--open-file <路径> [--plugin <插件id>]`。
+///
+/// `--plugin` 由注册表里的关联命令带上：同一个扩展名可能被多个插件声明，
+/// 用户在「打开方式」里选的是哪一个要原样告诉宿主。
+pub fn parse_open_file(argv: &[String]) -> Option<(String, Option<String>)> {
+    let mut path = None;
+    let mut plugin = None;
+    let mut it = argv.iter().skip(1);
+    while let Some(arg) = it.next() {
+        match arg.as_str() {
+            OPEN_FILE_ARG => path = it.next().cloned(),
+            "--plugin" => plugin = it.next().cloned(),
+            _ => {}
+        }
+    }
+    path.map(|p| (p, plugin))
+}
+
+fn open_file_from_args(app: &AppHandle, path: &str, plugin: Option<&str>) {
+    let data = app.state::<Shared>().inner().clone();
+    let app = app.clone();
+    let path = path.to_string();
+    let plugin = plugin.map(|p| p.to_string());
+    std::thread::spawn(move || {
+        if let Err(e) = commands::open_file_with_plugin(&app, &data, &path, plugin.as_deref()) {
+            tracing::warn!("打开文件失败: {e}");
+        }
+    });
+}
+
 pub fn run() {
+    run_app(None);
+}
+
+/// 首次启动就带着文件参数（资源管理器里双击/右键"打开方式"）。
+pub fn run_with_file(path: String, plugin: Option<String>) {
+    run_app(Some((path, plugin)));
+}
+
+fn run_app(initial_file: Option<(String, Option<String>)>) {
     init_tracing();
     adopt_accessory_mode();
     tracing::info!("efto {} 启动", env!("CARGO_PKG_VERSION"));
 
     tauri::Builder::default()
-        // 单实例：二次启动只唤起已有窗口
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            windows::show_main(app);
+        // 单实例：二次启动只唤起已有窗口；带 `--open-file` 时直接把文件交给插件
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            match parse_open_file(&argv) {
+                Some((path, plugin)) => open_file_from_args(app, &path, plugin.as_deref()),
+                None => windows::show_main(app),
+            }
         }))
         // 空 Builder，运行期按设置注册热键（便于改绑定）
         .plugin(ShortcutBuilder::new().build())
@@ -115,7 +160,7 @@ pub fn run() {
             let data = ctx.app_handle().state::<Shared>().inner().clone();
             protocol::handle(data, req, responder);
         })
-        .setup(|app| {
+        .setup(move |app| {
             let handle = app.handle().clone();
             // 运行时未配置时先从系统 PATH 补一次并落盘，随后 AppData::new 读到的就是补好的设置。
             // 放在 setup 而不是 AppData::new 里：单测构造 AppData 不应写用户的 settings.json。
@@ -173,6 +218,10 @@ pub fn run() {
             if let Some(w) = handle.get_webview_window(windows::MAIN_LABEL) {
                 let _ = w.hide();
             }
+            // 带文件启动（双击/右键「打开方式」）：窗口与插件都就绪后再拉起插件
+            if let Some((path, plugin)) = initial_file {
+                open_file_from_args(&handle, &path, plugin.as_deref());
+            }
             tracing::info!(
                 "就绪：应用 {} 个，插件 {} 个，热键 {}，通用动作 {}",
                 data.index.read().len(),
@@ -203,6 +252,8 @@ pub fn run() {
             commands::list_plugins,
             commands::set_plugin_cmd_alias,
             commands::set_plugin_enabled,
+            commands::register_file_assoc,
+            commands::unregister_file_assoc,
             commands::open_settings,
             commands::import_plugin,
             commands::pick_plugin_source,

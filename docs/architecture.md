@@ -85,6 +85,16 @@ macOS 支持的总设计见 `docs/macos-support-plan.md`，这里只记施工约
 
 去重键是 `resolve_key()`：`.lnk` 会解析出真实目标 exe，所以"开始菜单的微信快捷方式"和"`Tencent\WeChat\WeChat.exe`"合成一条，保留开始菜单的名字，把另一条的文件名并入别名。
 
+### 文件关联（`apps/assoc.rs`）
+
+插件清单的 `fileTypes` 决定它能打开哪些扩展名。设置页点「注册到「打开方式」」后，
+`assoc::register` 只写 `HKCU\Software\Classes`：`efto.<插件id>` 的默认名 / `DefaultIcon` /
+`shell\open\command`（`"<efto.exe>" --open-file "%1" --plugin "<id>"`），以及每个
+`.ext\OpenWithProgids` 下的登记项；免管理员、不改默认程序，取消注册只删这些项。
+系统随后以 `efto.exe --open-file <路径>` 启动本程序：`main.rs` 交给 `lib.rs::parse_open_file`，
+单实例机制把 argv 转给已运行实例；`commands::open_file_with_plugin` 校验扩展名后，
+以 `cmd = "open-file"`、`payload = 路径` 唤起对应插件。非 Windows 平台明确报错。
+
 ### `.lnk` 解析（`apps/lnk.rs`）
 
 自己实现 MS-SHLLINK 二进制解析，不走 COM：不需要 STA/COM 初始化，索引可以并行、也不需要消息泵。

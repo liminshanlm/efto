@@ -1958,3 +1958,32 @@ node --check plugins/ipmsg/main.js / ui.js / service.js      OK
 Windows 侧 `plugins/` 与 exe 同级的布局（本机无 Windows 环境）。代码按同一实现写好
 （`bundled_plugin_dir()` 同时探 `Contents/Resources/plugins` 与 exe 同级 `plugins/`），
 但需在 Windows 上补一次 `scripts/verify.ps1` 冒烟才算验证过。
+
+## 插件「打开方式」注册（2026-11-23）
+
+改动：清单 `fileTypes`、`core::apps::assoc`（只写 HKCU）、`efto.exe --open-file` 与单实例转发、
+markdown 插件接收 `cmd = "open-file"`。
+
+已验证（可复核）：
+
+- `cargo test -p efto-core`：`normalizes_file_types`（`.MD` / 空串 / 去重）、
+  `apps::assoc` 的 ProgID、非法 id、命令行引号 3 条单测。
+- `cargo check -p efto-app`、`cargo build -p efto-app` 通过。
+- `node scripts/check-frontend.js`、`node scripts/check-i18n.js` 通过。
+
+**没验证**：
+
+- 资源管理器右键「打开方式」的实跑。注册表命令指向**当前 exe**，必须先重启 efto 让新二进制生效；
+  测试机上已有一个旧实例在运行，单实例会把 `--open-file` 转给旧进程（旧代码忽略 argv），
+  为避免打断用户实例未实跑。人手复核步骤：重启 efto → 设置 → 插件 → Markdown →
+  「注册到「打开方式」」→ 资源管理器右键 `.md` →「打开方式」里选 `Markdown (efto)`。
+- `DefaultIcon` 指向 exe，资源管理器显示 efto 图标而不是插件 logo（插件 logo 不进注册表）。
+
+追加（同日）：首次实跑发现插件窗口已经在屏幕上但没有激活，用户以为没打开。
+
+- 根因：`--open-file` 由资源管理器（另一个进程）拉起，转发给已运行实例后，
+  该实例不是前台进程，Windows 前台锁把 `show()/set_focus()` 拦下。
+- 修复：`main.rs` 的 `--open-file` 分支先 `AllowSetForegroundWindow(ASFW_ANY)` 把前台权限
+  转交给现有实例；`windows::open_plugin_ui` 两条路径（新建/复用）在显示后调用
+  `force_foreground`（`AttachThreadInput` 借前台线程输入队列 + `SetForegroundWindow`）。
+- 已验证：`cargo build -p efto-app` 通过。实跑需重启 efto 后再从资源管理器点一次「打开方式」。

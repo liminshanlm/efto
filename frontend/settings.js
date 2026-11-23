@@ -821,6 +821,16 @@
       var problems = (p.problems || [])
         .map(function (x) { return '<div class="plugin-problem">' + esc(x) + '</div>'; })
         .join('');
+      // 声明了 fileTypes 的插件可以注册到系统「打开方式」
+      var assocBlock = '';
+      if (p.file_types && p.file_types.length) {
+        assocBlock = '<div class="plugin-meta">' + esc(T('settings.plugins.fileTypes', '可打开')) + ' ' +
+          esc(p.file_types.map(function (t) { return '.' + t; }).join(' / ')) + '</div>' +
+          '<button class="btn ghost plugin-assoc" data-plugin-assoc="' + esc(p.id) + '"' +
+          ' data-next="' + (p.assoc ? '0' : '1') + '">' +
+          esc(p.assoc ? T('settings.plugins.assocRemove', '取消「打开方式」注册') : T('settings.plugins.assocAdd', '注册到「打开方式」')) +
+          '</button>';
+      }
       var toggle = '<button class="btn ghost plugin-toggle" data-plugin-toggle="' + esc(p.id) +
         '" data-next="' + (p.enabled ? '0' : '1') + '">' +
         esc(p.enabled ? T('settings.plugins.disable', '停用') : T('settings.plugins.enable', '启用')) +
@@ -834,6 +844,7 @@
         '</div>' +
         (p.description ? '<div class="plugin-desc">' + esc(p.description) + '</div>' : '') +
         '<div class="plugin-meta">' + esc(T('settings.plugins.entry', '入口')) + ' ' + esc(entry || '—') + '</div>' +
+        assocBlock +
         cmdBlock +
         problems +
         '</div>' + toggle + '</div>';
@@ -1160,6 +1171,25 @@
   });
   // 启用 / 停用：停用后不再加载，立即从搜索结果消失
   $('pluginList').addEventListener('click', function (e) {
+    var assocBtn = e.target.closest('[data-plugin-assoc]');
+    if (assocBtn) {
+      var registering = assocBtn.getAttribute('data-next') === '1';
+      assocBtn.disabled = true;
+      invoke(registering ? 'register_file_assoc' : 'unregister_file_assoc', {
+        plugin: assocBtn.getAttribute('data-plugin-assoc')
+      })
+        .then(function (rows) {
+          renderPlugins(rows);
+          toast(registering
+            ? T('settings.toast.assocRegistered', '已注册到「打开方式」')
+            : T('settings.toast.assocRemoved', '已取消「打开方式」注册'));
+        })
+        .catch(function (err) {
+          assocBtn.disabled = false;
+          toast(String(err), true);
+        });
+      return;
+    }
     var btn = e.target.closest('[data-plugin-toggle]');
     if (!btn) return;
     var enabling = btn.getAttribute('data-next') === '1';
