@@ -181,7 +181,8 @@ $env:EFTO_PLUGIN_DIRS = "E:\workspace\efto\plugins"   # if you want the repo's s
 # 4) mouse: a single click on an app row only highlights it, double click launches; type 6*7 then single-click the result row → copies and dismisses
 #    type 2026-11-16 15:03:22 → two rows (seconds / milliseconds) should appear; single-click either to copy that number
 #    type date or now → eight system-time formats should appear; single-click copies the one you picked
-# 5) type 打招呼 你好 → a system notification should fire and the plugin UI window should open
+# 5) type 时间戳 abc → a system notification should fire (timestamp-ts' parse-failure path)
+#    type 网页快开 → the plugin UI window should open (quickweb)
 # 6) right-click the tray icon: show search box / rebuild index / open plugin directory / quit
 ```
 
