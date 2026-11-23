@@ -2072,3 +2072,20 @@ markdown 插件接收 `cmd = "open-file"`。
   Gatekeeper 拦截后的「右键打开」路径未实测；无 Intel x64 包。
 - `ci.yml` 同在 runner 上跑通（windows-latest 与 macos-latest 两个 gate 均 success），
   `bootstrap.ps1` 的 VS 探测在 runner 上没有触发 UAC 安装。
+
+## 设置页「让 Agent 帮我安装」（2026-11-23）
+
+- 入口：Everything 区块 `#agentInstallEs`（未就绪时显示，`ready` 时隐藏）、运行时 Node / Python
+  卡片里的 `#nodeAgent` / `#pythonAgent`（随引导一起在 `configured && ok` 时隐藏）。
+- 行为：点击后按当前状态与平台生成提示词，经新增的 `copy_to_clipboard` 命令（复用
+  `host::copy_text`）写入剪贴板，toast 提示到 Agent 对话中粘贴发送。
+  - Everything：官方 `https://www.voidtools.com/es.zip`、锁定的 sha256
+    `224550eddd…0c0d12`、目标 `%USERPROFILE%\.efto\tools\es\es.exe`；已装本体时跳过安装步骤，
+    校验失败（`mismatch`）时要求先删旧文件。
+  - Node.js / Python：Windows 用 `winget`（`OpenJS.NodeJS.LTS` / `Python.Python.3.13`），
+    macOS 用 Homebrew（`brew install node/python`），并要求 Agent 回报解释器绝对路径。
+  - 提示词语言跟随界面语言（`i18n.lang()`），中英两套内容。
+- 静态验证：`node --check frontend/settings.js`、`node scripts/check-i18n.js`（473 keys 双语一致）、
+  `node scripts/check-frontend.js`、`scripts/cargo.ps1 -Cmd "check -p efto-app"`（仅既有 4 条告警）。
+- 未验证：Windows / macOS GUI 实跑点击复制与提示词内容；Agent 端按提示词实际安装是否成功
+  不在本仓库验证范围。

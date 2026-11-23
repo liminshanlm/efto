@@ -351,6 +351,11 @@ Everything 是**一等搜索源**，和 `calc`/`clock` 同一条路：结果直�
 GUI 侧走独立异步命令 `search_files`（`spawn_blocking`），晚到的文件行追加在应用结果之后；
 es 侧超时 1s（`-timeout 1000`）、进程上限 1.2s，不可用时静默返回空（可用性看设置页）。
 
+设置页的 Everything 区块除自动下载 / 手动安装外，还提供「让 Agent 帮我安装」：宿主不静默装环境，
+而是按当前状态生成一段提示词（官方来源、锁定的 sha256、目标路径 `~/.efto/tools/es/es.exe`），
+经 `copy_to_clipboard` 复制到剪贴板，由用户粘贴到能执行本机命令的 Agent 对话里完成安装。
+安装动作仍由用户确认的 Agent 执行，宿主只负责描述事实与目标。
+
 ### macOS 的文件检索范围（`search/spotlight.rs`）
 
 与 Windows 的 es.exe 通道不同，macOS 用系统自带的 `mdfind`，因此**没有"安装/校验"环节**：
@@ -410,6 +415,9 @@ GUI 与 CLI **共用同一个 `exec_capability` 入口**：两处各写一份校
 3. **可控成本**：默认 10s、上限 60s，`-e`/`-c` 单参数传源码不落盘，cwd 固定为插件根目录。
 
 GUI 与 CLI 共用 `runtime_capability`，CLI 的解释器同样从 settings.json 读。
+设置页的 Node.js / Python 卡片在未就绪时同样提供「让 Agent 帮我安装」：按平台（Windows 用
+`winget`、macOS 用 Homebrew）生成安装提示词并复制到剪贴板，用户粘贴到 Agent 对话后按返回的
+解释器路径回到设置页「检测」。宿主不代装、不改 PATH。
 
 ## 插件运行时（crates/jsrt）
 

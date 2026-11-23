@@ -732,6 +732,8 @@
     $('everythingInstalled').textContent = st.everything_installed
       ? T('settings.everything.installed', '已安装 Everything')
       : T('settings.everything.notInstalled', '未检测到 Everything 本体');
+    var agentBtn = $('agentInstallEs');
+    if (agentBtn) agentBtn.hidden = st.state === 'ready';
     btn.disabled = false;
   }
 
@@ -780,6 +782,126 @@
       .finally(function () {
         btn.disabled = false;
         btn.textContent = T('settings.everything.installLocal', '从本地安装');
+      });
+  }
+
+  // ---------- 让 Agent 帮我安装 ----------
+  // 宿主不替用户静默装环境：生成一段提示词复制到剪贴板，由用户粘贴到任意能执行
+  // 本机命令的 Agent 对话里完成安装。提示词只写事实（官方来源、锁定的 sha256、
+  // 目标路径），安装动作仍由用户确认的 Agent 执行。
+  var ES_SHA256 = '224550eddd6f09fbae8ffe9d5e1d4bab07563a96c895fe1fc43fe60df48c0d12';
+
+  function isEnglishUi() {
+    var tag = (i18n.lang && i18n.lang()) || document.documentElement.lang || '';
+    return tag === 'en-US';
+  }
+
+  function isMacPlatform() {
+    return !!(platformCaps && platformCaps.platform === 'macos');
+  }
+
+  function everythingPrompt() {
+    var st = lastEverythingStatus || {};
+    if (isEnglishUi()) {
+      return [
+        'I use the efto launcher on Windows. Its file search depends on Everything and es.exe, but it is not ready.',
+        'Please install it on this machine directly:',
+        '',
+        st.everything_installed
+          ? '1. Everything is already installed; skip reinstalling it.'
+          : '1. Install Everything: winget install -e --id voidtools.Everything',
+        '2. Download the official command-line tool: https://www.voidtools.com/es.zip',
+        '3. Extract es.exe and verify its SHA-256 is ' + ES_SHA256 +
+          ' (Get-FileHash es.exe -Algorithm SHA256).',
+        '4. Put es.exe at %USERPROFILE%\\.efto\\tools\\es\\es.exe (create the directory if needed).' +
+          (st.state === 'mismatch'
+            ? ' Delete any existing es.exe there first: the old file failed verification.'
+            : ''),
+        '5. Run es.exe -version to confirm it works.',
+        '6. Report back when done; I will click "Recheck" in efto Settings - General.',
+        '',
+        'Note: es.exe must be the official build above; efto rejects it when the sha256 does not match.',
+        'Do not modify PATH or use builds from other sources.'
+      ].join('\n');
+    }
+    return [
+      '我在 Windows 上使用 efto 启动器，它的文件检索依赖 Everything 和 es.exe，但当前未就绪。请直接在本机帮我安装好：',
+      '',
+      st.everything_installed
+        ? '1. 已检测到 Everything 本体，这一步无需重装。'
+        : '1. 安装 Everything 本体：winget install -e --id voidtools.Everything',
+      '2. 下载官方命令行工具：https://www.voidtools.com/es.zip',
+      '3. 从 zip 中解压出 es.exe，并用 PowerShell 校验 SHA-256 必须为 ' + ES_SHA256 +
+        '（Get-FileHash es.exe -Algorithm SHA256）。',
+      '4. 把 es.exe 放到 %USERPROFILE%\\.efto\\tools\\es\\es.exe（目录不存在就创建）。' +
+        (st.state === 'mismatch' ? '如果该位置已有 es.exe，请先删除：旧文件校验不通过。' : ''),
+      '5. 运行 es.exe -version 确认能执行。',
+      '6. 完成后告诉我结果；我会回到 efto 的 设置 → 常规 点「重新检测」。',
+      '',
+      '注意：es.exe 必须是上述官方版本，sha256 不匹配时 efto 会拒绝执行；不要修改 PATH，也不要用其它来源的版本。'
+    ].join('\n');
+  }
+
+  function runtimePrompt(kind) {
+    var en = isEnglishUi();
+    var mac = isMacPlatform();
+    var name = kind === 'python' ? 'Python' : 'Node.js';
+    if (en) {
+      var enSteps = mac
+        ? (kind === 'python'
+          ? ['1. Install with Homebrew: brew install python',
+             '2. Run python3 --version to confirm it works.',
+             '3. Report the full path from which python3 (usually /opt/homebrew/bin/python3).']
+          : ['1. Install with Homebrew: brew install node',
+             '2. Run node -v to confirm it works.',
+             '3. Report the full path from which node (usually /opt/homebrew/bin/node).'])
+        : (kind === 'python'
+          ? ['1. Install Python 3: winget install -e --id Python.Python.3.13',
+             '2. Open a new terminal and run python --version to confirm it works.',
+             '3. Report the full path found by where python.']
+          : ['1. Install Node.js LTS: winget install -e --id OpenJS.NodeJS.LTS',
+             '2. Open a new terminal and run node -v to confirm it works.',
+             '3. Report the full path found by where node (usually C:\\Program Files\\nodejs\\node.exe).']);
+      return [
+        'I use the efto launcher on ' + (mac ? 'macOS' : 'Windows') + '. Its plugins need the ' + name +
+          ' runtime, but it was not detected.',
+        'Please install it on this machine directly and report the interpreter path:',
+        ''
+      ].concat(enSteps).concat([
+        '4. I will enter that path in efto Settings - Runtime and click "Check".'
+      ]).join('\n');
+    }
+    var zhSteps = mac
+      ? (kind === 'python'
+        ? ['1. 用 Homebrew 安装：brew install python',
+           '2. 执行 python3 --version 确认安装成功。',
+           '3. 用 which python3 查到完整路径并告诉我（通常是 /opt/homebrew/bin/python3）。']
+        : ['1. 用 Homebrew 安装：brew install node',
+           '2. 执行 node -v 确认安装成功。',
+           '3. 用 which node 查到完整路径并告诉我（通常是 /opt/homebrew/bin/node）。'])
+      : (kind === 'python'
+        ? ['1. 安装 Python 3：winget install -e --id Python.Python.3.13',
+           '2. 打开新的终端执行 python --version 确认安装成功。',
+           '3. 用 where python 查到 python.exe 的完整路径并告诉我。']
+        : ['1. 安装 Node.js LTS：winget install -e --id OpenJS.NodeJS.LTS',
+           '2. 打开新的终端执行 node -v 确认安装成功。',
+           '3. 用 where node 查到 node.exe 的完整路径并告诉我（通常是 C:\\Program Files\\nodejs\\node.exe）。']);
+    return [
+      '我在 ' + (mac ? 'macOS' : 'Windows') + ' 上使用 efto 启动器，插件需要 ' + name +
+        ' 运行时，但当前未检测到。请直接在本机帮我安装，并告诉我解释器路径：',
+      ''
+    ].concat(zhSteps).concat([
+      '4. 我会回到 efto 的 设置 → 运行时 填入该路径并点「检测」。'
+    ]).join('\n');
+  }
+
+  function copyAgentPrompt(text) {
+    invoke('copy_to_clipboard', { text: text })
+      .then(function () {
+        toast(T('settings.agent.copied', '已复制安装提示词，请到 Agent 对话中粘贴发送。'));
+      })
+      .catch(function (e) {
+        toast(T('settings.agent.copyFailed', '复制失败：') + e, true);
       });
   }
 
@@ -1222,6 +1344,15 @@
         toast(String(err), true);
       });
   });
+  $('agentInstallEs').addEventListener('click', function () {
+    copyAgentPrompt(everythingPrompt());
+  });
+  $('nodeAgent').addEventListener('click', function () {
+    copyAgentPrompt(runtimePrompt('node'));
+  });
+  $('pythonAgent').addEventListener('click', function () {
+    copyAgentPrompt(runtimePrompt('python'));
+  });
   $('checkNode').addEventListener('click', function () { checkRuntime('node'); });
   $('checkPython').addEventListener('click', function () { checkRuntime('python'); });
   $('nodePath').addEventListener('keydown', function (e) {
@@ -1231,7 +1362,7 @@
     if (e.key === 'Enter') checkRuntime('python');
   });
   $('saveRuntime').addEventListener('click', saveRuntime);
-  document.querySelectorAll('.runtime-guide .link-btn').forEach(function (btn) {
+  document.querySelectorAll('.runtime-guide .link-btn[data-url]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       invoke('open_url', { url: btn.dataset.url }).catch(function (e) {
         toast(T('settings.runtime.openFailed', '打开下载页失败：') + e, true);

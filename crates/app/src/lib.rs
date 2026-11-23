@@ -304,6 +304,7 @@ fn run_app(initial_file: Option<(String, Option<String>)>) {
             commands::remove_file_search_dir,
             commands::install_es,
             commands::install_es_from_bytes,
+            commands::copy_to_clipboard,
             commands::open_url,
             commands::get_settings,
             commands::set_settings,

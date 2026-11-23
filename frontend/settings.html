@@ -345,7 +345,10 @@
               文件检索依赖 Everything 的命令行工具 es.exe（官方下载后会做 sha256 校验）。
               安装 Everything 本体后，在设置里点一次“重新检测”即可。
             </div>
-            <button class="btn ghost" id="recheckEs" data-i18n="settings.everything.recheck">重新检测</button>
+            <div class="row-actions">
+              <button class="btn ghost" id="agentInstallEs" data-i18n="settings.everything.agentInstall">让 Agent 帮我安装</button>
+              <button class="btn ghost" id="recheckEs" data-i18n="settings.everything.recheck">重新检测</button>
+            </div>
           </div>
 
           <div class="group">
@@ -660,6 +663,7 @@
                   未安装 Node.js？到官网下载 LTS 安装包，安装后点「检测」（安装包默认会写入 PATH）。
                 </span>
                 <button class="link-btn" data-url="https://nodejs.org/en/download" data-i18n="settings.runtime.download">前往下载</button>
+                <button class="link-btn" id="nodeAgent" data-i18n="settings.runtime.agentInstall">让 Agent 帮我安装</button>
               </div>
             </div>
           </div>
@@ -689,6 +693,7 @@
                   未安装 Python？到官网下载安装包，安装时勾选「Add python.exe to PATH」，装完后点「检测」。
                 </span>
                 <button class="link-btn" data-url="https://www.python.org/downloads/" data-i18n="settings.runtime.download">前往下载</button>
+                <button class="link-btn" id="pythonAgent" data-i18n="settings.runtime.agentInstall">让 Agent 帮我安装</button>
               </div>
             </div>
           </div>

@@ -2160,6 +2160,12 @@ pub struct EverythingStatus {
 const ES_DOWNLOAD_URL: &str = "https://www.voidtools.com/es.zip";
 const EVERYTHING_DOWNLOAD_URL: &str = "https://www.voidtools.com/downloads/";
 
+/// 把设置页生成的文案（如「让 Agent 帮我安装」的提示词）复制到剪贴板。
+#[tauri::command]
+pub fn copy_to_clipboard(text: String) -> Result<(), String> {
+    crate::host::copy_text(&text).map(|_| ())
+}
+
 #[tauri::command]
 pub fn everything_status(data: State<'_, Shared>) -> EverythingStatus {
     let hint = data.settings.lock().everything_es_path.clone();
