@@ -93,7 +93,9 @@ macOS 支持的总设计见 `docs/macos-support-plan.md`，这里只记施工约
 `.ext\OpenWithProgids` 下的登记项；免管理员、不改默认程序，取消注册只删这些项。
 系统随后以 `efto.exe --open-file <路径>` 启动本程序：`main.rs` 交给 `lib.rs::parse_open_file`，
 单实例机制把 argv 转给已运行实例；`commands::open_file_with_plugin` 校验扩展名后，
-以 `cmd = "open-file"`、`payload = 路径` 唤起对应插件。非 Windows 平台明确报错。
+以 `cmd = "open-file"`、`payload = 路径` 唤起对应插件。非 Windows 平台明确报错，
+`platform_info` 的 `features.file_assoc` 因此只有 Windows 为 `true`，设置页据此不渲染
+「注册到「打开方式」」按钮（插件卡片的「可打开 .md」等说明仍照常展示）。
 
 ### `.lnk` 解析（`apps/lnk.rs`）
 
@@ -224,6 +226,11 @@ HTML5 dnd（WKWebView 里 `dragover` 不稳），6px 阈值区分点击与拖动
   边缘夹紧在窗口内），已提交的标注按同一位移量平移，保持相对选区的排版；因此马赛克会重新
   采样移动后的底层画面。移动位置本身不进标注撤销栈（Ctrl+Z 只回退标注），选区内单击/双击
   不会产生多余历史；长图模式选区固定，不参与移动。选区外按下仍然是重新框选。
+- **选区改大小**：同样只在没有激活标注工具时生效。右/下边框与右下角各有一条以框线为中心、
+  向两侧各放宽 6px 的命中带（1px 的框线否则点不中），命中时鼠标变 `ew-resize` / `ns-resize` /
+  `nwse-resize`；拖动只改宽高、原点不动（左/上边框不参与），夹紧在窗口内且不小于 3px。
+  命中带与选区重叠，因此 `pointerdown` 里**先判边框再判「选区内移动」**。改大小不平移标注
+  （标注按选区裁剪显示，缩小就裁掉），也不进标注撤销栈；长图模式同样不参与。
 - **长截图**：覆盖层工具栏的「长图」按钮把选区（物理像素）交给 `screenshot_long_start`。
   覆盖层**留在屏幕上**（`transparent(true)` 窗口，藏掉整屏图后只画遮罩、边框和滚动提示），
   同时 `set_ignore_cursor_events(true)` 让鼠标穿透，并用 `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`
@@ -410,6 +417,9 @@ GUI 与 CLI **共用同一个 `exec_capability` 入口**：两处各写一份校
    直接拒绝 —— 否则这个能力就成了任意程序执行。路径为空时，宿主在启动（以及打开运行时设置页）
    会用 `exec::detect_on_path` 按 PATH 顺序探测 `node.exe` / `python.exe` 等固定文件名，
    首个 `--version` 通过者写回 settings.json；已配置的路径永不覆盖，用户仍可改成别的解释器。
+   macOS 上 Finder / Dock 启动的 app 不继承 shell 的 PATH（不执行 rc 文件），因此在进程 PATH
+   之后还会追加 `/opt/homebrew/bin`、`/usr/local/bin` 两个兜底目录；进程 PATH 的顺序不变，
+   兜底只补在后面。
 2. **同一判据**：设置页"检测"、保存后的状态展示、调用时的失败都走 `probe_interpreter`
    （`--version`）与同一条 `resolve_interpreter`，不存在"显示可用但跑不起来"。
 3. **可控成本**：默认 10s、上限 60s，`-e`/`-c` 单参数传源码不落盘，cwd 固定为插件根目录。

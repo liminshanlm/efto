@@ -45,7 +45,9 @@ my-plugin/
 
 ### 用插件打开文件（系统「打开方式」）
 
-插件声明 `fileTypes` 后，设置 → 插件 里该插件会出现「注册到「打开方式」」按钮：
+插件声明 `fileTypes` 后，Windows 上设置 → 插件 里该插件会出现「注册到「打开方式」」按钮
+（macOS 没有这套注册表机制，宿主 `assoc::register` 明确报错，设置页按
+`platform_info.features.file_assoc` 隐藏按钮，只保留「可打开 .md」这类说明）：
 
 - 写入 `HKCU\Software\Classes\efto.<name>`（默认值 = 显示名、`DefaultIcon`、`shell\open\command`），
   并在每个 `.md` 等的 `OpenWithProgids` 下登记 `efto.<name>`；**免管理员、不改默认程序**，
@@ -212,7 +214,9 @@ const r = await efto.exec({
 让插件用本机的 Node.js / Python 执行一段脚本。解释器**只能**在 设置 → 运行时 里配置，
 检测通过后所有插件都能调用；插件无法指定或替换解释器路径。
 路径留空时，efto 启动会自动从系统 PATH 里探测可用的 `node` / `python` 并写回设置，
-之后仍可在设置页改成别的解释器。
+之后仍可在设置页改成别的解释器。macOS 上还会在 PATH 之后补查 `/opt/homebrew/bin`、
+`/usr/local/bin`（从 Finder / Dock 启动的 app 拿不到 shell 的 PATH），设置页的安装引导
+也按平台改写成 Homebrew / `python3` 的说法。
 
 ```js
 const r = await efto.node.run({

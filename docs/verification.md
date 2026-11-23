@@ -2089,3 +2089,119 @@ markdown 插件接收 `cmd = "open-file"`。
   `node scripts/check-frontend.js`、`scripts/cargo.ps1 -Cmd "check -p efto-app"`（仅既有 4 条告警）。
 - 未验证：Windows / macOS GUI 实跑点击复制与提示词内容；Agent 端按提示词实际安装是否成功
   不在本仓库验证范围。
+
+## macOS 同步清单 A/B 项修复（2026-11-23，Apple Silicon / macOS 14.6.1）
+
+清单见 `docs/macos-parity-todo.md`，本次处理「真缺失 / 需适配」两类：
+
+- **设置页「注册到「打开方式」」按平台隐藏**：`platform_info` 的 `features` 新增
+  `file_assoc`（`cfg!(windows)`）；`frontend/settings.js` 的插件卡片只在宿主下发
+  `file_assoc !== false` 时渲染按钮，平台说明行（「可打开 .md」）照常展示。
+  后端 `assoc::register` 在非 Windows 仍明确报错（直接调用 IPC 的路径不变）。
+  单测 `platform_info_is_consistent_with_this_platform` 增加断言：
+  `features.file_assoc` 必须等于 `cfg!(windows)`。
+- **运行时探测补 macOS 兜底目录**：`exec::detect_on_path` 原来只读进程 `PATH`，
+  从 Finder / Dock 启动的 app 不继承 shell 的 PATH（不执行 rc 文件），`/opt/homebrew/bin`
+  与 `/usr/local/bin` 因此常常缺失。现在目录序列改为"进程 PATH + `FALLBACK_DIRS`"，
+  兜底目录只在 macOS 生效、只补在 PATH 之后。单测
+  `search_dirs_appends_platform_fallbacks_after_path` 钉住顺序与平台差异。
+- **运行时安装引导按平台分流**：`frontend/locales/{zh-CN,en-US}.json` 新增
+  `settings.runtime.{node,python}.{guideMac,placeholderMac}`，macOS 上引导文案改成
+  Homebrew（`brew install node/python`）、占位符改成 `/opt/homebrew/bin/...`、
+  Python 明确写 `python3`；不再出现 Windows 安装包的「Add to PATH」。
+  `settings.js` 的 `paintRuntimeCopy` 换的是 `data-i18n*` 属性而非文本，
+  切语言后 `apply()` 仍按属性重画，不会退回 Windows 文案。`settings.runtime.hint` 补了
+  「macOS 还会查 Homebrew 与 /usr/local/bin」。
+
+验证（macOS 真机，`scripts/cargo.sh`）：
+
+- `scripts/cargo.sh "test --workspace"`：core 255 / jsrt 48 / app 147（1 ignored）全通过。
+- 兜底目录端到端（临时用例，跑完已删）：把进程 `PATH` 改成只有 `/usr/bin:/bin`
+  （模拟 Finder 启动的 app）后 `detect_on_path(Node)` → `/opt/homebrew/bin/node`、
+  `detect_on_path(Python)` → `/usr/bin/python3`。本机 `which node` 是
+  `/opt/homebrew/bin/node`；`python3` 另有 `/usr/local/bin/python3`（python.org pkg 的软链），
+  未装 CLT 的机器会落到后者。
+- 静态检查：`node --check frontend/settings.js`、`node scripts/check-i18n.js`
+  （477 keys 双语一致）、`node scripts/check-frontend.js` 全通过。
+
+**没验证的**：
+
+- macOS GUI 实跑：Finder 启动后打开 设置 → 插件（Markdown 卡片应只有「可打开 .md」、
+  没有注册按钮）与 设置 → 运行时（引导应为 Homebrew 文案、占位符为 `/opt/homebrew/bin/...`）；
+  本机没有安装浏览器自动化，前端只做了静态检查。
+- 本机 `~/.efto/settings.json` 已被配置过，未跑 GUI 自动填回的边界（留空→启动被填入→清空保存→
+  再启动重新填入）。
+
+## macOS 同步清单 C 类：无 GUI 静态/CLI 验证（2026-11-23，Apple Silicon / macOS 14.6.1）
+
+清单 12 条「待同步」里剩下的 C 类（代码跨平台共享、只缺 mac 侧验证）逐条在这台 mac 上跑了一遍。
+**注意口径**：本次只做"不开 GUI"的验证——单测、`cli` 端到端、`node --check`、静态核对；
+所有窗口观感、键位时序、拖拽授权这类必须用眼睛看的条目仍在下面的「没验证」里。
+
+先跑全量：`scripts/verify.sh`（mac 端到端，会 `cargo build` 并启动一次 TextEdit 再退出）
+→ **ALL CHECKS PASSED**。覆盖 index / search（含拼音 `fy`、CJK 关键词、文件源不劫持、
+mac `x-apple.systempreferences:`）/ `cli plugins`（14 个）/ plugin-run（hello-js 夹具、
+timestamp-ts 双向、hosts 走原生能力、translate 空 payload、未知插件 exit 3）/ Spotlight
+inline + 范围外不返回 / run-command dry-run 与 echo 往返 / capabilities --json /
+files --dry-run / focus 未知 pid exit 3 / launch TextEdit（真启动并 osascript 退出）。
+
+逐条：
+
+- **engines.efto 版本约束**：`cargo test -p efto-core host_`（3 项）+ `-p efto-app host_`（3 项）
+  通过。另用两个临时插件复验 CLI 三个入口：`>=99.0.0` 与 `^0.1.0` 都出现在 `cli plugins`
+  并各带原因；`cli search` 只回 websearch 行（不进搜索）；`cli plugin-run` 均 exit 3 +
+  `{"code":"host_version_mismatch"}`；13 份内置清单 `hostCompatible` 全 true。临时目录已删。
+- **Markdown 插件 + 插件文本文件 API**：`cargo test -p efto-app fileapi` 4 项通过；
+  `node plugins/markdown/tests/run-all.js` 24 项通过；`EFTO_PLUGIN_DIRS=plugins
+  cli plugin-run markdown md "# hi" --json` 返回 `[ui→page:seed] {"text":"# hi"}`。
+- **Markdown「编辑模式」**：同一份插件测试 24 项覆盖渲染/插入路径；
+  `node --check plugins/markdown/{main,ui,render}.js` 通过；纯插件前端，宿主零改动。
+- **便签纸**：`cargo test -p efto-app notes` 3 项通过；`node --check frontend/note.js`；
+  `note_drag` 走 Tauri `start_dragging()`、窗口在独立线程创建，均无平台分支。
+- **通用动作菜单（翻译 / AI）**：清单里"macOS 通用动作未放出"已过时——
+  `BuiltinAction::UniversalActions.supported_on_platform()` 现对所有平台返回 true。
+  `cargo test -p efto-app universal` 2 项 + `cargo test -p efto-core universal` 1 项通过。
+- **颜色提取器**：`cargo build -p efto-app` 通过、`node --check frontend/color-picker.js` 通过、
+  无 Windows 路径假设。**这条没有单测**（Windows 侧也只有 `cargo check` + 语法检查）。
+- **截图拖动选区 / Shift 预览开关**：`node --check frontend/{screenshot,app}.js` +
+  `node scripts/check-frontend.js` 通过，同一份共享前端。
+- **ipmsg 探测 + 发文件**：`node --check plugins/ipmsg/{main,service,ui}.js` 通过；
+  静态核对无 Windows 假设（落盘 `path.join(os.homedir(), 'Downloads', 'efto-ipmsg')`、
+  文件名同时归一 `\` 与 `/`）。**没有跑单机 E2E**：service 启动即向局域网 UDP 广播，
+  不在开发机所在网络执行。
+- **设置页「让 Agent 帮我安装」**：`node --check frontend/settings.js`、
+  `node scripts/check-i18n.js`（477 keys）、`node scripts/check-frontend.js` 通过；
+  提示词已有 macOS 分支（Homebrew），`copy_to_clipboard` 走 `arboard`（跨平台）。
+
+顺带修掉 `docs/macos-parity-todo.md` 里 `engines` 那行的表格 bug：
+单元格里的 `||` 没转义成 `\|\|`，GFM 会把它当列分隔符，整张表从那一行起错位。
+
+**没验证的**（全部需要真机点一遍）：
+
+- 颜色提取器：Retina 缩放下的坐标换算、覆盖层窗口层级（`set_window_level`）、键盘 Enter/Esc、
+  HEX 写入剪贴板。
+- 便签纸：置顶层级是否够"浮"、无边框窗口拖动/缩放、退出重开的按上次位置恢复。
+- 截图框选拖动：多屏与 Retina 下的边界夹紧、标注随动。
+- Shift 预览：连续 Shift 的 keyup 时机与 180ms 轻点判定（Windows 侧用 CDP
+  `Input.dispatchKeyEvent` 派发过轻点/按住各一次，mac 没有对应自动化）。
+- 通用动作：划词菜单在 mac 上的实际触发、翻译结果内联主窗口、AI 插件预填。
+- Markdown 插件：拖拽授权事件在 mac 的路径、WKWebView 的 `window.print()`、
+  编辑模式下 textarea 在 flex 栏内的高度与独立滚动。
+- ipmsg：单机 E2E（UDP 广播 + 首连同意 + 大文件传输）与 macOS 防火墙放行。
+- 「让 Agent 帮我安装」：按钮显隐与复制出来的提示词内容。
+
+## 截图选区拖边框改大小（2026-11-23）
+
+改动：`frontend/screenshot.js` 在没有激活标注工具时，指针落在**右/下边框或右下角**的命中带
+（以框线为中心各 6px）上会进入改大小状态，只改宽高、原点不动；左/上边框不参与。
+
+- 命中优先级：`pointerdown` 先判边框再判"选区内移动"（两者重叠，顺序错了边缘永远被当移动）。
+- 夹紧：不小于 3px（与 `insideSel` 下限一致），不超过窗口；`e` 只改宽、`s` 只改高、`se` 两个都改。
+- 标注不跟随缩放（按选区裁剪显示），不进标注撤销栈；长图模式与工具栏标注仍沿用原优先级。
+- 文案：覆盖层提示行、`docs/help.{zh-CN,en-US}.md`、`docs/architecture.md` 的覆盖层交互段同步。
+
+静态验证：`node --check frontend/screenshot.js`、`node scripts/check-frontend.js`、
+`scripts/cargo.sh "build -p efto-app"` 通过。
+
+**没验证**：GUI 手测（命中手感、Retina/外接屏坐标、改大小后工具栏贴位、与双击复制和长图模式的
+互不干扰）。截图交互无前端测试台，历来靠页面内实点。
