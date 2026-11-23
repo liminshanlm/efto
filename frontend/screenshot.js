@@ -43,6 +43,13 @@
   var moveAnchor = null;
   var moveSel = null;
   var moveShapes = null;
+  // 右 / 下边框与右下角拖拽改大小：只改宽高，原点不动（左/上边框不参与）
+  var resizing = false;
+  var resizeStarted = false;
+  var resizeEdge = null; // 'e' | 's' | 'se'
+  var resizeSel = null;
+  var RESIZE_GRIP = 6; // 命中带宽度（CSS px）：框线只有 1px，得放宽才好点中
+  var MIN_SEL = 3; // 与 insideSel 的判定下限一致，缩到更小就没法再移动/双击了
   // 长截图状态：模式标志、已拼接行数、进度轮询定时器
   var longMode = false;
   var longRows = 0;
@@ -645,6 +652,26 @@
       p.y >= sel.y && p.y <= sel.y + sel.h);
   }
 
+  // 右 / 下边框与右下角的命中判定：返回 'e' | 's' | 'se'，不在命中带上返回 null。
+  // 命中带以框线为中心向两侧各放宽 RESIZE_GRIP，落在选区外也算命中。
+  function resizeEdgeAt(p) {
+    if (!sel || sel.w < MIN_SEL || sel.h < MIN_SEL) return null;
+    var right = sel.x + sel.w;
+    var bottom = sel.y + sel.h;
+    var onRight = Math.abs(p.x - right) <= RESIZE_GRIP &&
+      p.y >= sel.y - RESIZE_GRIP && p.y <= bottom + RESIZE_GRIP;
+    var onBottom = Math.abs(p.y - bottom) <= RESIZE_GRIP &&
+      p.x >= sel.x - RESIZE_GRIP && p.x <= right + RESIZE_GRIP;
+    if (onRight && onBottom) return 'se';
+    if (onRight) return 'e';
+    if (onBottom) return 's';
+    return null;
+  }
+
+  function edgeCursor(edge) {
+    return edge === 'se' ? 'nwse-resize' : edge === 'e' ? 'ew-resize' : 'ns-resize';
+  }
+
   function shiftShape(s, dx, dy) {
     var c = {};
     for (var k in s) c[k] = s[k];
@@ -679,6 +706,17 @@
       startShape(tool, p);
       return;
     }
+    if (!tool && !longMode) {
+      // 边缘命中带与选区重叠，必须先判边框再判"选区内移动"
+      var edge = resizeEdgeAt(p);
+      if (edge) {
+        resizing = true;
+        resizeStarted = false;
+        resizeEdge = edge;
+        resizeSel = { x: sel.x, y: sel.y, w: sel.w, h: sel.h };
+        return;
+      }
+    }
     if (inSel && !longMode) {
       // 已有选区：拖选区内是整体移动位置（长图模式选区固定，不参与移动）
       moving = true;
@@ -705,6 +743,28 @@
       moveShape(p);
       return;
     }
+    if (resizing) {
+      var rw = resizeSel.w;
+      var rh = resizeSel.h;
+      // 右/下边框各自只改一个方向，右下角改两个；夹紧到窗口内，最小 MIN_SEL
+      if (resizeEdge !== 's') {
+        rw = Math.min(Math.max(MIN_SEL, p.x - resizeSel.x), window.innerWidth - resizeSel.x);
+      }
+      if (resizeEdge !== 'e') {
+        rh = Math.min(Math.max(MIN_SEL, p.y - resizeSel.y), window.innerHeight - resizeSel.y);
+      }
+      sel = { x: resizeSel.x, y: resizeSel.y, w: rw, h: rh };
+      if (!resizeStarted && (rw !== resizeSel.w || rh !== resizeSel.h)) {
+        // 与移动一致：真的改了尺寸才收浮层，单纯点一下边框不该闪
+        resizeStarted = true;
+        bar.style.display = 'none';
+        hint.style.display = 'none';
+        palette.style.display = 'none';
+        errorEl.style.display = 'none';
+      }
+      draw();
+      return;
+    }
     if (moving) {
       var nx = Math.min(Math.max(0, moveSel.x + p.x - moveAnchor.x), Math.max(0, window.innerWidth - moveSel.w));
       var ny = Math.min(Math.max(0, moveSel.y + p.y - moveAnchor.y), Math.max(0, window.innerHeight - moveSel.h));
@@ -727,7 +787,9 @@
       return;
     }
     if (!dragging || !anchor) {
-      canvas.style.cursor = (!tool && insideSel(p)) ? 'move' : 'crosshair';
+      var hoverEdge = (!tool && !longMode) ? resizeEdgeAt(p) : null;
+      canvas.style.cursor = hoverEdge ? edgeCursor(hoverEdge)
+        : ((!tool && insideSel(p)) ? 'move' : 'crosshair');
       return;
     }
     sel = {
@@ -747,6 +809,13 @@
     }
     if (erasing) {
       endErase();
+      return;
+    }
+    if (resizing) {
+      resizing = false;
+      resizeEdge = null;
+      resizeSel = null;
+      placeBar();
       return;
     }
     if (moving) {
