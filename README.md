@@ -30,7 +30,7 @@ Alt+Space 唤起 → 输入 → 回车启动应用 / 唤起插件
 | 插件 UI | ⚠️ 代码就绪，未在真实 webview 里跑过 | `efto://` 协议托管插件目录，宿主注入 `window.efto`，UI ↔ main 双向消息 |
 | 插件持久化 | ✅ 已验证 | 每插件一个 JSON 文件，10MB 配额；KV 与文档式接口（`efto.db.put/allDocs`）都可写 |
 | Everything 文件检索 | ✅ CLI 端到端已验证 / ⚠️ 界面渲染未实测 | 搜索框直接输入（≥2 字符）→ **文件结果补在下拉框应用条目之后**（无需魔法前缀），单击选中、双击或 Enter 打开。查本机 Everything 索引，中文路径按 GBK 正确解码 |
-| 发布产物 | ✅ Windows 已验证（v0.1.0）/ macOS 待验证 | GitHub Release 提供绿色版 zip（`efto.exe` + `plugins/`）、NSIS 安装包、macOS arm64 dmg 与单个插件包；均未签名，开机自启与自动更新仍未做 |
+| 发布产物 | ✅ 已验证（v0.1.0） | GitHub Release 提供绿色版 zip（`efto.exe` + `plugins/`）、NSIS 安装包、macOS arm64 dmg 与单个插件包；均未签名，开机自启与自动更新仍未做 |
 
 **真实数据与验证过程见 `docs/verification.md`**（单元测试、204 个真机快捷方式解析度量、端到端 CLI 验证 + Node 独立时间探针，以及明确列出"没验证过什么"）。
 

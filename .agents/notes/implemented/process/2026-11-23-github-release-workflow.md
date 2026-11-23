@@ -34,8 +34,20 @@ GitHub 提供两条通路：Actions artifacts（需登录、临时）与 Release
   `efto-plugin.json` 等文件本身。
 - `ci.yml` 两个 gate（windows / macos）在 runner 上均通过，发布无需为 runner 另开构建路径。
 
+## macOS（2026-11-23 补充）
+
+- 一开始只出 Windows 是有意为之：macOS 未签名会被 Gatekeeper 拦、且 parity 清单仍有待同步项。
+  本次决定先发未签名的 Apple Silicon 包（Intel 暂不出）。
+- **坑**：`runs-on: macos-14` 在 2026 年已下线，job 启动即 cancelled，annotation 为
+  `configuration 'macos-14-arm64-us-default' is not supported`；换 `macos-15`（arm64）即恢复。
+- `tauri build --bundles app,dmg` + `APPLE_SIGNING_IDENTITY=-`（ad-hoc），产物
+  `efto-0.1.0-macos-arm64.dmg` 24.78 MB；未公证，用户需右键打开或去隔离属性。
+- 两个构建 job 只上传 artifact，新增 `publish` job 统一下载后创建 Release，避免并发建
+  release 撞 422。
+- 验证方式：下载 dmg 检查尾部 UDIF `koly` trailer；未在真实 macOS 上挂载安装。
+
 ## 未验证 / 后续
 
-- NSIS 安装包的实际安装与 SmartScreen 提示未实测。
-- 未签名：代码签名与自动更新仍留在 roadmap。
-- macOS 未纳入发布工作流（签名/公证依赖 Apple 证书）。
+- NSIS 安装包的实际安装与 SmartScreen 提示未实测；dmg 的 Gatekeeper 解除路径未实测。
+- 未签名（macOS 未公证）：代码签名、公证与自动更新仍留在 roadmap。
+- Intel x64 包未提供（可后续用 `macos-15-intel` + 交叉编译 aarch64）。

@@ -2062,6 +2062,13 @@ markdown 插件接收 `cmd = "open-file"`。
 - 产物回头验证：下载绿色版解压为 `efto.exe` + `plugins/`（13 个）+ `LICENSE` /
   `THIRD_PARTY_LICENSES.md`，在该目录跑 `efto.exe cli plugins` 输出「发现 13 个插件」并正常
   列出清单（exit 0）；`hello-js-1.0.0.zip` 的 zip 根就是插件文件（`efto-plugin.json` 在最外层）。
-- 未验证：NSIS 安装包的实际安装与 SmartScreen 提示；只有 Windows x64，macOS 未纳入。
+- macOS（run `45134646529`，2026-11-23）：`macos-15` arm64 runner 上
+  `tauri build --bundles app,dmg` 成功，产出 `efto-0.1.0-macos-arm64.dmg` 24.78 MB；
+  下载后尾部带 UDIF `koly` trailer，确认是完整磁盘映像。签名方式为 ad-hoc
+  （`APPLE_SIGNING_IDENTITY=-`），未公证。
+- 两个构建 job 改为只上传 artifact，由独立的 `publish` job 统一下载并创建 Release，
+  避免并发建 release 撞 422。
+- 未验证：NSIS 安装包的实际安装与 SmartScreen 提示；dmg 未在真实 macOS 上挂载安装，
+  Gatekeeper 拦截后的「右键打开」路径未实测；无 Intel x64 包。
 - `ci.yml` 同在 runner 上跑通（windows-latest 与 macos-latest 两个 gate 均 success），
   `bootstrap.ps1` 的 VS 探测在 runner 上没有触发 UAC 安装。
