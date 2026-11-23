@@ -155,6 +155,31 @@
       var term = document.querySelector('#commandModeSeg .seg-item[data-mode="terminal"]');
       if (term) term.hidden = true;
     }
+    paintRuntimeCopy();
+  }
+
+  // 运行时安装引导与占位符按平台换一套 key：macOS 走 Homebrew / python3，
+  // 没有 Windows 安装包的「Add to PATH」环节，路径前缀也不同。
+  // 换的是 data-i18n* 属性，切语言时 apply() 仍按属性重画，不会退回 Windows 文案。
+  function paintRuntimeCopy() {
+    if (!platformCaps || platformCaps.platform !== 'macos') return;
+    var swaps = [
+      ['nodePath', 'placeholder', 'settings.runtime.node.placeholderMac'],
+      ['pythonPath', 'placeholder', 'settings.runtime.python.placeholderMac'],
+      ['nodeGuide', 'i18n', 'settings.runtime.node.guideMac'],
+      ['pythonGuide', 'i18n', 'settings.runtime.python.guideMac']
+    ];
+    swaps.forEach(function (s) {
+      var el = $(s[0]);
+      if (!el) return;
+      if (s[1] === 'placeholder') {
+        el.setAttribute('data-i18n-placeholder', s[2]);
+      } else {
+        var span = el.querySelector('[data-i18n]');
+        if (span) span.setAttribute('data-i18n', s[2]);
+      }
+    });
+    if (window.eftoI18n && window.eftoI18n.apply) window.eftoI18n.apply(document);
   }
 
   // 权限区块：仅 macOS 展示（Windows 无此授权模型）
@@ -947,11 +972,15 @@
       var assocBlock = '';
       if (p.file_types && p.file_types.length) {
         assocBlock = '<div class="plugin-meta">' + esc(T('settings.plugins.fileTypes', '可打开')) + ' ' +
-          esc(p.file_types.map(function (t) { return '.' + t; }).join(' / ')) + '</div>' +
-          '<button class="btn ghost plugin-assoc" data-plugin-assoc="' + esc(p.id) + '"' +
-          ' data-next="' + (p.assoc ? '0' : '1') + '">' +
-          esc(p.assoc ? T('settings.plugins.assocRemove', '取消「打开方式」注册') : T('settings.plugins.assocAdd', '注册到「打开方式」')) +
-          '</button>';
+          esc(p.file_types.map(function (t) { return '.' + t; }).join(' / ')) + '</div>';
+        // 注册走 Windows 注册表（HKCU\Software\Classes），其它平台宿主明确报错；
+        // 宿主下发 file_assoc=false 时不展示按钮（platform_info 读取失败按全量展示）
+        if (!(platformCaps && platformCaps.features && platformCaps.features.file_assoc === false)) {
+          assocBlock += '<button class="btn ghost plugin-assoc" data-plugin-assoc="' + esc(p.id) + '"' +
+            ' data-next="' + (p.assoc ? '0' : '1') + '">' +
+            esc(p.assoc ? T('settings.plugins.assocRemove', '取消「打开方式」注册') : T('settings.plugins.assocAdd', '注册到「打开方式」')) +
+            '</button>';
+        }
       }
       var toggle = '<button class="btn ghost plugin-toggle" data-plugin-toggle="' + esc(p.id) +
         '" data-next="' + (p.enabled ? '0' : '1') + '">' +

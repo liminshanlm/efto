@@ -662,14 +662,34 @@ pub fn probe_interpreter(interpreter: &str) -> Result<String, ExecError> {
     Ok(line.to_string())
 }
 
-/// 在系统 PATH 里探测可用的解释器，返回第一个通过 `--version` 校验的绝对路径。
+/// 在系统 PATH（外加平台兜底目录，见 [`FALLBACK_DIRS`]）里探测可用的解释器，
+/// 返回第一个通过 `--version` 校验的绝对路径。
 ///
 /// 设置页在未配置时用它自动补全（用户之后仍可在 设置 → 运行时 改成别的路径）。
 /// 只按固定文件名查找，**不接受插件传入名字**；真正判据仍是 [`probe_interpreter`]，
 /// 所以 Windows 商店里那个只会弹商店的 `python.exe` 占位程序会被跳过。
 pub fn detect_on_path(rt: ScriptRuntime) -> Option<String> {
-    let raw = std::env::var_os("PATH")?;
-    detect_in_dirs(rt, std::env::split_paths(&raw))
+    let env_dirs = std::env::var_os("PATH")
+        .map(|raw| std::env::split_paths(&raw).collect::<Vec<_>>())
+        .unwrap_or_default();
+    detect_in_dirs(rt, search_dirs(env_dirs))
+}
+
+/// macOS 上从 Finder / Dock 启动的 app 不继承 shell 的 PATH（不执行 rc 文件），
+/// Homebrew 与 python.org 安装包落地的目录因此常常缺失，这里补上兜底。
+#[cfg(target_os = "macos")]
+const FALLBACK_DIRS: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin"];
+#[cfg(not(target_os = "macos"))]
+const FALLBACK_DIRS: &[&str] = &[];
+
+/// [`detect_on_path`] 的目录序列：进程 PATH 在前，平台兜底目录在后。
+fn search_dirs<I>(env_dirs: I) -> Vec<PathBuf>
+where
+    I: IntoIterator<Item = PathBuf>,
+{
+    let mut dirs: Vec<PathBuf> = env_dirs.into_iter().collect();
+    dirs.extend(FALLBACK_DIRS.iter().map(PathBuf::from));
+    dirs
 }
 
 /// [`detect_on_path`] 的可测试内核：按目录顺序找固定文件名并逐个探测。
@@ -1754,6 +1774,24 @@ mod tests {
         std::fs::write(&fake, b"not an interpreter").unwrap();
         assert_eq!(detect_in_dirs(ScriptRuntime::Node, [&dir]), None);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn search_dirs_appends_platform_fallbacks_after_path() {
+        let env_dir = PathBuf::from("/efto-env-only");
+        let dirs = search_dirs([env_dir.clone()]);
+        // PATH 顺序不能被打乱：兜底目录只补在后面
+        assert_eq!(dirs[0], env_dir);
+        for want in FALLBACK_DIRS {
+            assert!(dirs.iter().any(|d| d == Path::new(want)), "{want} 应进搜索序列");
+        }
+        #[cfg(target_os = "macos")]
+        {
+            assert!(FALLBACK_DIRS.contains(&"/opt/homebrew/bin"));
+            assert!(FALLBACK_DIRS.contains(&"/usr/local/bin"));
+        }
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(dirs.len(), 1);
     }
 
     #[test]

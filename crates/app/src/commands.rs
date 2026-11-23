@@ -2326,6 +2326,9 @@ pub fn platform_info() -> serde_json::Value {
             "file_buffer": BuiltinAction::FileBuffer.supported_on_platform(),
             // 终端模式要接 Terminal.app / 新建控制台窗口，非 Windows 是 v1.5
             "terminal_mode": cfg!(windows),
+            // 「打开方式」注册走 HKCU\Software\Classes，macOS 需要另做 Info.plist /
+            // LSSetDefaultRoleHandlerForContentType，当前 assoc::register 在非 Windows 明确报错
+            "file_assoc": cfg!(windows),
         }
     })
 }
@@ -2783,6 +2786,11 @@ mod tests {
         assert!(shells.iter().any(|s| s == default_shell), "{default_shell} 不在 {shells:?}");
         // 平台名字只能是三种之一
         assert!(["windows", "macos", "linux"].contains(&v["platform"].as_str().unwrap()));
+        // 「打开方式」注册只有 Windows 的注册表实现，其它平台不得在前端放出入口
+        assert_eq!(
+            v["features"]["file_assoc"].as_bool().unwrap(),
+            cfg!(windows)
+        );
     }
 
     #[test]
