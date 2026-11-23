@@ -2205,3 +2205,31 @@ files --dry-run / focus 未知 pid exit 3 / launch TextEdit（真启动并 osasc
 
 **没验证**：GUI 手测（命中手感、Retina/外接屏坐标、改大小后工具栏贴位、与双击复制和长图模式的
 互不干扰）。截图交互无前端测试台，历来靠页面内实点。
+
+## 第三方许可清单重做与产物内许可文件（2026-11-23）
+
+改动：重写 `LICENSE`（加 SPDX 行与范围说明，MIT 正文未改）与 `THIRD_PARTY_LICENSES.md`
+（产物对照表、许可族义务、带第三方代码的插件、不随包分发项、重核命令），补上缺失的
+`licenses/BSL-1.0.txt`（取自 `ryu-1.0.23` 上游 `LICENSE-BOOST`），并修掉三处产物缺文本：
+
+- `crates/app/tauri.conf.json`：新增 `bundle.licenseFile: "../../LICENSE"`（NSIS 许可页），
+  `bundle.resources` 追加 `LICENSE` / `THIRD_PARTY_LICENSES.md` / `licenses`。
+- `.github/workflows/release.yml`：绿色版 zip 的 staging 步骤增加 `licenses/` 整目录拷贝。
+
+依赖面扫描（`cargo metadata --format-version 1 --locked`，670 个包，2026-11-23）：
+无 GPL/AGPL 独占依赖（`r-efi` 的 `MIT OR Apache-2.0 OR LGPL-2.1-or-later` 走 MIT 分支）；
+MPL-2.0 共 8 个（cssparser 0.37/0.38、cssparser-macros、selectors 0.38/0.41、dtoa-short、
+option-ext、smartstring `MPL-2.0+`）；BSL-1.0 4 个（clipboard-win、error-code、ryu、ryu-js）；
+Unicode-3.0 27 个（ICU4X）；解包后的 registry 源码里没有任何 crate 带 `NOTICE` 文件，
+Apache-2.0 的 NOTICE 聚合义务未被触发。
+
+静态验证：`tauri.conf.json` JSON 解析通过、`licenseFile` 与三条 `resources` 源路径逐个存在；
+`release.yml` 经 `yaml.safe_load` 解析、确认拷贝落在 `windows-x64` 的 `Package portable zip`
+步骤；`THIRD_PARTY_LICENSES.md` 的 7 个相对链接全部存在、两张表列数一致；`LICENSE` 的 MIT
+正文与 `licenses/MIT.txt` diff 只差本项目版权行。
+
+**没验证**：NSIS 许可页与 `bundle.resources` 的真实落盘未跑构建（本机 macOS，未执行
+`tauri build --bundles nsis`，也未打 app/dmg）。`licenseFile` 的相对路径按"相对
+`tauri.conf.json`"理解，需第一个 `v*` tag 实跑确认。**仍未解决的合规缺口**：
+`licenses/MIT.txt` 无版权行、无逐 crate 归属清单，MIT/BSD 要的是 Notice，正解是接
+`cargo-bundle-licenses` / `cargo-about` 生成归属文件并塞进产物。

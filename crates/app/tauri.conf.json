@@ -156,6 +156,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "licenseFile": "../../LICENSE",
     "icon": [
       "icons/efto.icns",
       "icons/icon.ico",
@@ -168,7 +169,10 @@
       "entitlements": "entitlements.plist"
     },
     "resources": {
-      "../../plugins": "plugins"
+      "../../plugins": "plugins",
+      "../../LICENSE": "LICENSE",
+      "../../THIRD_PARTY_LICENSES.md": "THIRD_PARTY_LICENSES.md",
+      "../../licenses": "licenses"
     }
   },
   "plugins": {}

@@ -75,6 +75,9 @@ jobs:
           if (Test-Path 'THIRD_PARTY_LICENSES.md') {
             Copy-Item -LiteralPath 'THIRD_PARTY_LICENSES.md' -Destination $stage
           }
+          if (Test-Path 'licenses') {
+            Copy-Item -LiteralPath 'licenses' -Destination $stage -Recurse -Force
+          }
           Compress-Archive -Path "$stage/*" -DestinationPath "dist/efto-$v-windows-x64-portable.zip"
 
       - name: Package plugin zips
