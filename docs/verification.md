@@ -2057,7 +2057,11 @@ markdown 插件接收 `cmd = "open-file"`。
 - 绿色版目录与 `Settings::bundled_plugin_dir()` 的 Windows 分支一致（exe 同级 `plugins/`）。
 - 本地实跑打包步骤：13 个插件、绿色版 zip 25.5 MB（exe 未压缩 55.6 MB）、zip 根为
   `efto-0.1.0/{efto.exe, plugins/, LICENSE}`。
-- 未验证：工作流尚未在 GitHub Actions 实跑；NSIS 安装包的实际安装与 SmartScreen 提示未实测；
-  只出 Windows x64，macOS 未纳入。
-- 已知风险：`scripts/bootstrap.ps1` / `vsenv.ps1` 硬编码 `C:\BuildTools-MSVC`，在 runner 上不可用，
-  因此发布工作流直接调 cargo/tauri CLI；`ci.yml` 的 Windows gate 仍走 bootstrap，首次运行大概率失败。
+- 首次 Actions 实跑（run `45129852465`，2026-11-23）通过：`release` 全部步骤 success，Release
+  `v0.1.0` 共 15 个资产——绿色版 26.22 MB、NSIS 安装包 18.05 MB、13 个插件 zip。
+- 产物回头验证：下载绿色版解压为 `efto.exe` + `plugins/`（13 个）+ `LICENSE` /
+  `THIRD_PARTY_LICENSES.md`，在该目录跑 `efto.exe cli plugins` 输出「发现 13 个插件」并正常
+  列出清单（exit 0）；`hello-js-1.0.0.zip` 的 zip 根就是插件文件（`efto-plugin.json` 在最外层）。
+- 未验证：NSIS 安装包的实际安装与 SmartScreen 提示；只有 Windows x64，macOS 未纳入。
+- `ci.yml` 同在 runner 上跑通（windows-latest 与 macos-latest 两个 gate 均 success），
+  `bootstrap.ps1` 的 VS 探测在 runner 上没有触发 UAC 安装。
