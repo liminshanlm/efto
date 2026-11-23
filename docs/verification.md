@@ -1987,3 +1987,22 @@ markdown 插件接收 `cmd = "open-file"`。
   转交给现有实例；`windows::open_plugin_ui` 两条路径（新建/复用）在显示后调用
   `force_foreground`（`AttachThreadInput` 借前台线程输入队列 + `SetForegroundWindow`）。
 - 已验证：`cargo build -p efto-app` 通过。实跑需重启 efto 后再从资源管理器点一次「打开方式」。
+
+## Markdown 插件编辑模式（2026-11-23）
+
+改动：`plugins/markdown` 增加第三种模式「编辑模式」（split）：左侧 textarea 写源码、
+右侧实时预览；`Ctrl+E` 在 文档 → 编辑 → 源码 间循环。
+
+已验证：
+
+- `node --check plugins/markdown/ui.js`、`node plugins/markdown/tests/run-all.js`：24 项通过。
+- 静态页实测（`python -m http.server` 起 `plugins/markdown`，浏览器代替 webview）：点
+  「编辑模式」后左 textarea 与右预览各占 50%（1204px 宽下各 602px）；输入 `# 标题` + 段落
+  即时渲染为 `<h1>`/`<p>`；左右两栏独立滚动（左 `scrollTop=345` 时右为 0，反之亦然），
+  无横向溢出，外层不滚动。
+
+没验证：
+
+- 真 efto webview 内的表现（静态页没有 `efto` 宿主对象，只覆盖 DOM/CSS 布局与渲染路径）。
+- `Ctrl+E` 三态循环的浏览器实测（只验证了点击模式按钮切换）；`node --check` 保证语法正确。
+- 打印：`@media print` 已隐藏 `.editor-pane`，未实跑打印预览。

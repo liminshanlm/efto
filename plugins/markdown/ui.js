@@ -11,6 +11,8 @@
   var docDirtyEl = document.getElementById('docDirty');
   var modesEl = document.getElementById('modes');
   var toolbarEl = document.getElementById('toolbar');
+  var workspaceEl = document.getElementById('workspace');
+  var editorPaneEl = document.getElementById('editorPane');
   var editorEl = document.getElementById('editor');
   var previewWrapEl = document.getElementById('previewWrap');
   var previewEl = document.getElementById('preview');
@@ -103,8 +105,13 @@
     emptyEl.hidden = !(state.mode === 'preview' && !state.text.trim());
   }
 
+  function schedulePreview() {
+    clearTimeout(schedulePreview._t);
+    schedulePreview._t = setTimeout(renderPreview, 120);
+  }
+
   function switchMode(next) {
-    if (next !== 'preview' && next !== 'source') return;
+    if (next !== 'preview' && next !== 'source' && next !== 'split') return;
     state.mode = next;
 
     var items = modesEl.querySelectorAll('.seg-item');
@@ -113,17 +120,18 @@
         'seg-item' + (items[i].getAttribute('data-mode') === next ? ' on' : '');
     }
 
-    var source = next === 'source';
-    toolbarEl.hidden = !source;
-    editorEl.hidden = !source;
-    previewWrapEl.hidden = source;
+    var showEditor = next !== 'preview';
+    var showPreview = next !== 'source';
+    workspaceEl.setAttribute('data-mode', next);
+    toolbarEl.hidden = !showEditor;
+    editorPaneEl.hidden = !showEditor;
+    previewWrapEl.hidden = !showPreview;
 
-    if (source) {
+    if (showEditor) {
       editorEl.value = state.text;
       editorEl.focus();
-    } else {
-      renderPreview();
     }
+    if (showPreview) renderPreview();
     updateEmpty();
   }
 
@@ -136,7 +144,7 @@
     updatePath();
     updateMeta();
     updateEmpty();
-    if (state.mode === 'preview') renderPreview();
+    if (state.mode !== 'source') renderPreview();
   }
 
   function confirmDiscard() {
@@ -319,6 +327,7 @@
     state.text = editorEl.value;
     setDirty(true);
     updateMeta();
+    if (state.mode === 'split') schedulePreview();
   }
 
   function surround(before, after, placeholder) {
@@ -412,6 +421,7 @@
     state.text = editorEl.value;
     setDirty(true);
     updateMeta();
+    if (state.mode === 'split') schedulePreview();
   });
 
   editorEl.addEventListener('keydown', function (e) {
@@ -461,7 +471,9 @@
       printDoc();
     } else if (k === 'e') {
       e.preventDefault();
-      switchMode(state.mode === 'preview' ? 'source' : 'preview');
+      switchMode(
+        state.mode === 'preview' ? 'split' : state.mode === 'split' ? 'source' : 'preview'
+      );
     }
   });
 

@@ -36,6 +36,7 @@
 
       <div id="modes" class="seg" role="tablist" aria-label="显示模式">
         <button class="seg-item on" data-mode="preview" type="button" role="tab">文档模式</button>
+        <button class="seg-item" data-mode="split" type="button" role="tab">编辑模式</button>
         <button class="seg-item" data-mode="source" type="button" role="tab">源码模式</button>
       </div>
 
@@ -89,9 +90,11 @@
       <button type="button" data-act="hr">分割线</button>
     </div>
 
-    <main class="workspace">
-      <textarea id="editor" class="editor" spellcheck="false" hidden
-        placeholder="在这里写 Markdown，Ctrl+S 保存，Ctrl+E 回到文档模式"></textarea>
+    <main id="workspace" class="workspace" data-mode="preview">
+      <div id="editorPane" class="editor-pane" hidden>
+        <textarea id="editor" class="editor" spellcheck="false"
+          placeholder="在这里写 Markdown，Ctrl+S 保存，Ctrl+E 切换模式"></textarea>
+      </div>
 
       <div id="previewWrap" class="preview-wrap">
         <article id="preview" class="paper markdown-body"></article>
