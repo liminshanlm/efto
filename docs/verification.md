@@ -2045,3 +2045,19 @@ markdown 插件接收 `cmd = "open-file"`。
 - 真 efto webview 内的表现（静态页没有 `efto` 宿主对象，只覆盖 DOM/CSS 布局与渲染路径）。
 - `Ctrl+E` 三态循环的浏览器实测（只验证了点击模式按钮切换）；`node --check` 保证语法正确。
 - 打印：`@media print` 已隐藏 `.editor-pane`，未实跑打印预览。
+
+## GitHub Release 发布工作流（2026-11-23）
+
+- 入口 `.github/workflows/release.yml`：推 `v*` tag 或手动 `workflow_dispatch` 触发，用
+  `softprops/action-gh-release@v2` 挂资产。
+- 链路：下载 `rusty_v8_release_x86_64-pc-windows-msvc.lib.gz` 并按 `.cargo/config.toml` 的
+  `RUSTY_V8_ARCHIVE_SHA256` 校验 → `npx @tauri-apps/cli@2 build --bundles nsis`（一次构建同时
+  出 exe 与 NSIS 安装包）→ 绿色版 zip（`efto.exe` + `plugins/` + `LICENSE`）→
+  `scripts/package-plugins.ps1` 出单插件 zip → 上传 Release。
+- 绿色版目录与 `Settings::bundled_plugin_dir()` 的 Windows 分支一致（exe 同级 `plugins/`）。
+- 本地实跑打包步骤：13 个插件、绿色版 zip 25.5 MB（exe 未压缩 55.6 MB）、zip 根为
+  `efto-0.1.0/{efto.exe, plugins/, LICENSE}`。
+- 未验证：工作流尚未在 GitHub Actions 实跑；NSIS 安装包的实际安装与 SmartScreen 提示未实测；
+  只出 Windows x64，macOS 未纳入。
+- 已知风险：`scripts/bootstrap.ps1` / `vsenv.ps1` 硬编码 `C:\BuildTools-MSVC`，在 runner 上不可用，
+  因此发布工作流直接调 cargo/tauri CLI；`ci.yml` 的 Windows gate 仍走 bootstrap，首次运行大概率失败。

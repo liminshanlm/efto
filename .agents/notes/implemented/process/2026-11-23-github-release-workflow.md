@@ -1,0 +1,34 @@
+# GitHub Release 发布工作流
+
+- **Date**: 2026-11-23
+- **Status**: done
+- **相关**: `.github/workflows/release.yml`、`README.md`（下载一节）、`docs/verification.md`
+
+## 背景
+
+仓库迁到 GitHub 后，产物仍是本地 `target/release/efto.exe`，外部用户没有可下载的入口。
+GitHub 提供两条通路：Actions artifacts（需登录、临时）与 Release assets（公开、长期）。
+本项选择 Release：打 `v*` tag 时构建并上传。
+
+## 产物设计
+
+| 资产 | 内容 | 对应用法 |
+| --- | --- | --- |
+| `efto-<ver>-windows-x64-portable.zip` | `efto.exe` + `plugins/` + `LICENSE` | 解压即用（`bundled_plugin_dir` 读 exe 同级 `plugins/`） |
+| `efto_<ver>_x64-setup.exe` | NSIS 安装包 | `tauri build --bundles nsis`，`bundle.resources` 把插件打进安装目录 |
+| `<plugin>-<version>.zip` | 单插件 | 设置页导入或解压到 `~/.efto/plugins/<name>/` |
+
+## 关键判据
+
+- **不复用 `scripts/bootstrap.ps1` / `cargo.ps1`**：两者硬编码 `C:\BuildTools-MSVC` 并依赖 UAC
+  安装 VS，runner 上必然失败；runner 自带 rust 与 MSVC，直接调 cargo / tauri CLI 即可。
+- **V8 不入库但必须校验**：下载后与 `.cargo/config.toml` 里的 sha256 比对，避免升级 tag 时
+  文件与哈希漂移；哈希只有一处事实源。
+- **只构建一次**：绿色版复用 `tauri build` 产出的 exe，避免 cargo build 与 tauri build 各编一遍。
+
+## 未验证 / 后续
+
+- 首次 Actions 实跑、NSIS 实际安装与 SmartScreen 表现均未验证。
+- 未签名：`tauri build` 产出无签名安装包，SmartScreen 会拦；代码签名与自动更新仍留在 roadmap。
+- macOS 未纳入发布工作流（签名/公证依赖 Apple 证书）。
+- `ci.yml` 的 Windows gate 仍走 `bootstrap.ps1`，在 runner 上大概率失败，需另开一条兼容 runner 的路径。
