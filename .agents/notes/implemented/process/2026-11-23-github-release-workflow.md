@@ -46,6 +46,18 @@ GitHub 提供两条通路：Actions artifacts（需登录、临时）与 Release
   release 撞 422。
 - 验证方式：下载 dmg 检查尾部 UDIF `koly` trailer；未在真实 macOS 上挂载安装。
 
+## v0.1.0 tag 被强制移动（重要）
+
+- 首次发布时 `v0.1.0` 打在 `5a5e5bc`，工作流只有 Windows job。决定补 macOS 后，为了让
+  同一次 Release 就带上 dmg，用 `git tag -f` + `git push --force` **两次移动了该 tag**：
+  1. `5a5e5bc` → `153edd7`（加 mac job，但 `macos-14` runner 已下线，job 被 cancelled）；
+  2. `153edd7` → `6937054`（换 `macos-15`，构建成功）。
+- 现在 Release `v0.1.0` 的资产来自 `6937054`；`main` 头是之后的文档提交 `6417a4e`。
+- 影响：已 clone 或引用旧 tag 的人本地仍是旧对象，需要
+  `git fetch --tags --force` 才能对齐；任何缓存了旧 tag commit 的 CI 也会指向旧提交。
+- 约定：**发布后不再移动 tag**。以后再改发布流程用新版本号（如 `v0.1.1`），不要在已发布的
+  tag 上重写历史；这次是首次发布、无外部引用，属例外。
+
 ## 未验证 / 后续
 
 - NSIS 安装包的实际安装与 SmartScreen 提示未实测；dmg 的 Gatekeeper 解除路径未实测。
