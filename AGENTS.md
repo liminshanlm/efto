@@ -78,8 +78,9 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1               # 无 
 
 ### 一个事实只有一个家
 
-权威约定在本文件；钉钉源文档是需求事实的来源；`.agents/notes/` 只装 agent 向的施工账本与
-踩坑判据（为什么这么改、坑在哪、验到什么程度）。短 note 引用不复制，账本不取代本文件的硬性规则。
+权威约定在本文件；需求事实以仓库内的 issue、设计文档与提交记录为准；`.agents/notes/` 只装
+agent 向的施工账本与踩坑判据（为什么这么改、坑在哪、验到什么程度）。短 note 引用不复制，
+账本不取代本文件的硬性规则。
 
 ### 两轴编码
 
