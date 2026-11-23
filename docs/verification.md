@@ -503,7 +503,7 @@ release 二进制同样跑通了 `cli search jsb`、`cli plugins` 与 `cli plugi
 
 最终方案：保持控制台子系统，启动 GUI 时用 `GetConsoleProcessList` 判断——**只有该控制台仅由本进程使用时才隐藏**（即双击启动、系统新建的控制台）。从终端里启动时控制台属于用户的 shell，绝不隐藏。修后：`MainWindowTitle` 变为 `app.efto.launcher-siw`（黑控制台消失），`verify.ps1` 全部通过。
 
-**仍未确认的**：搜索框的**视觉渲染**（透明/无边框/居中/字体/配色）与插件 UI 窗口的实际观感。原因是这台机器在 RayLink 独享桌面会话里，computer-use 的截图取到的是会话画面而非宿主桌面，且会话会持续抢回前台焦点。这两点需要人工看一次，检查表见 README"如何在本机验证 GUI"。
+**仍未确认的**：搜索框的**视觉渲染**（透明/无边框/居中/字体/配色）与插件 UI 窗口的实际观感。原因是这台机器在 RayLink 独享桌面会话里，computer-use 的截图取到的是会话画面而非宿主桌面，且会话会持续抢回前台焦点。这两点需要人工看一次，检查表见 `README.zh-CN.md`「如何在本机验证 GUI」（英文版 `README.md` 同名小节）。
 
 顺带发现并修掉的一个真实不一致：`EFTO_PLUGIN_DIRS` 以前只有 CLI 路径读取，GUI 启动日志里是"发现 0 个插件"；现在 env 解析统一到 `Settings::effective_plugin_dirs()`，两条路径同一套规则，并有回归测试。
 

@@ -15,7 +15,7 @@ powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
 ```
 
 `bootstrap` 会把 rusty_v8 预编译库下载到 `vendor/rusty_v8/`（不入库）。直连 GitHub 超时的网络，
-先按 README「构建与运行」第 2 条改成镜像。
+先按 `README.zh-CN.md`「构建」第 2 条改成镜像。
 
 ## 提交前必须跑
 
