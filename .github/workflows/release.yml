@@ -98,8 +98,9 @@ jobs:
           path: dist
 
   macos-arm64:
-    # macos-14 是 Apple Silicon（arm64）runner；Intel 版后续可加 macos-13 job。
-    runs-on: macos-14
+    # macos-15 是 Apple Silicon（arm64, M1）runner；macos-14 已被 GitHub 下线。
+    # Intel 版后续可用 macos-15-intel + 交叉编译 aarch64，或另加 x64 job。
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
