@@ -66,8 +66,18 @@ impl PreviewPayload {
 static CURRENT: once_cell::sync::Lazy<std::sync::Mutex<Option<PreviewPayload>>> =
     once_cell::sync::Lazy::new(|| std::sync::Mutex::new(None));
 
-pub fn store(payload: PreviewPayload) {
+/// 当前预览对应的搜索结果 id。Shift 是开关，宿主靠它判断这次按下是
+/// "关掉已经展示的这条"还是"换成当前选中条目"。
+static CURRENT_ID: once_cell::sync::Lazy<std::sync::Mutex<Option<String>>> =
+    once_cell::sync::Lazy::new(|| std::sync::Mutex::new(None));
+
+pub fn store(hit_id: &str, payload: PreviewPayload) {
     *CURRENT.lock().unwrap_or_else(|e| e.into_inner()) = Some(payload);
+    *CURRENT_ID.lock().unwrap_or_else(|e| e.into_inner()) = Some(hit_id.to_string());
+}
+
+pub fn current_id() -> Option<String> {
+    CURRENT_ID.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 pub fn current() -> Option<PreviewPayload> {

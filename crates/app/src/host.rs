@@ -690,6 +690,14 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn exec_happy_path_returns_decoded_output() {
+        // es.exe 不再随仓库分发；本机未安装时跳过，但不静默通过
+        let ready = efto_core::exec::lookup("es")
+            .and_then(|a| efto_core::exec::resolve_verified(a, None).ok())
+            .is_some();
+        if !ready {
+            println!("skip: 本机没有已校验的 es.exe");
+            return;
+        }
         // 走完整链路（JSON -> 白名单 -> 摘要校验 -> 子进程 -> 代码页解码）
         let v = exec_capability("p", &json!({ "name": "es", "args": ["-version"] }), None)
             .expect("es -version 应成功");

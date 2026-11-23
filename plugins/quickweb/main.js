@@ -3,7 +3,7 @@
 //
 // 这里只做三件事：
 //   1. 触发词 → URL（内置表在 lib/sites.js，自定义的表存在 kv 里）
-//   2. {query} 占位符换成用户输入
+//   2. 带关键词且站点有 search 时拼站内搜索，否则打开主页
 //   3. efto.openExternal 交给系统浏览器打开
 //
 // 运行在 efto 的内嵌 V8：没有 Node、没有 DOM、没有 fetch，只能用 efto.*。
@@ -21,17 +21,28 @@ function loadCustom() {
 }
 
 // 被用户删掉的内置站点：存 code（没有 code 时退回 cmd），比较时忽略大小写。
+// 旧版本的 code 形如 islide@web，这里统一去掉 @分组 后缀，避免升级后已删的站点又冒出来。
+function normalizeKey(v) {
+  return String(v == null ? '' : v).trim().toLowerCase().split('@')[0];
+}
+
 function loadHidden() {
   try {
     var v = efto.kv.get('hidden_sites');
-    return Array.isArray(v) ? v : [];
+    if (!Array.isArray(v)) return [];
+    var out = [];
+    for (var i = 0; i < v.length; i++) {
+      var key = normalizeKey(v[i]);
+      if (key && out.indexOf(key) < 0) out.push(key);
+    }
+    return out;
   } catch (e) {
     return [];
   }
 }
 
 function siteKey(site) {
-  return String(site.code || site.cmd || '').trim().toLowerCase();
+  return normalizeKey(site.code || site.cmd);
 }
 
 function visibleBuiltin() {
@@ -174,16 +185,17 @@ efto.onPluginEnter(function (info) {
   }
 
   var site = hit.site;
-  var hasQuerySlot = String(site.url).indexOf('{query}') >= 0;
   var query = typeof payload === 'string' ? payload.trim() : '';
+  // 带关键词且有搜索地址时走站内搜索，否则打开主页。
+  var target = query && site.search ? fillQuery(site.search, query) : site.url;
 
-  if (hasQuerySlot && !query) {
+  if (!target) {
     hint(site.cmd + '：请在该触发词后输入关键词',
       '例如：' + site.cmd + ' 关键词',
       site.cmd + ' ');
     return;
   }
-  open(fillQuery(site.url, query));
+  open(target);
 });
 
 // UI 页面用：拉站点数据、增删改自定义项

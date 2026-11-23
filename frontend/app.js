@@ -123,36 +123,69 @@
   }
 
   // ---------- Shift 预览 ----------
-  // 选中项变化时同步预览窗口；同一条目不重复请求（避免每帧重读文件）。
+  // 预览已经开着时，跟着选中项换内容；没开就不主动弹（弹由 Shift 按下负责）。
   function syncPreview() {
-    if (!shiftHeld || previewSuppressed) return;
+    if (!shiftHeld || previewSuppressed || !previewOpen) return;
     var hit = hits[active];
     if (!hit) {
-      if (previewKey) {
-        previewKey = null;
-        invoke('preview_hide').catch(function () {});
-      }
+      previewKey = null;
+      previewOpen = false;
+      invoke('preview_hide').catch(function () {});
       return;
     }
-    if (hit.id === previewKey && previewOpen) return;
+    if (hit.id === previewKey) return;
     previewKey = hit.id;
     invoke('preview_show', { hit: hit })
       .then(function (ok) {
-        // 不支持预览（exe / 目录 / 插件动作…）：静默，下次切换重新判定
+        // 不支持预览（插件动作 / 命令 / 复制项…）：宿主已经收起窗口，
+        // 这里同步状态并明确提示，避免看起来像"按 Shift 没反应"。
         if (!ok) {
           if (previewKey === hit.id) previewKey = null;
-          return;
+          previewOpen = false;
+          toast(T('main.status.previewUnsupported', '该结果不支持预览'));
         }
-        // 弹出期间用户又按了别的键（Shift 组合）或关掉了预览：把窗口收回去
-        if (previewSuppressed) {
-          if (previewKey === hit.id) previewKey = null;
-          invoke('preview_hide').catch(function () {});
-          return;
-        }
-        if (previewKey === hit.id) previewOpen = true;
       })
       .catch(function () {
         if (previewKey === hit.id) previewKey = null;
+      });
+  }
+
+  // Shift 按下（本地认为预览没开）：让宿主按真实状态决定开还是关。
+  // 前端这份 previewOpen 只是缓存，漏事件时会和宿主脱节，开关判定不能交给它。
+  // releaseAfter：轻点 Shift（keyup 前没按住到延迟）时，等开关落地后再上报松开，
+  // 否则 preview_release 可能先于 show 到达宿主，按住态会被 show 再置回 true。
+  function togglePreview(releaseAfter) {
+    var hit = hits[active];
+    if (!hit) {
+      if (releaseAfter) invoke('preview_release').catch(function () {});
+      return;
+    }
+    previewKey = hit.id;
+    invoke('preview_toggle', { hit: hit })
+      .then(function (state) {
+        if (state === 'shown') {
+          // 弹出期间用户又按了别的键（Shift 组合）或关掉了：把窗口收回去
+          if (previewSuppressed) {
+            previewOpen = false;
+            if (previewKey === hit.id) previewKey = null;
+            invoke('preview_hide').catch(function () {});
+            return;
+          }
+          previewOpen = true;
+          return;
+        }
+        previewOpen = false;
+        if (previewKey === hit.id) previewKey = null;
+        if (state === 'unsupported') {
+          toast(T('main.status.previewUnsupported', '该结果不支持预览'));
+        }
+      })
+      .catch(function () {
+        previewOpen = false;
+        if (previewKey === hit.id) previewKey = null;
+      })
+      .then(function () {
+        if (releaseAfter) invoke('preview_release').catch(function () {});
       });
   }
 
@@ -161,9 +194,18 @@
     // 但要告诉宿主松开 Shift 了，否则主窗口的失焦隐藏会一直被豁免。
     if (!shiftHeld) return;
     shiftHeld = false;
-    previewSuppressed = false;
+    // 按住还没到延迟就松手：轻点 Shift 也是一次开关（绝大多数人就是这么按的）。
+    // 组合键（Shift+A 大写、Shift+方向键）在 keydown 时已经把计时器清掉并置了
+    // previewSuppressed，这里 pending/suppressed 都不成立，不会误弹。
+    var pending = previewTimer;
+    var suppressed = previewSuppressed;
     clearTimeout(previewTimer);
     previewTimer = null;
+    previewSuppressed = false;
+    if (pending && !suppressed) {
+      togglePreview(true);
+      return;
+    }
     invoke('preview_release').catch(function () {});
   }
 
@@ -1058,28 +1100,27 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Shift') {
       if (e.repeat) return;
-      // Shift 是开关：预览没开就打开当前选中项；已经开着就关掉
+      // Shift 是开关：预览开着就关掉，没开就打开当前选中项
       // （不阻止默认行为，不影响大写输入）
       shiftHeld = true;
+      clearTimeout(previewTimer);
+      previewTimer = null;
       if (previewOpen) {
         previewOpen = false;
         // 本次按住继续按住时（比如接着按方向键）不要再自动打开
         previewSuppressed = true;
         previewKey = null;
-        clearTimeout(previewTimer);
-        previewTimer = null;
         invoke('preview_hide').catch(function () {});
-      } else {
-        // Shift 也常被当修饰键用（Shift+A 输入大写、Shift+方向键选词）：
-        // 先等一小会儿，期间没有别的键按下才弹预览。
-        previewSuppressed = false;
-        clearTimeout(previewTimer);
-        previewTimer = setTimeout(function () {
-          previewTimer = null;
-          if (!shiftHeld || previewSuppressed) return;
-          syncPreview();
-        }, PREVIEW_HOLD_DELAY_MS);
+        return;
       }
+      // Shift 也常被当修饰键用（Shift+A 输入大写、Shift+方向键选词）：
+      // 先等一小会儿，期间没有别的键按下才弹预览。
+      previewSuppressed = false;
+      previewTimer = setTimeout(function () {
+        previewTimer = null;
+        if (!shiftHeld || previewSuppressed) return;
+        togglePreview();
+      }, PREVIEW_HOLD_DELAY_MS);
       return;
     }
     if (shiftHeld) {
@@ -1214,10 +1255,10 @@
       if (!q.value.trim()) search();
     });
     listen('preview:closed', function () {
-      // 用户在预览窗口点了"关闭"：清掉缓存，下次按 Shift 才会重新打开
-      clearTimeout(previewTimer);
-      previewTimer = null;
-      shiftHeld = false;
+      // 预览被收起（预览页关闭按钮 / Shift 关闭）：只同步"窗口已关"。
+      // 不改 shiftHeld、也不清按住计时器——按住状态只由 keydown/keyup 维护，
+      // 这里改会让随后的 keyup 提前返回（宿主收不到 preview_release），
+      // 也会把用户刚按下的那次 Shift 吞掉（第 3 次按 Shift 没反应就是这么来的）。
       previewKey = null;
       previewOpen = false;
     });

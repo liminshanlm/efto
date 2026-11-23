@@ -1007,10 +1007,10 @@ pub fn toggle_main(app: &AppHandle) {
 ///
 /// 在异步命令线程调用，窗口创建再另起线程（理由同 [`open_plugin_ui`]）。
 /// 文本类窗口复用 `preview.html`，网页类窗口复用 `preview-web` 并重新导航。
-pub fn show_preview(app: &AppHandle, payload: PreviewPayload) {
+pub fn show_preview(app: &AppHandle, hit_id: &str, payload: PreviewPayload) {
     PREVIEW_ACTIVE.store(true, Ordering::SeqCst);
     PREVIEW_HELD.store(true, Ordering::SeqCst);
-    crate::preview::store(payload.clone());
+    crate::preview::store(hit_id, payload.clone());
 
     if payload.kind == "web" {
         if let Some(w) = app.get_webview_window(PREVIEW_WEB_LABEL) {
@@ -1156,6 +1156,11 @@ fn build_text_preview(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
 /// 松手后预览仍会留在屏幕上，但此时就不能再豁免失焦隐藏了。
 pub fn preview_active() -> bool {
     PREVIEW_HELD.load(Ordering::SeqCst)
+}
+
+/// 预览窗口此刻是否（应当）显示。`preview_toggle` 用它判断这次 Shift 是开还是关。
+pub fn preview_visible() -> bool {
+    PREVIEW_ACTIVE.load(Ordering::SeqCst)
 }
 
 /// 松开 Shift：预览窗口保持显示，只退出"按住预览"状态。

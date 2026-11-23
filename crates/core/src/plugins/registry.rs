@@ -9,7 +9,7 @@ use super::manifest::{has_manifest, load_descriptor, CmdType, PluginCmd, PluginD
 use crate::search::{HitPayload, MatchReason, SearchHit, SearchText};
 use crate::ItemKind;
 
-/// 插件运行时登记的动态搜索项（对应 uTools 的 setFeature）。
+/// 插件运行时登记的动态搜索项（`efto.setSearchItems`）。
 /// 清单里的 cmds 是静态的；这项能力让插件把自定义数据也挂进搜索。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DynamicItem {

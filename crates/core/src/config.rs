@@ -214,7 +214,7 @@ pub struct Settings {
     /// 相对路径与不存在的目录在 `effective_file_search_dirs` 里被丢弃。
     pub file_search_dirs: Vec<PathBuf>,
     /// Everything 命令行工具 `es.exe` 的位置（文件或所在目录）。
-    /// 留空时按"仓库 tools/es → 数据目录 → PATH → Everything 安装目录"顺序自动发现。
+    /// 留空时按"数据目录 → PATH → Everything 安装目录"顺序自动发现。
     /// 无论来自哪里，**都必须通过内置 sha256 校验才会被执行**。
     pub everything_es_path: Option<String>,
     /// 界面主题，默认跟随系统明暗。

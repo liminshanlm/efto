@@ -1,10 +1,9 @@
-# Fetch and pin the Everything command-line tool (es.exe) into tools/es/.
+# Fetch the Everything command-line tool (es.exe) into the gitignored tools/es/ cache.
 #
-# Why a script instead of letting the app download it at runtime: the app CAN download
-# (exec::fetch_and_install), but a repo-maintained pin should be a deliberate, reviewable
-# step -- same reasoning as vendoring the rusty_v8 archive. This script writes the binary
-# plus the manifest that exec.rs's ALLOWLIST is supposed to match, and refuses to proceed
-# if the two hashes disagree.
+# The app downloads es.exe at runtime (exec::fetch_and_install) and the settings page can
+# also install a manually downloaded file. This script is a developer convenience: it
+# refreshes the ignored tools/es/ cache and prints the hashes needed to update ALLOWLIST
+# in crates/core/src/exec.rs after a deliberate version bump.
 #
 # ASCII-ONLY: PowerShell 5.1 decodes .ps1 as ANSI; non-ASCII bytes can swallow a newline
 # and silently null out later variables (see scripts/verify.ps1 header).
@@ -62,5 +61,5 @@ Write-Host "es.exe  size=$size  version=$version"
 Write-Host "  zip sha256 = $zipHash"
 Write-Host "  exe sha256 = $exeHash"
 Write-Host ''
-Write-Host 'Now update ALLOWLIST.sha256 in crates/app/src/exec.rs to the exe hash above,'
-Write-Host 'then run:  cargo test -p efto-app --lib exec'
+Write-Host 'Now update ALLOWLIST.sha256 in crates/core/src/exec.rs to the exe hash above,'
+Write-Host 'then run:  scripts/cargo.ps1 -Cmd "test -p efto-core --lib exec"'

@@ -1,7 +1,7 @@
 {
   "name": "quickweb",
-  "version": "4.1.2",
-  "description": "网页快开：输入触发词直接打开常用网站与 AI 站点（69 个内置项，支持自定义）",
+  "version": "1.1.0",
+  "description": "网页快开：输入触发词打开常用网站，触发词后加关键词直接站内搜索（52 个内置项，支持自定义）",
   "main": "main.js",
   "index": "index.html",
   "logo": "logo.png",
@@ -66,193 +66,103 @@
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 知网",
+      "label": "网页快开 · 网页 · 知乎 <关键词>",
+      "cmd": "知乎"
+    },
+    {
+      "type": "input",
+      "label": "网页快开 · 网页 · 知网 <关键词>",
       "cmd": "知网"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 搜索论文 <关键词>",
-      "cmd": "搜索论文"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 稿定",
-      "cmd": "稿定"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 搜索模板 <关键词>",
-      "cmd": "搜索模板"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 花瓣",
-      "cmd": "花瓣"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 搜索素材 <关键词>",
-      "cmd": "搜索素材"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · iSlide",
-      "cmd": "iSlide"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 搜索 PPT 模板 <关键词>",
-      "cmd": "搜索 PPT 模板"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · iconfont",
-      "cmd": "iconfont"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 搜索图标 <关键词>",
-      "cmd": "搜索图标"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 字体天下",
-      "cmd": "字体天下"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 搜索字体 <关键词>",
-      "cmd": "搜索字体"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 丁香园",
+      "label": "网页快开 · 网页 · 丁香园 <关键词>",
       "cmd": "丁香园"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 搜索疾病 <关键词>",
-      "cmd": "搜索疾病"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 企查查",
+      "label": "网页快开 · 网页 · 企查查 <关键词>",
       "cmd": "企查查"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 搜索企业 <关键词>",
-      "cmd": "搜索企业"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 同花顺",
+      "label": "网页快开 · 网页 · 同花顺 <关键词>",
       "cmd": "同花顺"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 搜索股票 <关键词>",
-      "cmd": "搜索股票"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · Github",
+      "label": "网页快开 · 网页 · Github <关键词>",
       "cmd": "Github"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 搜索开源项目 <关键词>",
-      "cmd": "搜索开源项目"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 哔哩哔哩",
+      "label": "网页快开 · 网页 · 哔哩哔哩 <关键词>",
       "cmd": "哔哩哔哩"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 搜索视频 <关键词>",
-      "cmd": "搜索视频"
+      "label": "网页快开 · 网页 · 天气",
+      "cmd": "天气"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 中国气象局",
-      "cmd": "中国气象局"
+      "label": "网页快开 · 工具 · 稿定 <关键词>",
+      "cmd": "稿定"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 天气预报",
-      "cmd": "天气预报"
+      "label": "网页快开 · 工具 · 花瓣 <关键词>",
+      "cmd": "花瓣"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · Smallpdf",
+      "label": "网页快开 · 工具 · iSlide <关键词>",
+      "cmd": "iSlide"
+    },
+    {
+      "type": "input",
+      "label": "网页快开 · 工具 · iconfont <关键词>",
+      "cmd": "iconfont"
+    },
+    {
+      "type": "input",
+      "label": "网页快开 · 工具 · 字体天下 <关键词>",
+      "cmd": "字体天下"
+    },
+    {
+      "type": "input",
+      "label": "网页快开 · 工具 · Smallpdf",
       "cmd": "Smallpdf"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 在线 PDF 工具箱",
-      "cmd": "在线 PDF 工具箱"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · RemoveBg",
+      "label": "网页快开 · 工具 · RemoveBg",
       "cmd": "RemoveBg"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 在线抠图",
-      "cmd": "在线抠图"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · Tinify",
+      "label": "网页快开 · 工具 · Tinify",
       "cmd": "Tinify"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 在线图片压缩",
-      "cmd": "在线图片压缩"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · ProcessOn",
+      "label": "网页快开 · 工具 · ProcessOn",
       "cmd": "ProcessOn"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 在线流程图",
-      "cmd": "在线流程图"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · ChartCube",
+      "label": "网页快开 · 工具 · ChartCube",
       "cmd": "ChartCube"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 在线图表制作",
-      "cmd": "在线图表制作"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 知犀",
+      "label": "网页快开 · 工具 · 知犀",
       "cmd": "知犀"
     },
     {
       "type": "input",
-      "label": "网页快开 · 网页 · 在线思维导图",
-      "cmd": "在线思维导图"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 奶牛快传",
+      "label": "网页快开 · 工具 · 奶牛快传",
       "cmd": "奶牛快传"
-    },
-    {
-      "type": "input",
-      "label": "网页快开 · 网页 · 在线大文件传输",
-      "cmd": "在线大文件传输"
     },
     {
       "type": "input",
@@ -326,6 +236,11 @@
     },
     {
       "type": "input",
+      "label": "网页快开 · 聚合 · 雪球 <关键词>",
+      "cmd": "雪球"
+    },
+    {
+      "type": "input",
       "label": "网页快开 · 聚合 · 36氪",
       "cmd": "36氪"
     },
@@ -341,8 +256,8 @@
     },
     {
       "type": "input",
-      "label": "网页快开 · 聚合 · TeacWeb",
-      "cmd": "TeacWeb"
+      "label": "网页快开 · 聚合 · TechWeb",
+      "cmd": "TechWeb"
     },
     {
       "type": "input",

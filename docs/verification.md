@@ -288,7 +288,7 @@ cargo 在 `E:\qianwen` 找不到 `Cargo.toml` 也以 **101** 退出，而脚本�
 | --- | --- |
 | Everything | 已装 `C:\Program Files (x86)\Everything\Everything.exe`，服务 **Running**，两个进程在跑 |
 | es.exe | **原本不存在**（Everything 安装包不含它），`es` 也不在 PATH |
-| 获取 | `https://www.voidtools.com/es.zip` 可达（`es.exe` 直链超时不通）；zip sha256 `9412f3b0…beb7b3`，解出的 exe sha256 `224550ed…c0d12`（1.1.0.18），vendor 进 `tools/es/` + `manifest.json` |
+| 获取 | `https://www.voidtools.com/es.zip` 可达（`es.exe` 直链超时不通）；zip sha256 `9412f3b0…beb7b3`，解出的 exe sha256 `224550ed…c0d12`（1.1.0.18）。仓库不内置二进制，运行时下载到数据目录 `tools/es/`；设置页另提供手动下载与本地安装兜底 |
 | 输出编码 | **GBK 不是 UTF-8**：中文路径原始字节 `0xD7 0xC9 0xD1 0xAF`。经"解码→写 UTF-8 文件→读回"验证解出 `咨询交付\skills\写报告` ✓ |
 | 参数坑 | `-count` 不存在（`Error 6: Unknown switch`，正确是 `-n`）；目录的**大小列是空**，不能当 0 B 显示 |
 | 噪音 | `ext:exe` 默认第一屏前三条全是 `$RECYCLE.BIN\$I*.exe` |
@@ -353,8 +353,8 @@ GBK 解码、超时 kill、参数含 shell 元字符不被解释、写能力开�
   排序、副标题、来源正确"，但"列表长什么样、双击是否真打开"要你点一下。
 - **Everything 没在跑时的表现**：停服务需要管理员权限，没做；代码路径有测试覆盖
   （非零退出码 / 找不到 es.exe 都返回空结果，不报错），真机没演练。
-- **运行时自动下载**（`exec::fetch_and_install`）：zip 解析器用真实 es.zip 测过 ✓，
-  但整条下载分支在本机走不到（有 vendor 副本）。实际验证的是 `scripts/fetch-es.ps1 -Force`。
+- **运行时自动下载**（`exec::fetch_and_install`）：zip 解析器用合成的 stored / deflate 夹具测过 ✓；
+  真实下载分支与设置页「从本地安装」仍以手动冒烟为准，仓库不再内置 es.exe。
 
 ## 插件 UI：白屏 + 卡死 + 消息不通（一处报障，查出六处缺陷）
 
@@ -1010,8 +1010,8 @@ efto-jsrt:  48 passed
   没有真实 API Key 下的内容渲染。
 - `dev-tools` 的预编译包内部仍有 `utools` 适配分支，但设置页的「uTools」标签只在
   `kn.isUtools()` 为真时出现，efto 下不可见；本次不反编译第三方产物。
-- 旧兼容守卫 `scripts/check-compat.js` 与当前仓库（AGENTS.md 已明确不提供兼容层）不一致，
-  运行会报 11 处失败，属于历史遗留、未接入 `verify.ps1`，本次未改动。
+- 旧兼容守卫 `scripts/check-compat.js`、`scripts/prove-compat-guard.py` 与 `plugin-sdk/utools.d.ts`
+  已删除；仓库只保留 `efto.*` 契约（AGENTS.md 明确不提供第三方启动器兼容层）。
 
 ## 2026-11-20：插件窗口主题跟随应用设置
 
@@ -1858,6 +1858,81 @@ node --check plugins/ipmsg/main.js / ui.js / service.js      OK
 - 预览里的相对路径图片无法在 `efto://` 页面加载（只认 http(s) 绝对地址与页面同源资源）；
   导出 HTML 不受此限制。
 - macOS 未构建未实测。
+
+## 网页快开：站点合并、工具分组与新增站点（2026-11-23）
+
+`plugins/quickweb` 从「一个动作一条记录」改为「一个站点一条记录」：站点表只保留
+`code/cmd/url/search/group`，带关键词且存在 `search` 时走站内搜索，否则打开主页。
+原来成对的触发词（`iSlide` / `搜索 PPT 模板`、`知网` / `搜索论文` 等）合并到站点名一条，
+清单命令从 74 条降到 57 条（52 个站点 + 5 条管理命令）。
+
+- 新增 `tool` 分组（稿定、花瓣、iSlide、iconfont、字体天下、Smallpdf、RemoveBg、Tinify、
+  ProcessOn、ChartCube、知犀、奶牛快传），管理界面顶部改为「全部 / 网页 / 工具 / AI / 聚合」tab。
+- 新增 知乎、雪球；`TechWeb` 拼写修正；A股/港股/美股、资讯、图库站点拆成唯一 code
+  （原先共用 code，删一个会连带隐藏同组其它站点）。
+- `hidden_sites` 兼容旧 `xxx@group` 写法（去 `@` 后缀后比较），升级后已删的内置项不会复活。
+
+已跑：
+
+- `node --check plugins/quickweb/main.js`、`ui/app.js`；`efto-plugin.json` JSON 解析通过。
+- 桩宿主脚本（临时目录，不进仓库）14 项通过：主页跳转、关键词编码、无 `search` 时忽略关键词、
+  未知触发词给提示、旧 `@group` 隐藏项生效、清单与站点表互相覆盖、`sites=52 cmds=57`。
+
+**没验证**：真实 WebView2 / `efto://` 页面下的 tab 切换、卡片点击与删除按钮观感；
+浏览器内核下的新 tab 样式只做了静态检查，没有截图核对。
+
+## Shift 预览偶发无反应（2026-11-23）
+
+前端预览开关状态与宿主窗口不同步，导致一次 Shift 被吞掉：
+
+- 选中项不支持预览时，宿主已 `hide_preview`，前端仍保留 `previewOpen=true`，下一次 Shift 被当成
+  "关闭"，实际无窗可关。
+- 预览开着但选中项换过之后，Shift 只关闭旧预览，不刷新成当前条目。
+- 不支持预览的结果原本静默返回，没有任何提示。
+
+修复：Shift 仅在"预览开着且展示的就是当前选中项"时关闭；`!ok` / 无选中项 / 请求失败时同步把
+`previewOpen` 置回 `false`；`!ok` 时 toast 提示"该结果不支持预览"（`main.status.previewUnsupported`）。
+180ms 按住判定保持不变（避开 Shift 切输入法 / Shift+A 误弹）。
+
+### 第二处根因：开关判定放在了前端缓存上
+
+按"打开 → 关闭 → 再按"复现时第 3 次起完全无反应，根因是前端维护的 `previewOpen` 只是宿主窗口的
+副本，任何一处漏同步都会让后续 Shift 按在错误的分支上；且 `preview:closed` 事件里顺手把
+`shiftHeld=false`，用户仍按着 Shift 时随后到达的 keyup 会在 `stopPreview` 的早退处返回，
+`preview_release` 不再上报。
+
+修复：
+
+- 新增 `preview_toggle`（`crates/app/src/commands.rs`）：宿主按 `PREVIEW_ACTIVE` +
+  `preview::current_id()` 判断这次按下是"关掉已展示的这条"还是"展示当前条目"，返回
+  `shown` / `hidden` / `unsupported`。`preview_show` 抽成内部 `show_hit` 复用，行为不变。
+- `preview.rs` 记录当前预览对应的 `hit.id`（`store(hit_id, payload)` / `current_id()`），
+  `windows::show_preview` 多传一个 `hit_id`。
+- `frontend/app.js`：本地 `previewOpen` 降级为纯缓存；Shift 按下且本地认为已开时立即 `preview_hide`，
+  认为没开时走 `preview_toggle`；`preview:closed` 只清 `previewKey`/`previewOpen`，不再碰
+  `shiftHeld` 与按住计时器；`syncPreview` 只在预览已开时跟随选中项换内容。
+
+已跑：`node --check frontend/app.js`、`node scripts/check-i18n.js`（464 keys）、
+`node scripts/check-frontend.js`、`scripts/cargo.ps1 -Cmd "check -p efto-app"`。
+**没验证**：真实 WebView2 下连续 Shift 操作（开→关→开→关）与 toast 观感。
+
+### 第三处根因：轻点 Shift 永远不弹（2026-11-23）
+
+用 CDP（`Input.dispatchKeyEvent`，走真实输入管线）对运行中的 efto 复测：
+
+- `preview_toggle` 宿主路径正确：连调三次返回 `shown` / `hidden` / `shown`，预览页 DOM 有内容。
+- 合成按键四连按（每次按住 320ms）：渲染计数 0→1→1→2→2，符合"开/关/开/关"。
+- **轻点 60ms / 120ms：渲染计数不变**，也没有任何提示。原因就是 180ms 按住判定只覆盖了
+  "按住到延迟后打开"，没有覆盖"轻点"这一分支：keyup 时把计时器清掉就结束了。
+  用户绝大多数时候就是轻点一下 Shift，"按了没反应 / 有时候没反应"由此而来。
+
+修复（`frontend/app.js`）：`stopPreview` 发现计时器仍在、且本次没有变成组合键
+（`previewSuppressed=false`）时，说明是轻点，立刻走一次 `togglePreview(true)`；
+`togglePreview` 新增 `releaseAfter`，等开关在宿主侧落地后再发 `preview_release`，
+避免"release 先到、show 后到"把 `PREVIEW_HELD` 卡在 true。组合键（Shift+A / Shift+方向键）
+在 keydown 时就已清计时器并置 suppressed，不会误弹。
+
+已跑：`node --check frontend/app.js`。**没验证**：真实键盘手感（轻点弹出的延迟观感）。
 
 
 ## 内置插件随包分发（2026-11-22，Apple Silicon / macOS 14.6.1）

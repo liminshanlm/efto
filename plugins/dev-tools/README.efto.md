@@ -6,6 +6,7 @@
 
 - 上游：Ctool 2.3.0（2023-09）
 - 许可：MIT（见 `LICENSE`，版权归 baiy）。本插件的适配层（`main.js`、`ui/bridge.js`、`lib/routes.js`）为新增代码。
+- 第三方资产与内嵌库的许可说明见 `THIRD_PARTY_NOTICES.md`。efto 不提供第三方启动器兼容层，本插件也不宣称兼容。
 
 ## 目录结构
 

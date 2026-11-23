@@ -2,11 +2,12 @@
 // 网页快开的管理界面：列出内置与自定义站点、按关键词筛选、点击即用系统浏览器打开。
 // UI 侧的 efto.* 全部走 IPC 并返回 Promise。
 (function () {
-  var state = { builtin: [], custom: [], groups: [], groupLabels: {}, filter: '' };
+  var state = { builtin: [], custom: [], groups: [], groupLabels: {}, filter: '', tab: 'all' };
 
   var elList = document.getElementById('list');
   var elFilter = document.getElementById('filter');
   var elRefresh = document.getElementById('refresh');
+  var elTabs = document.getElementById('tabs');
   var elToast = document.getElementById('toast');
   var toastTimer = 0;
 
@@ -39,19 +40,59 @@
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m6 6 1 14h10l1-14"/></svg>';
   }
 
+  // 站点图标一律自绘：取触发词首字 + 由名称散列出的色相，不使用第三方 Logo。
+  function avatarHue(text) {
+    var h = 0;
+    for (var i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
+    return h % 360;
+  }
+
   function siteIcon(site) {
+    var label = String(site.cmd || '?').trim();
     var box = document.createElement('span');
     box.className = 'site-icon';
-    box.textContent = String(site.cmd || '?').slice(0, 1);
-    if (!site.icon) return box;
-    var img = document.createElement('img');
-    img.src = site.icon;
-    img.alt = '';
-    img.loading = 'lazy';
-    img.onerror = function () { img.remove(); };
-    img.onload = function () { box.textContent = ''; };
-    box.appendChild(img);
+    box.textContent = label.slice(0, 1);
+    box.style.setProperty('--avatar-hue', String(avatarHue(label || site.url || '')));
     return box;
+  }
+
+  // 分组 tab：全部 / 网页 / 工具 / AI / 聚合。筛选框有内容时跨分组搜索，忽略当前 tab。
+  function renderTabs() {
+    if (!elTabs) return;
+    elTabs.innerHTML = '';
+    var entries = [{ key: 'all', label: '全部' }];
+    state.groups.forEach(function (g) {
+      entries.push({ key: g, label: state.groupLabels[g] || g });
+    });
+
+    entries.forEach(function (entry) {
+      var n = entry.key === 'all'
+        ? state.builtin.length
+        : state.builtin.filter(function (s) { return s.group === entry.key; }).length;
+      var active = state.tab === entry.key;
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tab' + (active ? ' active' : '');
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      btn.textContent = entry.label;
+
+      var count = document.createElement('span');
+      count.className = 'tab-count';
+      count.textContent = String(n);
+      btn.appendChild(count);
+
+      btn.addEventListener('click', function () {
+        state.tab = entry.key;
+        // 切 tab 时清掉筛选，避免"当前分组一条都没有"的困惑
+        state.filter = '';
+        elFilter.value = '';
+        render();
+      });
+
+      elTabs.appendChild(btn);
+    });
   }
 
   function renderBuiltin(frag) {
@@ -59,6 +100,8 @@
 
     for (var g = 0; g < state.groups.length; g++) {
       var group = state.groups[g];
+      if (!state.filter && state.tab !== 'all' && state.tab !== group) continue;
+
       var items = state.builtin.filter(function (s) {
         return s.group === group && (matches(s.cmd) || matches(s.url));
       });
@@ -81,7 +124,7 @@
         card.title = s.url;
         card.tabIndex = 0;
         card.setAttribute('role', 'button');
-        card.setAttribute('aria-label', s.cmd + (s.needsQuery ? '，需要输入关键词' : ''));
+        card.setAttribute('aria-label', s.cmd + (s.search ? '，支持关键词搜索' : ''));
 
         var main = document.createElement('div');
         main.className = 'item-main';
@@ -95,10 +138,11 @@
         var hostText = document.createElement('span');
         hostText.textContent = host(s.url);
         where.appendChild(hostText);
-        if (s.needsQuery) {
+        if (s.search) {
           var need = document.createElement('span');
           need.className = 'need';
           need.textContent = '关键词';
+          need.title = '触发词后加关键词可站内搜索';
           where.appendChild(need);
         }
 
@@ -121,13 +165,6 @@
         card.appendChild(btnDel);
 
         function activate() {
-          if (s.needsQuery) {
-            // 带 {query} 的站点必须有关键词，这里只把触发词写进筛选框提示用法
-            elFilter.value = s.cmd + ' ';
-            elFilter.focus();
-            elFilter.select();
-            return;
-          }
           openUrl(s.url);
         }
 
@@ -292,6 +329,7 @@
   }
 
   function render() {
+    renderTabs();
     elList.innerHTML = '';
     var frag = document.createDocumentFragment();
     renderBuiltin(frag);

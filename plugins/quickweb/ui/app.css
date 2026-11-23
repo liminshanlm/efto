@@ -125,6 +125,54 @@ body {
 .search input::placeholder { color: var(--text-3); }
 .search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
+/* ---------- 分组 tab ---------- */
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--side);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+.tab:hover { background: var(--hover); color: var(--text); }
+.tab.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+  font-weight: 600;
+}
+.tab:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.tab-count {
+  color: var(--text-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.tab.active .tab-count { color: var(--accent); }
+
 /* ---------- 通用控件 ---------- */
 
 .btn {
@@ -229,12 +277,11 @@ body {
   place-items: center;
   overflow: hidden;
   border-radius: 8px;
-  background: var(--side);
-  color: var(--text-2);
+  background: hsl(var(--avatar-hue, 212) 38% 38%);
+  color: #fff;
   font-size: 12px;
   font-weight: 650;
 }
-.site-icon img { width: 100%; height: 100%; object-fit: contain; }
 
 .item-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 

@@ -152,7 +152,7 @@ const r = await efto.exec({
 
 1. **白名单**：`name` 只认表里的键。`path` / `command` / `shell` / `cwd` / `env` / `file`
    这些字段**一律拒绝** —— 能指定路径就等于绕过白名单。
-2. **sha256 锁定**：按"仓库 `tools/es` → 数据目录 → PATH → Everything 安装目录"顺序找，
+2. **sha256 锁定**：按"数据目录 → PATH → Everything 安装目录"顺序找，
    **逐个校验摘要**，用第一个匹配的。都不匹配就报错并列出期望/实际摘要，绝不"降级执行"。
    为什么这么严：按名字去 PATH 里找 `es.exe`，任何能往 PATH 目录写文件的人就等于拿到任意代码执行。
 3. **参数不经 shell**：数组直接进 CreateProcess，`;` `&` `|` `>` 拼不出额外语义。

@@ -24,6 +24,7 @@
           <button class="nav-item" data-page="plugins" data-i18n="settings.nav.plugins">插件</button>
           <button class="nav-item" data-page="runtime" data-i18n="settings.nav.runtime">运行时</button>
           <button class="nav-item" data-page="models" data-i18n="settings.nav.models">模型</button>
+          <button class="nav-item" data-page="about" data-i18n="settings.nav.about">关于</button>
         </nav>
       </aside>
 
@@ -318,6 +319,19 @@
                   <div class="desc mono" id="esPath">—</div>
                 </div>
                 <button class="btn" id="installEs" data-i18n="settings.everything.install">下载并安装 es.exe</button>
+              </div>
+              <div class="row">
+                <div class="row-text">
+                  <div class="label" data-i18n="settings.everything.manual.label">手动安装</div>
+                  <div class="desc" data-i18n="settings.everything.manual.hint">
+                    自动下载失败时，可手动下载官方 es.zip，或选择已下载的 zip / es.exe；宿主仍会做 sha256 校验。
+                  </div>
+                </div>
+                <div class="row-actions">
+                  <button class="btn ghost" id="downloadEsManual" data-i18n="settings.everything.manualDownload">手动下载</button>
+                  <button class="btn ghost" id="installEsLocal" data-i18n="settings.everything.installLocal">从本地安装</button>
+                  <input id="esLocalFile" type="file" accept=".zip,.exe" hidden />
+                </div>
               </div>
               <div class="row">
                 <div class="row-text">
@@ -724,6 +738,27 @@
           <div class="footer-actions">
             <button class="btn primary" id="saveModels" data-i18n="settings.common.save">保存</button>
             <span class="hint" id="modelsHint"></span>
+          </div>
+        </section>
+
+        <!-- 关于 -->
+        <section class="page" id="page-about" hidden>
+          <header class="page-head">
+            <h1 data-i18n="settings.page.about.title">关于</h1>
+            <p data-i18n="settings.page.about.desc">产品与版本信息。</p>
+          </header>
+
+          <div class="group">
+            <div class="group-title" data-i18n="settings.group.about">版本</div>
+            <div class="card">
+              <div class="row">
+                <div class="row-text">
+                  <div class="label">efto</div>
+                  <div class="desc" data-i18n="settings.about.product.desc">应用快速启动 + JS/TS 插件运行时</div>
+                </div>
+                <span class="pill" id="aboutVersion">—</span>
+              </div>
+            </div>
           </div>
         </section>
       </main>

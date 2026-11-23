@@ -222,4 +222,7 @@ efto.onPluginEnter(({ code, payload }) => {
 
 ## 许可
 
-MIT。示例插件可自由参考与修改。
+MIT，全文见 [LICENSE](LICENSE)。示例插件可自由参考与修改。
+
+随二进制分发的第三方组件（V8、Tauri、deno_ast/SWC、MPL-2.0 与 Unicode 数据等）及其许可文本见
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。

@@ -17,7 +17,7 @@
 //! 4. **输出按控制台代码页解码**。实测 es.exe 在 zh-CN 机器上输出 **GBK 而非 UTF-8**
 //!    （中文路径原始字节 `0xD7 0xC9 ...`），所以必须用 `GetConsoleOutputCP()`/`GetACP()`
 //!    经 `MultiByteToWideChar` 转 UTF-16，否则中文全乱。
-//! 5. **缺失时可从官方地址取**。下载 zip → 解出目标文件 → 校验摘要 → 落到 tools/es/。
+//! 5. **缺失时可从官方地址取**。下载 zip → 解出目标文件 → 校验摘要 → 落到数据目录 tools/es/。
 //!    网络与解压都只服务于"拿到那个被锁定的字节串"，拿到后仍走同一套校验。
 
 use std::io::Read;
@@ -237,11 +237,7 @@ pub fn candidate_dirs() -> Vec<PathBuf> {
         }
     };
 
-    // 随仓库 vendor 的副本（和 rusty_v8 一样的离线构建思路）
-    let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf()));
-    for base in repo_tool_dirs(exe_dir.as_deref()) {
-        push(base);
-    }
+    // 运行时下载到数据目录的副本（第三方二进制不随仓库分发）
     push(fsutil::data_root().join("tools").join("es"));
 
     // PATH
@@ -284,21 +280,6 @@ pub fn candidates(a: &Allowed, settings_hint: Option<&Path>) -> Vec<PathBuf> {
     out
 }
 
-/// 仓库内 tools/<key>/ 的可能位置：exe 同级的 tools/<key>，以及向上找到的仓库根。
-fn repo_tool_dirs(exe_dir: Option<&Path>) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let key = "es";
-    if let Some(d) = exe_dir {
-        out.push(d.join("tools").join(key));
-        // target/{debug,release} -> 仓库根
-        if let Some(root) = d.ancestors().nth(2) {
-            out.push(root.join("tools").join(key));
-        }
-    }
-    out.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tools").join(key));
-    out
-}
-
 fn everything_dirs() -> Vec<PathBuf> {
     let mut out = vec![
         PathBuf::from("C:\\Program Files\\Everything"),
@@ -337,7 +318,7 @@ fn hex(b: &[u8]) -> String {
 }
 
 /// 找到第一个"存在且摘要匹配"的候选。都不匹配时返回最刺眼的那个错误，
-/// 把期望/实际摘要都打出来，方便决定是重新 vendor 还是更新清单。
+/// 把期望/实际摘要都打出来，方便决定是重新下载还是更新清单。
 pub fn resolve_verified(a: &Allowed, settings_hint: Option<&Path>) -> Result<PathBuf, ExecError> {
     // 绝对路径的系统工具（mdfind）：路径固定即消掉 PATH 劫持面；系统升级会换二进制
     // 内容，没法钉 sha256，校验只到"固定路径 + 存在"。
@@ -1202,8 +1183,33 @@ pub fn zip_extract(zip: &[u8], want: &str) -> Result<Vec<u8>, ExecError> {
     Err(ExecError::Zip(format!("zip 里没有 {want}")))
 }
 
+/// 从用户提供的本地文件安装：接受官方 zip 或已解出的可执行文件。
+/// 仍然强制走内置 sha256 校验，不信任文件名。
+pub fn install_from_local(a: &Allowed, bytes: &[u8]) -> Result<PathBuf, ExecError> {
+    let data = if bytes.starts_with(b"PK\x03\x04") {
+        zip_extract(bytes, a.file)?
+    } else {
+        bytes.to_vec()
+    };
+    let mut h = Sha256::new();
+    h.update(&data);
+    let got = hex(&h.finalize());
+    if got != a.sha256 {
+        return Err(ExecError::DigestMismatch {
+            path: "本地文件".to_string(),
+            expected: a.sha256.to_string(),
+            actual: got,
+        });
+    }
+    let dir = fsutil::data_root().join("tools").join(a.key);
+    std::fs::create_dir_all(&dir)?;
+    let out = dir.join(a.file);
+    std::fs::write(&out, &data)?;
+    Ok(out)
+}
+
 /// 下载 zip → 解出目标 → 校验摘要 → 落到数据目录 tools/<key>/。
-/// 只在本地一个都没有匹配候选时调用。
+/// 只在本地一个都没有匹配候选时调用；失败后可由设置页手动下载/本地安装。
 pub fn fetch_and_install(a: &'static Allowed) -> Result<PathBuf, ExecError> {
     // 同 app/http.rs：ureq 的 native-tls feature 不会自动启用默认 TLS，
     // 必须显式传 connector，否则 https 下载直接失败。
@@ -1223,22 +1229,7 @@ pub fn fetch_and_install(a: &'static Allowed) -> Result<PathBuf, ExecError> {
         .take(8u64 << 20)
         .read_to_end(&mut bytes)
         .map_err(|e| ExecError::Fetch(e.to_string()))?;
-    let data = zip_extract(&bytes, a.file)?;
-    let mut h = Sha256::new();
-    h.update(&data);
-    let got = hex(&h.finalize());
-    if got != a.sha256 {
-        return Err(ExecError::DigestMismatch {
-            path: a.zip_url.to_string(),
-            expected: a.sha256.to_string(),
-            actual: got,
-        });
-    }
-    let dir = fsutil::data_root().join("tools").join(a.key);
-    std::fs::create_dir_all(&dir)?;
-    let out = dir.join(a.file);
-    std::fs::write(&out, &data)?;
-    Ok(out)
+    install_from_local(a, &bytes)
 }
 
 #[cfg(test)]
@@ -1472,21 +1463,11 @@ mod tests {
     }
 
     #[test]
-    fn digest_pin_matches_the_vendored_binary() {
-        // 清单里的摘要必须与仓库里 vendor 的那份一致，否则每次改动都会静默变成"找不到"
+    fn install_from_local_rejects_unknown_bytes() {
+        // 校验发生在落盘之前：非官方字节串必须被摘要拒绝，不能靠文件名混过去
         let a = lookup("es").unwrap();
-        let vendored = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tools/es/es.exe")
-            .canonicalize()
-            .expect("tools/es/es.exe 必须随仓库存在");
-        assert_eq!(sha256_of(&vendored).unwrap(), a.sha256, "vendor 的 es.exe 与清单不符");
-    }
-
-    #[test]
-    fn resolve_verified_prefers_the_pinned_copy() {
-        let a = lookup("es").unwrap();
-        let p = resolve_verified(a, None).expect("仓库 vendor 的 es.exe 应通过校验");
-        assert!(p.is_file());
+        let e = install_from_local(a, b"not the official es.exe").unwrap_err();
+        assert!(matches!(e, ExecError::DigestMismatch { .. }), "实际 {e}");
     }
 
     #[test]
@@ -1522,21 +1503,78 @@ mod tests {
         }
     }
 
-    #[test]
-    fn zip_extraction_matches_the_real_es_archive() {
-        // 用真实 es.zip 当夹具：解析 + inflate 出来的字节必须正好是 vendor 的那份
-        let zip = std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tools/es/es.zip"))
-            .expect("tools/es/es.zip 夹具");
-        let exe = zip_extract(&zip, "es.exe").unwrap();
-        let mut h = Sha256::new();
-        h.update(&exe);
-        assert_eq!(hex(&h.finalize()), ES_SHA256, "从 zip 解出的 es.exe 摘要不符");
+    /// 构造最小 zip 夹具：只覆盖解析器用到的字段，不依赖仓库内二进制。
+    fn zip_fixture(name: &str, data: &[u8], deflate: bool) -> Vec<u8> {
+        use flate2::write::DeflateEncoder;
+        use flate2::Compression;
+        use std::io::Write;
 
-        // 错误路径：不存在的条目、非 zip
-        assert!(matches!(zip_extract(&zip, "nope.exe"), Err(ExecError::Zip(_))));
-        assert!(matches!(zip_extract(b"not a zip", "es.exe"), Err(ExecError::Zip(_))));
-        // 越界：截一半
+        let (method, payload) = if deflate {
+            let mut enc = DeflateEncoder::new(Vec::new(), Compression::default());
+            enc.write_all(data).unwrap();
+            (8u16, enc.finish().unwrap())
+        } else {
+            (0u16, data.to_vec())
+        };
+        let n = name.as_bytes();
+        let comp = payload.len() as u32;
+        let raw = data.len() as u32;
+        let mut z = Vec::new();
+        z.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
+        z.extend_from_slice(&20u16.to_le_bytes());
+        z.extend_from_slice(&0u16.to_le_bytes());
+        z.extend_from_slice(&method.to_le_bytes());
+        z.extend_from_slice(&[0, 0, 0, 0]);
+        z.extend_from_slice(&0u32.to_le_bytes());
+        z.extend_from_slice(&comp.to_le_bytes());
+        z.extend_from_slice(&raw.to_le_bytes());
+        z.extend_from_slice(&(n.len() as u16).to_le_bytes());
+        z.extend_from_slice(&0u16.to_le_bytes());
+        z.extend_from_slice(n);
+        z.extend_from_slice(&payload);
+        let cd_start = z.len();
+        z.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
+        z.extend_from_slice(&20u16.to_le_bytes());
+        z.extend_from_slice(&20u16.to_le_bytes());
+        z.extend_from_slice(&0u16.to_le_bytes());
+        z.extend_from_slice(&method.to_le_bytes());
+        z.extend_from_slice(&[0, 0, 0, 0]);
+        z.extend_from_slice(&0u32.to_le_bytes());
+        z.extend_from_slice(&comp.to_le_bytes());
+        z.extend_from_slice(&raw.to_le_bytes());
+        z.extend_from_slice(&(n.len() as u16).to_le_bytes());
+        z.extend_from_slice(&0u16.to_le_bytes());
+        z.extend_from_slice(&0u16.to_le_bytes());
+        z.extend_from_slice(&0u16.to_le_bytes());
+        z.extend_from_slice(&0u16.to_le_bytes());
+        z.extend_from_slice(&0u32.to_le_bytes());
+        z.extend_from_slice(&0u32.to_le_bytes());
+        z.extend_from_slice(n);
+        let cd_size = z.len() - cd_start;
+        z.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
+        z.extend_from_slice(&0u16.to_le_bytes());
+        z.extend_from_slice(&0u16.to_le_bytes());
+        z.extend_from_slice(&1u16.to_le_bytes());
+        z.extend_from_slice(&1u16.to_le_bytes());
+        z.extend_from_slice(&(cd_size as u32).to_le_bytes());
+        z.extend_from_slice(&(cd_start as u32).to_le_bytes());
+        z.extend_from_slice(&0u16.to_le_bytes());
+        z
+    }
+
+    #[test]
+    fn zip_extraction_handles_stored_and_deflated_entries() {
+        let payload = b"fake es bytes";
+        for deflate in [false, true] {
+            let zip = zip_fixture("es.exe", payload, deflate);
+            assert_eq!(zip_extract(&zip, "es.exe").unwrap(), payload);
+            assert!(matches!(zip_extract(&zip, "nope.exe"), Err(ExecError::Zip(_))));
+        }
+        assert!(matches!(
+            zip_extract(b"not a zip", "es.exe"),
+            Err(ExecError::Zip(_))
+        ));
+        let zip = zip_fixture("es.exe", payload, false);
         assert!(zip_extract(&zip[..zip.len() / 2], "es.exe").is_err());
     }
 
@@ -1621,17 +1659,17 @@ mod tests {
     }
 
     #[test]
-    fn candidate_dirs_cover_repo_path_and_everything() {
+    fn candidate_dirs_cover_data_dir_and_everything() {
         let d = candidate_dirs();
         assert!(
             d.iter().any(|p| p.display().to_string().contains("tools")),
-            "候选目录里应有仓库 tools：{d:?}"
+            "候选目录里应有数据目录 tools：{d:?}"
         );
         assert!(
             d.iter().any(|p| p.display().to_string().contains("Everything")),
             "候选目录里应有 Everything 安装位置：{d:?}"
         );
-        // 顺序：仓库 vendor 的副本排在 PATH 之前。摘要校验是最后一道，
+        // 顺序：宿主安装的副本排在 PATH 之前。摘要校验是最后一道，
         // 但把可信副本优先本来就该是默认。
         let tools = d
             .iter()
@@ -1641,7 +1679,7 @@ mod tests {
             .iter()
             .position(|p| p.display().to_string().contains("System32"))
             .unwrap_or(usize::MAX);
-        assert!(tools < system32, "vendor 副本应优先于 PATH：tools={tools} system32={system32}");
+        assert!(tools < system32, "数据目录副本应优先于 PATH：tools={tools} system32={system32}");
     }
 
     #[test]

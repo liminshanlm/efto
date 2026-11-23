@@ -2,6 +2,7 @@
 name = "efto-app"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 description = "efto 桌面主程序：全局热键、托盘、搜索窗口、插件宿主与能力实现。"
 
 [lib]

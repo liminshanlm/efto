@@ -225,6 +225,31 @@ pub fn cancel_command(data: State<'_, Shared>) -> bool {
 /// 预览当前选中的结果（按住 Shift）。返回 false 表示该条目不支持预览，前端静默。
 #[tauri::command]
 pub async fn preview_show(hit: SearchHit, app: AppHandle) -> Result<bool, String> {
+    show_hit(hit, &app).await
+}
+
+/// Shift 开关：宿主按真实窗口状态决定这次按下是收起预览，还是展示当前选中项。
+///
+/// 返回 `shown` / `hidden` / `unsupported`。开关判定放在宿主侧：前端只保留一份
+/// 缓存副本，漏掉 keyup 或事件晚到时它会和真实状态脱节，表现就是"再按 Shift 没反应"。
+#[tauri::command]
+pub async fn preview_toggle(hit: SearchHit, app: AppHandle) -> Result<String, String> {
+    let same = windows::preview_visible()
+        && crate::preview::current_id().as_deref() == Some(hit.id.as_str());
+    if same {
+        preview_hide(app);
+        return Ok("hidden".into());
+    }
+    Ok(if show_hit(hit, &app).await? {
+        "shown"
+    } else {
+        "unsupported"
+    }
+    .into())
+}
+
+async fn show_hit(hit: SearchHit, app: &AppHandle) -> Result<bool, String> {
+    let hit_id = hit.id.clone();
     let payload = tauri::async_runtime::spawn_blocking(move || crate::preview::build(&hit))
         .await
         .map_err(|e| format!("预览失败: {e}"))?;
@@ -246,11 +271,11 @@ pub async fn preview_show(hit: SearchHit, app: AppHandle) -> Result<bool, String
                     }
                 }
             }
-            windows::show_preview(&app, p);
+            windows::show_preview(app, &hit_id, p);
             Ok(true)
         }
         None => {
-            windows::hide_preview(&app);
+            windows::hide_preview(app);
             Ok(false)
         }
     }
@@ -2108,6 +2133,18 @@ pub async fn install_es() -> Result<String, String> {
     .map_err(|e| format!("安装任务失败: {e}"))?
 }
 
+/// 从用户手动下载的官方 zip / es.exe 安装（自动下载失败时的兜底）。
+#[tauri::command]
+pub async fn install_es_from_bytes(data: Vec<u8>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let a = efto_core::exec::lookup("es").ok_or("未配置 es 白名单")?;
+        let p = efto_core::exec::install_from_local(a, &data).map_err(|e| e.to_string())?;
+        Ok(p.display().to_string())
+    })
+    .await
+    .map_err(|e| format!("安装任务失败: {e}"))?
+}
+
 #[tauri::command]
 pub fn open_url(url: String) -> Result<(), String> {
     efto_core::apps::launch::shell_open(&url, None).map_err(|e| e.to_string())
@@ -2178,6 +2215,7 @@ pub fn platform_info() -> serde_json::Value {
     .map(|s| serde_json::to_value(s).unwrap_or_default())
     .collect();
     serde_json::json!({
+        "version": env!("CARGO_PKG_VERSION"),
         "platform": if cfg!(windows) {
             "windows"
         } else if cfg!(target_os = "macos") {

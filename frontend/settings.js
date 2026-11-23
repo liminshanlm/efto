@@ -124,6 +124,8 @@
 
   function applyPlatformCaps(info) {
     platformCaps = info || {};
+    var version = $('aboutVersion');
+    if (version && platformCaps.version) version.textContent = platformCaps.version;
     var tools = platformCaps.tools || [];
     Object.keys(TOOL_INPUTS).forEach(function (id) {
       if (tools.indexOf(id) >= 0) return;
@@ -705,7 +707,10 @@
       .catch(function (e) { toast(T('settings.everything.checkFailed', '检测 Everything 失败：') + e, true); });
   }
 
+  var lastEverythingStatus = null;
+
   function renderEverything(st) {
+    lastEverythingStatus = st;
     var pill = $('esPill');
     var btn = $('installEs');
     pill.className = 'pill';
@@ -740,8 +745,41 @@
         loadEverything();
       })
       .catch(function (e) {
-        toast(T('settings.everything.installFailed', '安装 es.exe 失败：') + e, true);
+        toast(
+          T('settings.everything.installFailed', '安装 es.exe 失败：') + e + ' ' +
+          T('settings.everything.autoFailedManual', '可点「手动下载」或「从本地安装」重试。'),
+          true
+        );
         loadEverything();
+      })
+      .finally(function () { btn.disabled = false; });
+  }
+
+  function downloadEsManually() {
+    if (!lastEverythingStatus) return;
+    invoke('open_url', { url: lastEverythingStatus.download_es_url })
+      .catch(function (e) { toast(T('settings.toast.openDownloadFailed', '打开下载页失败：') + e, true); });
+  }
+
+  function installEsFromLocal(file) {
+    var btn = $('installEsLocal');
+    if (!file) return;
+    btn.disabled = true;
+    btn.textContent = T('settings.everything.localInstalling', '安装中…');
+    file.arrayBuffer()
+      .then(function (buf) {
+        return invoke('install_es_from_bytes', { data: Array.from(new Uint8Array(buf)) });
+      })
+      .then(function (path) {
+        toast(T('settings.everything.installedToast', 'es.exe 已安装：') + path);
+        loadEverything();
+      })
+      .catch(function (e) {
+        toast(T('settings.everything.localInstallFailed', '本地安装失败：') + e, true);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = T('settings.everything.installLocal', '从本地安装');
       });
   }
 
@@ -1097,6 +1135,13 @@
   var addSpotlightDirBtn = $('addSpotlightDir');
   if (addSpotlightDirBtn) addSpotlightDirBtn.addEventListener('click', addSpotlightDir);
   $('installEs').addEventListener('click', installEs);
+  $('downloadEsManual').addEventListener('click', downloadEsManually);
+  $('installEsLocal').addEventListener('click', function () { $('esLocalFile').click(); });
+  $('esLocalFile').addEventListener('change', function (e) {
+    var file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    installEsFromLocal(file);
+  });
   $('downloadEverything').addEventListener('click', function () {
     invoke('everything_status').then(function (st) {
       return invoke('open_url', { url: st.download_everything_url });

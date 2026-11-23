@@ -18,6 +18,9 @@
 plugins/*/dist/
 plugins/*/node_modules/
 
+# 运行时下载的第三方工具（Everything es.exe，不随仓库分发）
+/tools/es/
+
 # 本地打包/运行产物（安装包、临时打包文件、运行日志、IDE 与截图缓存）
 /dist/
 /*.exe

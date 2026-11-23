@@ -76,6 +76,7 @@ Built-in sources appear only when the input matches their rules, so they never h
 - Hold `Shift` to preview the selected item; releasing does not close it, pressing `Shift` again does.
 - Supports text, images, video, web pages, PDF, local HTML, and file properties.
 - Web previews show Open / Close buttons; `Shift` also closes them.
+- Results that cannot be previewed (plugin actions, commands, web-search suggestions, copy items) show a short "cannot be previewed" hint instead of doing nothing.
 - When the preview takes focus, "hide on blur" is suppressed; return to the search box to continue.
 
 ## 6. Favorite Tools
@@ -118,7 +119,7 @@ The default panel (empty input) contains "Recent" and "Favorite tools":
 
 ## 8. Settings
 
-Settings has seven pages:
+Settings has eight pages:
 
 - **General**
   - Appearance: theme (system / dark / light).
@@ -126,7 +127,7 @@ Settings has seven pages:
   - Favorite tools: toggle screenshot, clipboard, lock screen, tile windows, shortcut guide, snippets, file buffer, color picker and sticky note; the "Panel order" list below reorders them by dragging the handle on the left (order = panel layout and `Alt+1..9` mapping).
   - Index: entry sources, auto refresh, registry index, install-folder scan, custom folders.
   - Browser bookmarks: whether to search them.
-  - Everything: status of the app and `es.exe`, with one-click `es.exe` install.
+  - Everything: status of the app and `es.exe`; install automatically, or fall back to a manual `es.zip` download / local file (sha256 is still verified).
   - Command execution: see section 13.
   - Language: system / 简体中文 / English.
 - **Snippets**: maintain keyword, title, and body; keywords cannot contain spaces and must be unique.
@@ -135,6 +136,7 @@ Settings has seven pages:
 - **Plugins**: import plugins, list installed plugins, disable / re-enable each one (disabled plugins drop out of search and can't be triggered; their files stay), open the plugin folder.
 - **Runtimes**: Node.js and Python interpreter paths, with a check button. When left empty, efto auto-detects them from the system PATH at startup; you can still edit them. If a runtime is missing or fails the check, the card shows install guidance and a download link (Node.js LTS; for Python, tick "Add python.exe to PATH" during setup).
 - **Models**: OpenAI-compatible model list and default model for `efto.ai.chat`.
+- **About**: shows the current version.
 
 Changes apply immediately; hotkey and theme changes propagate to all windows.
 
@@ -186,7 +188,7 @@ efto.exe cli capabilities --json
 
 - **No Node runtime**: plugins only use efto capabilities; CommonJS packages are unavailable.
 - **TS is type-stripped only**: no tsc output; `enum`, value `namespace`, decorators, and JSX fail with an explicit error.
-- **File search needs Everything**: without it or `es.exe`, file results are absent; install `es.exe` from Settings.
+- **File search needs Everything**: without it or `es.exe`, file results are absent; install `es.exe` from Settings, or use the manual download / local install fallback.
 - **Some UWP apps may be missing**: Store apps without classic shortcuts may not be indexed; recreate a Start Menu shortcut.
 - **Hotkey conflicts**: if another app owns the combo, startup logs an error; pick another combo and save.
 - **Empty index**: after three consecutive empty auto-rebuilds, auto refresh stops; check index sources and press `Alt+R`.
