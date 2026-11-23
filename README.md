@@ -30,7 +30,7 @@ Alt+Space 唤起 → 输入 → 回车启动应用 / 唤起插件
 | 插件 UI | ⚠️ 代码就绪，未在真实 webview 里跑过 | `efto://` 协议托管插件目录，宿主注入 `window.efto`，UI ↔ main 双向消息 |
 | 插件持久化 | ✅ 已验证 | 每插件一个 JSON 文件，10MB 配额；KV 与文档式接口（`efto.db.put/allDocs`）都可写 |
 | Everything 文件检索 | ✅ CLI 端到端已验证 / ⚠️ 界面渲染未实测 | 搜索框直接输入（≥2 字符）→ **文件结果补在下拉框应用条目之后**（无需魔法前缀），单击选中、双击或 Enter 打开。查本机 Everything 索引，中文路径按 GBK 正确解码 |
-| 发布产物 | ✅ 已验证（v0.1.0） | GitHub Release 提供绿色版 zip（`efto.exe` + `plugins/`）、NSIS 安装包与单个插件包；未签名，开机自启与自动更新仍未做 |
+| 发布产物 | ✅ Windows 已验证（v0.1.0）/ macOS 待验证 | GitHub Release 提供绿色版 zip（`efto.exe` + `plugins/`）、NSIS 安装包、macOS arm64 dmg 与单个插件包；均未签名，开机自启与自动更新仍未做 |
 
 **真实数据与验证过程见 `docs/verification.md`**（单元测试、204 个真机快捷方式解析度量、端到端 CLI 验证 + Node 独立时间探针，以及明确列出"没验证过什么"）。
 
@@ -44,9 +44,11 @@ Alt+Space 唤起 → 输入 → 回车启动应用 / 唤起插件
 | --- | --- |
 | `efto-<ver>-windows-x64-portable.zip` | 绿色版：解压后 `efto.exe` 与 `plugins/` 同级，双击即用，不写注册表 |
 | `efto_<ver>_x64-setup.exe` | NSIS 安装包：装到本机，插件随包内置 |
+| `efto-<ver>-macos-arm64.dmg` | macOS Apple Silicon（arm64）：ad-hoc 签名、未公证，首次打开需右键「打开」或 `xattr -dr com.apple.quarantine /Applications/efto.app` |
 | `<plugin>-<version>.zip` | 单个插件：设置页「导入插件」，或解压到 `~/.efto/plugins/<name>/` |
 
-要求 Windows 10/11 x64，且系统已装 WebView2 Runtime（Win11 自带，Win10 多已随 Edge 更新装好）。
+要求 Windows 10/11 x64，且系统已装 WebView2 Runtime（Win11 自带，Win10 多已随 Edge 更新装好）；
+macOS 只提供 Apple Silicon 包，暂无 Intel 版。
 产物没有代码签名，SmartScreen 会提示「未知发布者」，点「更多信息 → 仍要运行」。
 
 发布由 `.github/workflows/release.yml` 在推 `v*` tag 时自动构建，维护者操作：
