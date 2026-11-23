@@ -69,7 +69,7 @@ crates/
   jsrt/     rusty_v8 engine, efto API shim, TS transpilation, capability thread pool
   app/      Tauri 2 host: tray, hotkey, search window, efto:// protocol, Host capability impl
 frontend/   search box (plain static HTML/CSS/JS, no bundler)
-plugins/    the 13 bundled plugins listed below; hello-js is the minimal JS example, timestamp-ts the TS + require example
+plugins/    the 12 bundled plugins listed below; timestamp-ts is the TS + require example
 plugin-sdk/ efto.d.ts — type hints for TS plugin authors
 scripts/    vsenv / cargo / gen-icons / dev-run / bootstrap / package-plugins
 vendor/     where the prebuilt V8 static library lands (fetched by bootstrap, gitignored — see below)
@@ -79,7 +79,6 @@ vendor/     where the prebuilt V8 static library lands (fetched by bootstrap, gi
 
 | Plugin | What it does |
 | --- | --- |
-| `hello-js` | Minimal JS plugin: `onPluginEnter`, `db`, notifications, and a round trip to a UI page |
 | `timestamp-ts` | Time ↔ timestamp conversion; also the TS + nested-`require` example |
 | `translate` | Translates input with the default model from Settings → Model (OpenAI-compatible), auto CN↔EN |
 | `ai-chat` | AI chat: multiple sessions, streaming output, Markdown rendering, image input |
@@ -260,7 +259,7 @@ efto.onPluginEnter(({ code, payload }) => {
 ```
 
 The full API surface, TypeScript patterns, UI page messaging, and debugging tips are in **`docs/plugin-development.md`**;
-two runnable examples live in `plugins/hello-js` and `plugins/timestamp-ts`.
+the snippet above is the smallest JS plugin, and `plugins/timestamp-ts` is a runnable example.
 
 A plugin can declare a host version requirement with `"engines": { "efto": ">=0.1.0" }`; when unmet, the plugin is
 still listed (with the reason) but never enters search and cannot be invoked. To package a plugin directory into a distributable zip:

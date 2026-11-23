@@ -18,7 +18,7 @@ crates/core/   应用发现、.lnk 解析、索引、搜索打分、插件清单
 crates/jsrt/   rusty_v8 引擎、efto API 垫片、TS 转译、能力线程池   无内部依赖
 crates/app/    Tauri 2 宿主：托盘、热键、窗口、efto:// 协议、Host 实现
 frontend/      搜索框（纯静态 HTML/CSS/JS，无打包器）
-plugins/       示例插件：hello-js、timestamp-ts、file-share（局域网只读共享，Node 服务）、ipmsg（局域网文本消息）、hosts（UAC 提权编辑 hosts）
+plugins/       示例插件：timestamp-ts、file-share（局域网只读共享，Node 服务）、ipmsg（局域网文本消息）、hosts（UAC 提权编辑 hosts）
 plugin-sdk/    efto.d.ts
 scripts/       构建/验证脚本（.ps1 必须保持纯 ASCII）
 docs/          architecture / plugin-development / roadmap / verification

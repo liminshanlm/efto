@@ -69,7 +69,7 @@ crates/
   jsrt/     rusty_v8 引擎、efto API 垫片、TS 转译、能力线程池
   app/      Tauri 2 主程序：托盘、热键、搜索窗口、efto:// 协议、Host 能力实现
 frontend/   搜索框（纯静态 HTML/CSS/JS，无打包器）
-plugins/    下面列出的 13 个内置插件；hello-js 是最简 JS 示例，timestamp-ts 是 TS + require 示例
+plugins/    下面列出的 12 个内置插件；timestamp-ts 是 TS + require 示例
 plugin-sdk/ efto.d.ts —— 给 TS 插件作者做类型提示
 scripts/    vsenv / cargo / gen-icons / dev-run / bootstrap / package-plugins
 vendor/     V8 预编译静态库落地点（bootstrap 下载，不入库，见下文）
@@ -79,7 +79,6 @@ vendor/     V8 预编译静态库落地点（bootstrap 下载，不入库，见�
 
 | 插件 | 作用 |
 | --- | --- |
-| `hello-js` | 最简 JS 插件：`onPluginEnter`、`db`、通知，以及与 UI 页面的往返 |
 | `timestamp-ts` | 时间与时间戳互转；同时是 TS + 嵌套 `require` 示例 |
 | `translate` | 用 设置 → 模型 里的默认模型（OpenAI 兼容接口）翻译输入，自动中英互译 |
 | `ai-chat` | AI 对话：多会话、流式输出、Markdown 渲染、图片输入 |
@@ -252,7 +251,7 @@ efto.onPluginEnter(({ code, payload }) => {
 });
 ```
 
-完整 API 表、TS 写法、UI 页面通信方式与调试技巧见 **`docs/plugin-development.md`**；两个可运行示例在 `plugins/hello-js` 与 `plugins/timestamp-ts`。
+完整 API 表、TS 写法、UI 页面通信方式与调试技巧见 **`docs/plugin-development.md`**；上面那段就是最简 JS 插件，`plugins/timestamp-ts` 是可运行示例。
 
 插件可加 `"engines": { "efto": ">=0.1.0" }` 声明宿主版本要求；不满足时插件仍会列出（附原因），但不会进搜索、也不能被唤起。把插件目录打包成可分发的 zip：
 

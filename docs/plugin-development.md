@@ -438,8 +438,8 @@ UI 侧的文件相关能力：
 用同一套主题设置（跟随系统 / 浅色 / 深色）：宿主建窗口时按设置锁定窗口主题，设置变更时也会
 同步已打开的插件窗口。页面在 `<head>` 里据此写 `document.documentElement.dataset.theme`；
 要在窗口打开期间跟随切换，监听 `matchMedia('(prefers-color-scheme: dark)')` 的 `change`
-事件重画（一方插件 `file-share` / `ai-chat` / `hosts` / `ocr` / `quickweb` / `text-beautify` /
-`hello-js` 都已这样处理）。
+事件重画（一方插件 `file-share` / `ai-chat` / `hosts` / `ocr` / `quickweb` / `text-beautify`
+都已这样处理）。
 
 注意 main 侧与 UI 侧的 `efto.db` **形态不同**：main 里是同步返回值，UI 页面里是 Promise（跨进程必须异步）。这是本项目刻意的设计，别在 UI 里写 `var v = efto.db.get(k)` 然后直接用。
 
