@@ -7,7 +7,7 @@
 //! 1. 非提权侧把校验过的内容写成请求文件（`~/.efto/uac/request-*.json`）；
 //! 2. 拉起同一 exe 并等它退出：Windows `ShellExecuteExW(verb="runas")`（UAC），
 //!    macOS `osascript … do shell script … with administrator privileges`；
-//! 3. 提权侧重新校验内容 → 备份到同目录 `hosts.efto.bak` → 临时文件 + 原子替换；
+//! 3. 提权侧重新校验内容 → 备份到同目录 `hosts.efto.bak` → 原地写入（不替换文件）；
 //! 4. 提权侧把结果写成 `<request>.resp.json`，非提权侧读回并清理。
 //!
 //! 两条安全边界：
@@ -247,8 +247,20 @@ fn apply_request(request: &Path) -> Result<(PathBuf, usize), String> {
     Ok((backup, bytes.len()))
 }
 
-/// 备份 → 临时文件 → 原子替换。备份失败直接中止，绝不"先写坏再想备份"。
+/// 写完到读回比对之间要留的窗口：端点安全软件的回滚不是同步完成的
+/// （实测写入之后数秒内文件被换回受保护版本），立刻读会永远"验通过"。
+const VERIFY_SETTLE: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// 备份 → 原地写入 → 读回比对。备份失败直接中止，绝不"先写坏再想备份"。
+///
+/// 不用「临时文件 + MoveFileExW 替换」：实测端点安全软件（aTrust 一类）会把
+/// 替换式写入当作篡改，先落一份 `hosts.bak_<时间>` 快照再把文件回滚成受保护
+/// 版本，表现为"保存成功，重新加载还是旧内容"。原地写入与编辑器保存一致。
+///
+/// 写完必须读回比对：被回滚时不能给插件回"已保存"（硬性约定 3，不许静默成功）。
 fn write_bytes(target: &Path, backup: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write as _;
+
     if let Some(parent) = target.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("创建 {} 失败: {e}", parent.display()))?;
     }
@@ -256,41 +268,31 @@ fn write_bytes(target: &Path, backup: &Path, bytes: &[u8]) -> Result<(), String>
         std::fs::copy(target, backup)
             .map_err(|e| format!("备份到 {} 失败: {e}", backup.display()))?;
     }
-    let tmp = target.with_file_name("hosts.efto.tmp");
-    std::fs::write(&tmp, bytes).map_err(|e| format!("写临时文件失败: {e}"))?;
-    replace_file(&tmp, target).inspect_err(|_| {
-        let _ = std::fs::remove_file(&tmp);
-    })
-}
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(target)
+        .map_err(|e| format!("打开 {} 失败: {e}", target.display()))?;
+    file.write_all(bytes)
+        .map_err(|e| format!("写入 {} 失败: {e}", target.display()))?;
+    file.sync_all()
+        .map_err(|e| format!("刷新 {} 失败: {e}", target.display()))?;
+    drop(file);
 
-#[cfg(windows)]
-fn replace_file(from: &Path, to: &Path) -> Result<(), String> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Storage::FileSystem::{
-        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
-    };
-    let wide = |p: &Path| -> Vec<u16> { p.as_os_str().encode_wide().chain(Some(0)).collect() };
-    let (a, b) = (wide(from), wide(to));
-    let ok = unsafe {
-        MoveFileExW(
-            a.as_ptr(),
-            b.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-    };
-    if ok == 0 {
+    std::thread::sleep(VERIFY_SETTLE);
+    let written = std::fs::read(target)
+        .map_err(|e| format!("写入后读取 {} 失败: {e}", target.display()))?;
+    if written != bytes {
         return Err(format!(
-            "替换 {} 失败: {}",
-            to.display(),
-            std::io::Error::last_os_error()
+            "写入 {} 后被回滚：写入 {} 字节，读回 {} 字节。\
+             请检查 aTrust 等终端安全软件的 hosts 防篡改策略，把 efto.exe 加入白名单",
+            target.display(),
+            bytes.len(),
+            written.len()
         ));
     }
     Ok(())
-}
-
-#[cfg(not(windows))]
-fn replace_file(from: &Path, to: &Path) -> Result<(), String> {
-    std::fs::rename(from, to).map_err(|e| format!("替换 {} 失败: {e}", to.display()))
 }
 
 /// 提权拉起子进程并等它结束，返回退出码。平台差异只在"怎么拉起"：
@@ -526,8 +528,9 @@ mod tests {
         assert!(e.contains("提权拉起失败"), "{e}");
     }
 
+    /// 备份 → 原地写入：第二遍写入更短内容必须把原文件截断（不能留尾部残渣）。
     #[test]
-    fn write_bytes_backs_up_then_replaces() {
+    fn write_bytes_backs_up_then_writes_in_place() {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("hosts");
         let backup = dir.path().join("hosts.efto.bak");
@@ -537,10 +540,9 @@ mod tests {
         assert_eq!(std::fs::read(&target).unwrap(), b"new\n");
         assert_eq!(std::fs::read(&backup).unwrap(), b"old\n");
 
-        write_bytes(&target, &backup, b"newer\n").unwrap();
-        assert_eq!(std::fs::read(&target).unwrap(), b"newer\n");
+        write_bytes(&target, &backup, b"n\n").unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"n\n", "写入更短内容应截断");
         assert_eq!(std::fs::read(&backup).unwrap(), b"new\n");
-        assert!(!dir.path().join("hosts.efto.tmp").exists(), "临时文件应被替换掉");
     }
 
     #[test]

@@ -516,7 +516,14 @@ spawn(plugin)
 - **提权**：非提权侧把内容写进 `~/.efto/uac/request-*.json`，用
   `ShellExecuteExW(verb="runas")` 拉起 `efto.exe hosts-apply <request>` 并
   `WaitForSingleObject`（120s）。提权侧重新校验 → 备份 `hosts.efto.bak` →
-  临时文件 + `MoveFileExW(MOVEFILE_REPLACE_EXISTING)` 原子替换 → 写 `<request>.resp.json`。
+  原地写入（truncate + 写 + flush）→ 写 `<request>.resp.json`。
+- **为什么不用"临时文件 + 原子替换"**：端点安全软件（如 aTrust）会把
+  `MoveFileExW` 替换式写入判定为篡改，先落一份 `hosts.bak_<时间>` 快照再把文件回滚成
+  受保护版本，表现为"保存成功、重新加载还是旧内容"。原地写入与记事本等编辑器保存一致，
+  不被拦。代价是写入过程中断会留下半截文件，因此备份必须在写入之前完成。
+- **写后复验**：写完 `sync_all` 后等待 1s 再读回比对；不一致就回
+  "写入 … 后被回滚：写入 N 字节，读回 M 字节"，让插件显示错误而不是"已保存"。
+  回滚不是同步发生的，立刻读会永远验通过；1s 也抓不住更晚的回滚，只能覆盖"刚写完就被换回"。
 - **边界**：提权侧只接受数据目录 `uac/` 下的请求，响应路径由请求路径推导，目标固定为系统
   hosts —— 请求 JSON 里没有"写哪里"的字段。`save` 在 `is_async_module` 里，走能力线程池，
   不会卡住插件 isolate；UAC 取消（1223）立即返回明确错误，不靠超时判断。

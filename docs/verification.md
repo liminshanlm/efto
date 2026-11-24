@@ -760,8 +760,8 @@ WARN 共享连接处理失败（10.10.174.110:65431）：无法立即完成一�
 - `utf8_roundtrip` / `ansi_roundtrip_uses_the_system_code_page`：UTF-8 与系统 ANSI
   代码页都能往返；BOM 去掉；ANSI 不可表示字符走报错分支。
 - `nul_and_oversize_are_refused`：NUL 与超过 1MB 的内容拒绝。
-- `write_bytes_backs_up_then_replaces`：两次写入后备份是上一版、目标是最新版、
-  临时文件已消失。
+- `write_bytes_backs_up_then_writes_in_place`：两次写入后备份是上一版、目标是最新版，
+  第二遍写更短内容会截断（原地写入，不产生临时文件）。
 - `apply_rejects_requests_outside_the_uac_directory`：提权侧拒绝数据目录之外的请求文件。
 - `save_capability_refuses_bad_text_and_encoding`：坏文本、未知编码、缺 `text` 都在
   JSON 边界被拒，不会触达文件系统。
@@ -771,10 +771,35 @@ WARN 共享连接处理失败（10.10.174.110:65431）：无法立即完成一�
 
 **没验证的**：
 
-- 当前环境没有以管理员身份实测真实写入系统 hosts（会修改用户机器），UAC 弹窗、
-  `hosts-apply` 子进程实际落盘、`MoveFileExW` 替换的真实结果都需要 GUI 手测。
 - GBK 注释在真实 zh-CN hosts 文件里的显示效果（单测用的是同一 ACP 往返，不是真实文件）。
 - UAC 提权到另一个管理员账户时的表现（代码会拒绝，见 `docs/architecture.md`）。
+
+## hosts 保存"回滚"排查与原地写入（2026-11-24）
+
+现场：插件里新增条目，UAC 授权后提示"已保存"，重新加载仍是旧内容。
+
+取证结论（不依赖代码猜测，全部来自磁盘与日志）：
+
+- efto 的提权写入本身成功：`hosts.bak_2026_11_24_16_27_26` 里留着 16:27:25 那次写入的
+  完整内容（插件 `serialize()` 的归一化格式，含用户新增条目）。
+- 到下一次 reload 时磁盘上已是被回滚的旧内容：`hosts.efto.bak`（写前备份）与当时
+  hosts 一致，均无新条目。
+- hosts 目录里存在 `hosts.bak_<时间>` 系列快照，最早可追到 2025-08（早于 efto 提供该能力），
+  仓库内无任何代码写这种文件名；机器上运行 aTrust/Sangfor 套件 → 判定为端点安全软件的
+  hosts 防篡改（快照 + 回滚）。
+- 用户侧补充：以管理员身份直接编辑 hosts 可以改成功。
+
+改动：`crates/app/src/hosts.rs::write_bytes` 从「临时文件 + `MoveFileExW` 替换」改为
+「先备份 `hosts.efto.bak` → 原地 truncate + 写入 + `sync_all`」，并在写入后等待 1s
+读回比对；不一致返回"写入 … 后被回滚：写入 N 字节，读回 M 字节"，避免插件把被回滚的
+写入显示成"已保存"。
+
+`cargo test -p efto-app hosts` 5 项通过（含新的 `write_bytes_backs_up_then_writes_in_place`）。
+
+**没验证的**：改动后真实提权写入在装有 aTrust 的机器上是否还会被回滚，需要 GUI 手测：
+保存 → 重新加载 → 再检查 hosts 目录是否还新出现 `hosts.bak_<时间>`。若仍被回滚，
+需要走端点安全软件的白名单/策略，代码侧已无更保守的写入方式。1s 的读回比对只能覆盖
+"刚写完就被换回"，更晚的回滚仍会漏，最终判据还是重新加载看一眼。
 
 ## 长截图（2026-11-17）
 
