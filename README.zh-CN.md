@@ -18,6 +18,40 @@ Alt+Space 唤起 → 输入 → 回车启动应用 / 唤起插件
 > 插件只认 efto 自己的契约：`efto-plugin.json` 清单、`efto.*` / `window.efto`、`efto://` 协议。
 > 不提供任何第三方启动器的兼容层。
 
+## 界面截图
+
+> 截图由仓库里的前端页面渲染生成（`scripts/gen-readme-shots.mjs`），与真实界面同源，屏幕上只有数据是样例。
+> 内置指令名、应用名与结果副标题目前由后端直出中文，其余文案跟随「设置 → 语言」。
+
+**默认面板** — 空输入时先列最近使用，再列常用工具（`Alt+1` … `Alt+7` 直接执行）：
+
+![默认面板](docs/images/panel.zh-CN.png)
+
+**应用搜索** — `wx`（拼音首字母）命中微信；插件条目带自己的图标，`Enter` 或双击执行：
+
+![应用搜索](docs/images/search-wx.zh-CN.png)
+
+**计算器** — 输入算式，结果直接成为第一行，`Enter` 或单击即复制：
+
+![计算器](docs/images/calculator.zh-CN.png)
+
+**时间 → 时间戳** — 一个时刻给两行（秒级、毫秒级），单击复制那个数字：
+
+![时间戳](docs/images/timestamp.zh-CN.png)
+
+**系统时间** — `date` / `now` / `时间` 列八种常用格式，单击复制你选中的那一种：
+
+![系统时间](docs/images/time-formats.zh-CN.png)
+
+**插件** — 以「文本美化」为例：左侧原文、右侧结果，全部在本地完成。插件窗口用插件自己的页面，
+文案由插件作者决定：
+
+![文本美化插件](docs/images/plugin-text-beautify.png)
+
+**设置** — 热键、索引、文件检索、插件、运行时与模型集中在一个窗口：
+
+![设置](docs/images/settings.zh-CN.png)
+
 ## 现在能做什么
 
 | 能力 | 状态 | 说明 |
@@ -71,7 +105,7 @@ crates/
 frontend/   搜索框（纯静态 HTML/CSS/JS，无打包器）
 plugins/    下面列出的 12 个内置插件；timestamp-ts 是 TS + require 示例
 plugin-sdk/ efto.d.ts —— 给 TS 插件作者做类型提示
-scripts/    vsenv / cargo / gen-icons / dev-run / bootstrap / package-plugins
+scripts/    vsenv / cargo / gen-icons / dev-run / bootstrap / package-plugins / gen-readme-shots
 vendor/     V8 预编译静态库落地点（bootstrap 下载，不入库，见下文）
 ```
 

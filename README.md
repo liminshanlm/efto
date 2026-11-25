@@ -18,6 +18,41 @@ Alt+Space → type → Enter to launch an app / open a plugin
 > Plugins only ever see efto's own contract: the `efto-plugin.json` manifest, `efto.*` / `window.efto`, and the `efto://` protocol.
 > There is no compatibility layer for any third-party launcher.
 
+## Screenshots
+
+> Rendered from the shipped frontend pages (`scripts/gen-readme-shots.mjs`), so the images track the real UI —
+> only the data on screen is sample data. Built-in command names, app names and result subtitles come from the
+> backend and are still Chinese-only; everything else follows Settings → Language.
+
+**Launcher panel** — empty input shows recently used apps, then pinned tools (`Alt+1` … `Alt+7`):
+
+![Launcher panel](docs/images/panel.en-US.png)
+
+**App search** — `wx` (pinyin initials) finds 微信; plugin rows carry their own logo, `Enter` or double click runs:
+
+![App search](docs/images/search-wx.en-US.png)
+
+**Calculator** — type an expression and the result becomes the first row; `Enter` or a single click copies it:
+
+![Calculator](docs/images/calculator.en-US.png)
+
+**Time → timestamp** — one moment, two rows (seconds and milliseconds); click copies that number:
+
+![Time to timestamp](docs/images/timestamp.en-US.png)
+
+**System time** — `date` / `now` / `时间` lists eight common formats; click copies the one you picked:
+
+![System time formats](docs/images/time-formats.en-US.png)
+
+**Plugins** — `文本美化` (text-beautify): the original text on the left, the formatted result on the right, all local.
+Plugin windows use the plugin's own markup, so their labels are the plugin author's:
+
+![text-beautify plugin](docs/images/plugin-text-beautify.png)
+
+**Settings** — hotkey, indexing, file search, plugins, runtimes and models in one window:
+
+![Settings](docs/images/settings.en-US.png)
+
 ## What works today
 
 | Capability | Status | Notes |
@@ -71,7 +106,7 @@ crates/
 frontend/   search box (plain static HTML/CSS/JS, no bundler)
 plugins/    the 12 bundled plugins listed below; timestamp-ts is the TS + require example
 plugin-sdk/ efto.d.ts — type hints for TS plugin authors
-scripts/    vsenv / cargo / gen-icons / dev-run / bootstrap / package-plugins
+scripts/    vsenv / cargo / gen-icons / dev-run / bootstrap / package-plugins / gen-readme-shots
 vendor/     where the prebuilt V8 static library lands (fetched by bootstrap, gitignored — see below)
 ```
 
