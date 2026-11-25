@@ -210,7 +210,8 @@ body {
   margin-top: 3px;
   color: var(--text-3);
   font-size: 12px;
-  word-break: break-all;
+  /* 只在"一个词放不下整行"时才断：break-all 会把英文长句在任意字母处切开 */
+  overflow-wrap: anywhere;
 }
 
 .desc.mono, .mono {
