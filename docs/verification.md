@@ -2294,3 +2294,15 @@ Apache-2.0 的 NOTICE 聚合义务未被触发。
   随下一次发布带走。
 - **没验证**：NSIS 安装包的实际安装与 SmartScreen 提示、dmg 在真实 macOS 上挂载与
   「右键打开」、Intel x64 包；修复提交推上去后的 CI（含 macos runner 的 `verify.sh`）待观察。
+
+## Markdown 插件外部修改提示（2026-11-26）
+
+- 行为：打开的文件每 2s 用 `efto.file.read` 读一次，与 `state.lastDisk`（最后一次读盘/写盘的内容）
+  比对；不同则在工具栏下方显示横幅。有未保存修改时文案额外提示「重新加载会丢弃当前修改」，
+  点「重新加载」前先走 `confirmDiscard`；点「知道了」只关提示。
+- 防误报：自己保存期间 `state.saving` 跳过轮询；保存成功后 `lastDisk` 取**发给磁盘的那份快照**
+  （不是当时的 `state.text`）；检测到外部改动后立刻把 `lastDisk` 抬到新内容，同一改动只提示一次。
+- 已跑：`node --check plugins/markdown/ui.js`、`node plugins/markdown/tests/run-all.js`
+  （24 项通过，均为渲染用例，未覆盖本逻辑）。
+- **没验证**：真实窗口里的轮询、横幅与 `window.confirm`；接近 8 MiB 的文件每 2s 读取的开销；
+  文件被删除时是否该给「文件已不存在」的提示（当前只静默跳过）。

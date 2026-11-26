@@ -115,7 +115,7 @@ The default panel (empty input) contains "Recent" and "Favorite tools":
 - Plugins can register dynamic results, open their own UI, and call `efto.*` capabilities (notifications, clipboard, files, HTTP, AI, …).
 - TypeScript is type-stripped only, with no runtime code generation: `enum`, value `namespace`, decorators, and JSX are rejected.
 - There is no Node/npm: plugins run in an embedded V8 and cannot `require` CommonJS packages.
-- **Markdown**: type `md` / `markdown` to open the plugin with document / edit / source modes (`Ctrl+E` cycles through them). Edit mode puts the source on the left and a live preview on the right. Open a file or drop one into the window to edit and save it back, or export standalone HTML / print it; saving a new document uses the system save dialog.
+- **Markdown**: type `md` / `markdown` to open the plugin with document / edit / source modes (`Ctrl+E` cycles through them). Edit mode puts the source on the left and a live preview on the right. Open a file or drop one into the window to edit and save it back, or export standalone HTML / print it; saving a new document uses the system save dialog. If the file is changed by another program, a banner at the top offers to reload it (you are asked first when you have unsaved edits).
 
 ## 8. Settings
 

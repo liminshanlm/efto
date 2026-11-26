@@ -28,13 +28,21 @@
   var printBtn = document.getElementById('printBtn');
   var emptyOpen = document.getElementById('emptyOpen');
   var emptyNew = document.getElementById('emptyNew');
+  var extBannerEl = document.getElementById('extBanner');
+  var extTextEl = document.getElementById('extText');
+  var extReloadBtn = document.getElementById('extReload');
+  var extIgnoreBtn = document.getElementById('extIgnore');
 
   var state = {
     mode: 'preview',
     path: '',
     name: '未命名.md',
     text: '',
-    dirty: false
+    dirty: false,
+    // 最后一次从磁盘拿到（或写回磁盘）的内容，用来发现外部修改
+    lastDisk: '',
+    saving: false,
+    polling: false
   };
 
   // ---------- 小工具 ----------
@@ -139,17 +147,69 @@
     state.path = path || '';
     state.name = state.path ? baseName(state.path) : '未命名.md';
     state.text = content || '';
+    state.lastDisk = state.text;
     editorEl.value = state.text;
     setDirty(!!dirty);
     updatePath();
     updateMeta();
     updateEmpty();
+    hideExtBanner();
     if (state.mode !== 'source') renderPreview();
   }
 
   function confirmDiscard() {
     if (!state.dirty) return true;
     return window.confirm('当前文档有未保存的修改，继续会丢弃它们。');
+  }
+
+  // ---------- 外部修改检测 ----------
+
+  function hideExtBanner() {
+    extBannerEl.hidden = true;
+  }
+
+  function showExtBanner(text) {
+    extTextEl.textContent = text;
+    extBannerEl.hidden = false;
+  }
+
+  // 每 2s 读一次当前文件比对内容：没变化时只花一次小文件读取，比 mtime 判断更准
+  function pollDisk() {
+    if (!state.path || state.polling || state.saving) return;
+    if (!host || !host.file || !host.file.read) return;
+    var path = state.path;
+    state.polling = true;
+    host.file.read(path)
+      .then(function (res) {
+        state.polling = false;
+        if (state.path !== path || state.saving) return;
+        if (res.content === state.lastDisk) return;
+        // 记成新基线：同一个改动不反复提示
+        state.lastDisk = res.content;
+        showExtBanner(
+          state.dirty
+            ? '文件已被其他程序修改，重新加载会丢弃当前未保存的修改。'
+            : '文件已被其他程序修改。'
+        );
+      })
+      .catch(function () {
+        // 文件被删除或权限变化时不打扰编辑，下次轮询再试
+        state.polling = false;
+      });
+  }
+
+  function reloadFromDisk() {
+    if (!state.path) return;
+    if (!confirmDiscard()) return;
+    host.file.read(state.path)
+      .then(function (res) {
+        applyDoc(res.path, res.content, false);
+        setStatus('已重新加载 ' + baseName(res.path), 'ok');
+        toast('已重新加载');
+      })
+      .catch(function (e) {
+        toast('重新加载失败：' + errText(e), true);
+      });
   }
 
   // ---------- 打开与保存 ----------
@@ -202,13 +262,19 @@
       saveAs();
       return;
     }
-    host.file.write(state.path, state.text)
+    var text = state.text;
+    state.saving = true;
+    host.file.write(state.path, text)
       .then(function (res) {
+        state.saving = false;
+        state.lastDisk = text;
         setDirty(false);
+        hideExtBanner();
         setStatus('已保存 ' + baseName(res.path), 'ok');
         toast('已保存');
       })
       .catch(function (e) {
+        state.saving = false;
         setStatus('保存失败', 'bad');
         toast('保存失败：' + errText(e), true);
       });
@@ -219,20 +285,26 @@
       toast('当前环境不支持保存文件', true);
       return;
     }
-    host.file.saveAs(state.name, state.text)
+    var text = state.text;
+    state.saving = true;
+    host.file.saveAs(state.name, text)
       .then(function (p) {
+        state.saving = false;
         if (!p) {
           setStatus('已取消保存');
           return;
         }
         state.path = p;
         state.name = baseName(p);
+        state.lastDisk = text;
         setDirty(false);
+        hideExtBanner();
         updatePath();
         setStatus('已保存到 ' + p, 'ok');
         toast('已保存');
       })
       .catch(function (e) {
+        state.saving = false;
         setStatus('保存失败', 'bad');
         toast('保存失败：' + errText(e), true);
       });
@@ -437,6 +509,8 @@
   printBtn.addEventListener('click', printDoc);
   emptyOpen.addEventListener('click', openFile);
   emptyNew.addEventListener('click', newDoc);
+  extReloadBtn.addEventListener('click', reloadFromDisk);
+  extIgnoreBtn.addEventListener('click', hideExtBanner);
 
   // 预览里的链接：外链交给系统浏览器，相对路径明确告知打不开
   previewEl.addEventListener('click', function (e) {
@@ -517,6 +591,7 @@
 
   applyDoc('', '', false);
   switchMode('preview');
+  setInterval(pollDisk, 2000);
 
   if (host && host.ipcMessage) {
     host.ipcMessage('init', {}).catch(function () {
