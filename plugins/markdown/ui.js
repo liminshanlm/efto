@@ -41,6 +41,8 @@
     dirty: false,
     // 最后一次从磁盘拿到（或写回磁盘）的内容，用来发现外部修改
     lastDisk: '',
+    // 磁盘上的字节数：超过阈值就把轮询放慢
+    bytes: 0,
     saving: false,
     polling: false
   };
@@ -143,11 +145,12 @@
     updateEmpty();
   }
 
-  function applyDoc(path, content, dirty) {
+  function applyDoc(path, content, dirty, bytes) {
     state.path = path || '';
     state.name = state.path ? baseName(state.path) : '未命名.md';
     state.text = content || '';
     state.lastDisk = state.text;
+    state.bytes = typeof bytes === 'number' ? bytes : 0;
     editorEl.value = state.text;
     setDirty(!!dirty);
     updatePath();
@@ -173,8 +176,23 @@
     extBannerEl.hidden = false;
   }
 
-  // 每 2s 读一次当前文件比对内容：没变化时只花一次小文件读取，比 mtime 判断更准
+  // 2s 读一次当前文件比对内容：没变化时只花一次小文件读取，比 mtime 判断更准。
+  // 超过阈值的大文件每次都要整份读 + 跨 IPC 拷贝，放慢到 10s。
+  var POLL_FAST_MS = 2000;
+  var POLL_SLOW_MS = 10000;
+  var POLL_SLOW_BYTES = 2 * 1024 * 1024;
+
+  function schedulePoll() {
+    clearTimeout(schedulePoll._t);
+    schedulePoll._t = setTimeout(function () {
+      pollDisk();
+      schedulePoll();
+    }, state.bytes > POLL_SLOW_BYTES ? POLL_SLOW_MS : POLL_FAST_MS);
+  }
+
   function pollDisk() {
+    // 窗口隐藏时不读盘；回到前台由 visibilitychange 立刻补一次
+    if (document.visibilityState === 'hidden') return;
     if (!state.path || state.polling || state.saving) return;
     if (!host || !host.file || !host.file.read) return;
     var path = state.path;
@@ -182,6 +200,7 @@
     host.file.read(path)
       .then(function (res) {
         state.polling = false;
+        state.bytes = res.bytes;
         if (state.path !== path || state.saving) return;
         if (res.content === state.lastDisk) return;
         // 记成新基线：同一个改动不反复提示
@@ -203,7 +222,7 @@
     if (!confirmDiscard()) return;
     host.file.read(state.path)
       .then(function (res) {
-        applyDoc(res.path, res.content, false);
+        applyDoc(res.path, res.content, false, res.bytes);
         setStatus('已重新加载 ' + baseName(res.path), 'ok');
         toast('已重新加载');
       })
@@ -221,7 +240,7 @@
     }
     host.file.read(p)
       .then(function (res) {
-        applyDoc(res.path, res.content, false);
+        applyDoc(res.path, res.content, false, res.bytes);
         setStatus('已打开 ' + baseName(res.path), 'ok');
       })
       .catch(function (e) {
@@ -268,6 +287,7 @@
       .then(function (res) {
         state.saving = false;
         state.lastDisk = text;
+        state.bytes = res.bytes;
         setDirty(false);
         hideExtBanner();
         setStatus('已保存 ' + baseName(res.path), 'ok');
@@ -591,7 +611,14 @@
 
   applyDoc('', '', false);
   switchMode('preview');
-  setInterval(pollDisk, 2000);
+  schedulePoll();
+  // 从后台回来立刻补一次检查，隐藏期间落下的改动不用等下一个周期
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') {
+      pollDisk();
+      schedulePoll();
+    }
+  });
 
   if (host && host.ipcMessage) {
     host.ipcMessage('init', {}).catch(function () {

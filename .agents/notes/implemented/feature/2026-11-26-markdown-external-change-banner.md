@@ -16,8 +16,9 @@
 - `plugins/markdown/ui.js`：
   - `state` 增加 `lastDisk`（最后一次从磁盘读到或写回的内容）、`saving`、`polling`。
   - `applyDoc` 把新内容同时记成 `lastDisk` 并隐藏横幅。
-  - `pollDisk` 用 `setInterval(..., 2000)` 轮询 `efto.file.read(state.path)`，与 `lastDisk`
-    比对内容；不同则抬 `lastDisk` 到新值并显示横幅（有未保存修改时文案额外提示会丢弃）。
+  - `pollDisk` 由递归 `setTimeout`（`schedulePoll`，默认 2s，文件 >2 MiB 时 10s）驱动，读
+    `efto.file.read(state.path)` 与 `lastDisk` 比对内容；不同则抬 `lastDisk` 到新值并显示横幅
+    （有未保存修改时文案额外提示会丢弃）。`state.bytes` 取打开/读盘返回的 `bytes`。
   - `reloadFromDisk` 复用 `confirmDiscard()`，重新读盘走 `applyDoc`。
   - `save` / `saveAs` 在发送时快照 `state.text`，成功后把 `lastDisk` 设成该快照。
 - `plugins/markdown/index.html`：`#workspace` 前插入 `#extBanner`（文案 + 「重新加载」+「知道了」）。
@@ -31,6 +32,11 @@
   写完再读（避免这期间的编辑被当成内容差异）；发现变化后立刻把 `lastDisk` 抬到新值，
   同一处改动只提示一次，点「知道了」之后也不会再弹。
 - 轮询读取失败（文件被删、权限变化）静默跳过，不打断编辑。
+- 窗口隐藏（最小化/被完全遮挡，`visibilityState === 'hidden'`）时不读盘，隐藏期间计时器本身
+  也被 WebView2 节流；`visibilitychange` 回到前台立刻补一次，避免外部改动等到下一个 2s。
+- 文件超过 2 MiB 时轮询从 2s 降到 10s：大文件每次都要整份 `fs::read` + UTF-8 校验 + 跨 IPC
+  拷贝，2s 一次会有可见的 CPU/内存抖动。间隔由递归 `setTimeout` 按 `state.bytes` 决定，
+  保存后不立刻改 `bytes`（下一次轮询自愈），最多多付一个周期的 2s 读。
 
 ## 验证
 

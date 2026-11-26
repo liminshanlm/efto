@@ -2302,6 +2302,10 @@ Apache-2.0 的 NOTICE 聚合义务未被触发。
   点「重新加载」前先走 `confirmDiscard`；点「知道了」只关提示。
 - 防误报：自己保存期间 `state.saving` 跳过轮询；保存成功后 `lastDisk` 取**发给磁盘的那份快照**
   （不是当时的 `state.text`）；检测到外部改动后立刻把 `lastDisk` 抬到新内容，同一改动只提示一次。
+- 可见性：`visibilityState === 'hidden'` 时不读盘（最小化/被完全遮挡时省掉无谓 IO），
+  `visibilitychange` 回到前台立刻补一次，隐藏期间的外部改动不会漏到下一个 2s。
+- 降频：磁盘字节数超过 2 MiB 时轮询间隔从 2s 放慢到 10s（`state.bytes` 取打开/读盘返回的
+  `bytes`），小文件维持 2s；回到前台补的那次不受降频影响。
 - 已跑：`node --check plugins/markdown/ui.js`、`node plugins/markdown/tests/run-all.js`
   （24 项通过，均为渲染用例，未覆盖本逻辑）。
 - **没验证**：真实窗口里的轮询、横幅与 `window.confirm`；接近 8 MiB 的文件每 2s 读取的开销；
