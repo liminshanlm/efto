@@ -63,3 +63,15 @@ GitHub 提供两条通路：Actions artifacts（需登录、临时）与 Release
 - NSIS 安装包的实际安装与 SmartScreen 提示未实测；dmg 的 Gatekeeper 解除路径未实测。
 - 未签名（macOS 未公证）：代码签名、公证与自动更新仍留在 roadmap。
 - Intel x64 包未提供（可后续用 `macos-15-intel` + 交叉编译 aarch64）。
+
+## v0.1.1 实跑（2026-11-25）
+
+- run `45640273364`：`windows-x64` / `macos-arm64` / `publish` 全部 success，15 个资产
+  （3 个应用产物 + 12 个插件 zip；hello-js 删除后插件数从 13 降到 12）。
+  `publish` 的 `tag_name` 取自 `tauri.conf.json`，与手打 tag 一致——「版本单源 + tag 同名」
+  这条设计在首次换版时验证通过。
+- 教训：**发版前必须把 `test --workspace` 跑绿**，因为 `release` 只 build 不 test。
+  这次 `ci` 在同一个提交上因一条钉死 `0.1.0` 的单测而红，而 Release 照常发布：产物没受影响，
+  但「发布成功」≠「测试通过」，别把 Release 绿灯当成整体绿灯。
+  修复见 `.agents/notes/implemented/bug-fix/2026-11-25-host-requirement-test-pins-version.md`。
+- tag 已发布，按上面「发布后不再移动 tag」的约定不动它，修复随下一个提交进 main。

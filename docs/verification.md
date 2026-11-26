@@ -2271,3 +2271,26 @@ Apache-2.0 的 NOTICE 聚合义务未被触发。
   `cargo build -p efto-app` 通过。
 - **没验证**：真实窗口的折叠/展开（`set_size` 后布局是否立即回流、标题输入时是否不再触发拖动）、
   折叠态拖动后重启位置是否保留；高 DPI/多显示器下 34px 标题栏是否够用。
+
+## v0.1.1 发布实跑与 CI 打红修复（2026-11-25）
+
+- 版本：`Cargo.toml` 的 workspace version 与 `crates/app/tauri.conf.json` 同步到 0.1.1，
+  `Cargo.lock` 里 `efto-app` / `efto-core` / `efto-jsrt` 三处随之重写；轻量 tag `v0.1.1`
+  打在 `784ed2d`（与 `v0.1.0` 同为轻量 tag，按约定未移动）。
+- `release`（run `45640273364`，2026-11-25T15:00:29Z → 15:17Z）三个 job 全部 success，
+  Release `efto v0.1.1` 创建成功（`draft=false`、`prerelease=false`），15 个资产：
+  绿色版 `efto-0.1.1-windows-x64-portable.zip` 26.16 MB、NSIS `efto_0.1.1_x64-setup.exe`
+  17.98 MB、`efto-0.1.1-macos-arm64.dmg` 24.73 MB，加 12 个插件 zip（hello-js 已删，
+  比 v0.1.0 少一个；插件版本未变：dev-tools 2.3.0、timestamp-ts 3.0.0、quickweb 1.1.0、
+  ipmsg 0.2.0，其余 0.1.0）。`publish` 的 `tag_name` 取自 `tauri.conf.json`，与手打 tag 一致，
+  「版本单源 + tag 同名」这条设计首次换版验证通过。
+- **`ci` 在同一个提交上失败**（run `45640253323`，卡在 `unit tests (windows)`）：
+  `plugins::manifest::tests::host_requirement_comparisons` 把宿主版本写死成 `0.1.0`，
+  `<=0.1.0` / `=0.1.0` / `>0.1.0` / `^0.1.0` / `>=0.1.0 || <0.3.0` 几条断言在宿主变 0.1.1
+  后必然翻转。改为相对 `HOST_VERSION` 拼比较式后，本地
+  `scripts/cargo.sh "test --workspace"` 全绿（efto-app 148 passed / 1 ignored、efto-core 255、
+  efto-jsrt 48）。只动测试、不影响产物，故不移动 tag。
+- 时序：tag 之后 main 又前进了 `f448d5c`（便签改标题与折叠），**不在 v0.1.1 的产物里**，
+  随下一次发布带走。
+- **没验证**：NSIS 安装包的实际安装与 SmartScreen 提示、dmg 在真实 macOS 上挂载与
+  「右键打开」、Intel x64 包；修复提交推上去后的 CI（含 macos runner 的 `verify.sh`）待观察。

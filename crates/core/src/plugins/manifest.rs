@@ -530,21 +530,25 @@ mod tests {
     }
 
     /// `engines.efto`：只支持单条比较；不满足或写法不认识都必须报错，不能当作通过。
+    ///
+    /// 判据一律相对 `HOST_VERSION` 表达：写死 `0.1.0` 会让每次发版都把这条测试打红
+    /// （v0.1.1 就是，`<=0.1.0` / `=0.1.0` 在宿主变成 0.1.1 后必然不成立）。
     #[test]
     fn host_requirement_comparisons() {
-        assert!(check_host_requirement(">=0.1.0").is_ok());
+        let host = HOST_VERSION;
+        assert!(check_host_requirement(&format!(">={host}")).is_ok());
         assert!(check_host_requirement(">=0.0.1").is_ok());
-        assert!(check_host_requirement("<=0.1.0").is_ok());
-        assert!(check_host_requirement("=0.1.0").is_ok());
-        assert!(check_host_requirement("0.1.0").is_ok());
-        assert!(check_host_requirement("0.1").is_ok(), "缺省段按 0");
-        assert!(check_host_requirement(">0.1.0").is_err());
-        assert!(check_host_requirement("<0.1.0").is_err());
+        assert!(check_host_requirement(&format!("<={host}")).is_ok());
+        assert!(check_host_requirement(&format!("={host}")).is_ok());
+        assert!(check_host_requirement(host).is_ok());
+        assert!(check_host_requirement(">=0.1").is_ok(), "缺省段按 0");
+        assert!(check_host_requirement(&format!(">{host}")).is_err());
+        assert!(check_host_requirement(&format!("<{host}")).is_err());
         assert!(check_host_requirement(">9.0.0").is_err());
         // 不支持的写法明确报错
-        assert!(check_host_requirement("^0.1.0").is_err());
+        assert!(check_host_requirement(&format!("^{host}")).is_err());
         assert!(check_host_requirement("~0.1").is_err());
-        assert!(check_host_requirement(">=0.1.0 || <0.3.0").is_err());
+        assert!(check_host_requirement(&format!(">={host} || <9.0.0")).is_err());
         assert!(check_host_requirement("latest").is_err());
     }
 

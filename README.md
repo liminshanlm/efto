@@ -67,7 +67,7 @@ Plugin windows use the plugin's own markup, so their labels are the plugin autho
 | Plugin UI | ⚠️ Code complete, never run in a real webview | The `efto://` protocol serves the plugin directory, the host injects `window.efto`, and UI ↔ main messaging works both ways |
 | Plugin persistence | ✅ Verified | One JSON file per plugin, 10 MB quota; both the KV and document-style interfaces (`efto.db.put` / `allDocs`) can write |
 | Everything file search | ✅ CLI verified end to end / ⚠️ UI rendering not exercised | Type directly in the search box (≥2 chars) → **file results are appended after the app entries** (no magic prefix); a single click selects, double click or Enter opens. Queries the local Everything index; Chinese paths are decoded correctly as GBK |
-| Release artifacts | ✅ Verified (v0.1.0) | GitHub Releases ships a portable zip (`efto.exe` + `plugins/`), an NSIS installer, a macOS arm64 dmg, and individual plugin bundles; none are signed, and autostart plus auto-update are still unimplemented |
+| Release artifacts | ✅ Verified (v0.1.1) | GitHub Releases ships a portable zip (`efto.exe` + `plugins/`), an NSIS installer, a macOS arm64 dmg, and individual plugin bundles; none are signed, and autostart plus auto-update are still unimplemented |
 
 **Real data and the verification process live in `docs/verification.md`** (unit tests, parsing metrics over 204 real shortcuts, end-to-end CLI verification plus an independent Node time probe, and an explicit list of what has *not* been verified).
 
