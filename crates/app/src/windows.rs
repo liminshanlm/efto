@@ -185,6 +185,9 @@ pub fn note_label(id: &str) -> String {
     format!("{NOTE_PREFIX}{id}")
 }
 
+/// 折叠态便签窗口的高度：只留标题栏（32px 标题栏 + 边框）。
+pub const NOTE_COLLAPSED_HEIGHT: u32 = 34;
+
 /// 插件 UI 窗口的 label（同时作为协议与事件的寻址键）。
 pub fn ui_label(plugin_id: &str) -> String {
     format!("{UI_PREFIX}{}", efto_core::fsutil::sanitize_key(plugin_id))
@@ -795,7 +798,12 @@ pub fn open_note(app: &AppHandle, note: &crate::notes::Note, focus: bool) -> Res
         focus
     );
     let width = note.width.unwrap_or(300).max(220) as f64;
-    let height = note.height.unwrap_or(240).max(160) as f64;
+    // 折叠态的便签只开到标题栏高，展开高度仍留在存储里
+    let height = if note.collapsed {
+        NOTE_COLLAPSED_HEIGHT as f64
+    } else {
+        note.height.unwrap_or(240).max(160) as f64
+    };
     let x = note.x.unwrap_or(140);
     let y = note.y.unwrap_or(120);
     std::thread::Builder::new()

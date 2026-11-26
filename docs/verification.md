@@ -2181,7 +2181,7 @@ files --dry-run / focus 未知 pid exit 3 / launch TextEdit（真启动并 osasc
   cli plugin-run markdown md "# hi" --json` 返回 `[ui→page:seed] {"text":"# hi"}`。
 - **Markdown「编辑模式」**：同一份插件测试 24 项覆盖渲染/插入路径；
   `node --check plugins/markdown/{main,ui,render}.js` 通过；纯插件前端，宿主零改动。
-- **便签纸**：`cargo test -p efto-app notes` 3 项通过；`node --check frontend/note.js`；
+- **便签纸**：`cargo test -p efto-app notes` 4 项通过；`node --check frontend/note.js`；
   `note_drag` 走 Tauri `start_dragging()`、窗口在独立线程创建，均无平台分支。
 - **通用动作菜单（翻译 / AI）**：清单里"macOS 通用动作未放出"已过时——
   `BuiltinAction::UniversalActions.supported_on_platform()` 现对所有平台返回 true。
@@ -2258,3 +2258,16 @@ Apache-2.0 的 NOTICE 聚合义务未被触发。
 `tauri.conf.json`"理解，需第一个 `v*` tag 实跑确认。**仍未解决的合规缺口**：
 `licenses/MIT.txt` 无版权行、无逐 crate 归属清单，MIT/BSD 要的是 Notice，正解是接
 `cargo-bundle-licenses` / `cargo-about` 生成归属文件并塞进产物。
+
+## 便签标题与折叠（2026-11-26）
+
+- 数据：`Note` 新增 `title` / `collapsed`，都带 `#[serde(default)]`，老 `notes.json` 直接兼容。
+- 交互：标题栏改为可编辑 `input`（留空显示占位「便签」）；`▾/▸` 调 `note_toggle`，
+  在 `NOTE_COLLAPSED_HEIGHT`（34px，只留标题栏）与存储的展开高度之间切换，折叠态隐藏正文与页脚。
+- 存储：`height` 语义固定为**展开高度**——收起前先记下当前几何，折叠期间 `note_save` 只更新
+  位置/宽度；`collapsed` 落盘，重启按收起状态开窗。
+- 已跑：`cargo test -p efto-app notes` 4 项通过（新增 `title_and_collapsed_roundtrip`，
+  覆盖 JSON 往返与老文件缺字段时的默认值）；`node --check frontend/note.js`；
+  `cargo build -p efto-app` 通过。
+- **没验证**：真实窗口的折叠/展开（`set_size` 后布局是否立即回流、标题输入时是否不再触发拖动）、
+  折叠态拖动后重启位置是否保留；高 DPI/多显示器下 34px 标题栏是否够用。

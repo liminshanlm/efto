@@ -272,6 +272,7 @@ fn run_app(initial_file: Option<(String, Option<String>)>) {
             commands::note_save,
             commands::note_close,
             commands::note_drag,
+            commands::note_toggle,
             commands::pin_load,
             commands::pin_drag,
             commands::pin_close,

@@ -249,11 +249,15 @@ HTML5 dnd（WKWebView 里 `dragover` 不稳），6px 阈值区分点击与拖动
   十字线与 HEX/RGB；单击或 `Enter` 调 `color_picker_finish` 把 HEX 写进剪贴板并关窗，`Esc` 调
   `color_picker_cancel`。画面在唤起瞬间冻结，动画/视频里的颜色以冻结帧为准。
 - **便签纸**：`run_action("sticky_note")` 每次新建一条便签（多条独立窗口共存），数据在
-  `crates/app/src/notes.rs`（`~/.efto/notes.json`，字段 `id/text/x/y/width/height`）。
-  窗口 `note.html`：无边框、`always_on_top`、可缩放、不占任务栏，标题栏拖动走 `note_drag`，
-  文本改动去抖 300ms 调 `note_save`（同时回写窗口几何），关闭窗口即删除该条。
+  `crates/app/src/notes.rs`（`~/.efto/notes.json`，字段
+  `id/title/text/collapsed/x/y/width/height`）。窗口 `note.html`：无边框、`always_on_top`、
+  可缩放、不占任务栏，标题栏拖动走 `note_drag`，标题可直接编辑、正文去抖 300ms 调
+  `note_save`（同时回写窗口几何），关闭窗口即删除该条。
   下次启动在 setup 里按存储顺序恢复全部便签（不抢焦点）；宿主退出时 `RunEvent::ExitRequested`
   置 `QUITTING`，`WindowEvent::Destroyed` 见到该标记就不再删除，避免退出时把便签清空。
+- **便签折叠**：`note_toggle` 把窗口缩到 `NOTE_COLLAPSED_HEIGHT`（34px，只留标题栏）或还原。
+  存储里的 `height` 始终是**展开态**高度：收起前先把当前几何记下来，折叠期间 `note_save`
+  只更新位置/宽度、不覆盖高度；`collapsed` 落盘，重启按收起状态恢复。
 - **剪贴板**：`clipwatch.rs` 用 500ms 轮询（不用 `WM_CLIPBOARDUPDATE`，省一个隐藏消息窗口），
   优先级 **文件列表（CF_HDROP）> 图片 > 文本**，同一份内容只记一次。启动时先读一次当前剪贴板当基线，
   所以不会把启动前的内容当成新记录。

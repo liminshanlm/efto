@@ -1507,27 +1507,71 @@ pub fn pin_close(id: String, app: AppHandle) {
 }
 
 #[tauri::command]
-pub fn note_load(id: String, data: State<'_, Shared>) -> Result<String, String> {
-    data.notes
-        .lock()
-        .get(&id)
-        .map(|n| n.text.clone())
-        .ok_or_else(|| "便签不存在".into())
+pub fn note_load(id: String, data: State<'_, Shared>) -> Result<Value, String> {
+    let store = data.notes.lock();
+    let note = store.get(&id).ok_or("便签不存在")?;
+    Ok(json!({
+        "title": note.title,
+        "text": note.text,
+        "collapsed": note.collapsed,
+    }))
 }
 
 #[tauri::command]
-pub fn note_save(id: String, text: String, app: AppHandle, data: State<'_, Shared>) {
+pub fn note_save(id: String, title: String, text: String, app: AppHandle, data: State<'_, Shared>) {
     let geometry = app.get_webview_window(&windows::note_label(&id)).and_then(|w| {
         let pos = w.outer_position().ok()?;
         let size = w.inner_size().ok()?;
         Some((pos.x, pos.y, size.width, size.height))
     });
     let mut store = data.notes.lock();
+    let collapsed = store.get(&id).map(|n| n.collapsed).unwrap_or(false);
+    store.set_title(&id, title);
     store.set_text(&id, text);
     if let Some((x, y, w, h)) = geometry {
+        // 折叠时窗口只有标题栏高：位置/宽度照记，高度保留展开态的值
+        let h = if collapsed { store.get(&id).and_then(|n| n.height).unwrap_or(h) } else { h };
         store.set_geometry(&id, x, y, w, h);
     }
     store.save();
+}
+
+/// 折叠 / 展开：窗口在标题栏高度与存储的展开高度之间切换。
+#[tauri::command]
+pub fn note_toggle(
+    id: String,
+    collapsed: bool,
+    app: AppHandle,
+    data: State<'_, Shared>,
+) -> Result<(), String> {
+    let w = app
+        .get_webview_window(&windows::note_label(&id))
+        .ok_or("便签窗口不存在")?;
+    let size = w.inner_size().map_err(|e| e.to_string())?;
+    let pos = w.outer_position().ok();
+    let width = size.width.max(220);
+    let height = {
+        let mut store = data.notes.lock();
+        if collapsed {
+            // 收起前把当前几何整个记下来（含刚拖过、还没保存的情况），展开按它还原
+            if let Some(pos) = pos {
+                store.set_geometry(&id, pos.x, pos.y, width, size.height);
+            }
+            store.set_collapsed(&id, true);
+            store.save();
+            windows::NOTE_COLLAPSED_HEIGHT
+        } else {
+            let h = store.get(&id).and_then(|n| n.height).unwrap_or(240);
+            store.set_collapsed(&id, false);
+            store.save();
+            h
+        }
+    };
+    w.set_size(tauri::PhysicalSize::new(width, height))
+        .map_err(|e| e.to_string())?;
+    // 折叠态只剩标题栏，允许拖高会露出空白正文区
+    let _ = w.set_resizable(!collapsed);
+    Ok(())
 }
 
 #[tauri::command]

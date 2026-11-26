@@ -10,11 +10,18 @@ use serde::{Deserialize, Serialize};
 use efto_core::{fsutil, Result};
 
 /// 单张便签。位置与尺寸是窗口物理像素，首次创建时由宿主给一个级联位置。
+///
+/// `height` 始终是**展开态**的高度：折叠时窗口缩到标题栏，但存储里保留展开高度，
+/// 重新展开按它还原。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Note {
     pub id: String,
     #[serde(default)]
+    pub title: String,
+    #[serde(default)]
     pub text: String,
+    #[serde(default)]
+    pub collapsed: bool,
     #[serde(default)]
     pub x: Option<i32>,
     #[serde(default)]
@@ -94,7 +101,9 @@ impl NoteStore {
         let n = self.items.len() as i32;
         let note = Note {
             id,
+            title: String::new(),
             text: String::new(),
+            collapsed: false,
             x: Some(140 + (n % 8) * 34),
             y: Some(120 + (n % 8) * 34),
             width: Some(300),
@@ -102,6 +111,18 @@ impl NoteStore {
         };
         self.items.push(note.clone());
         note
+    }
+
+    pub fn set_title(&mut self, id: &str, title: String) {
+        if let Some(n) = self.items.iter_mut().find(|n| n.id == id) {
+            n.title = title;
+        }
+    }
+
+    pub fn set_collapsed(&mut self, id: &str, collapsed: bool) {
+        if let Some(n) = self.items.iter_mut().find(|n| n.id == id) {
+            n.collapsed = collapsed;
+        }
     }
 
     pub fn set_text(&mut self, id: &str, text: String) {
@@ -150,7 +171,9 @@ mod tests {
         NoteStore {
             items: vec![Note {
                 id: "a".into(),
+                title: "待办".into(),
                 text: "第一行".into(),
+                collapsed: false,
                 x: Some(10),
                 y: Some(20),
                 width: Some(300),
@@ -188,5 +211,22 @@ mod tests {
         assert!(store.remove("a"));
         assert!(!store.remove("a"));
         assert!(store.get("a").is_none());
+    }
+
+    /// 标题与折叠态都要按 id 定位，且在 JSON 往返里保留。
+    #[test]
+    fn title_and_collapsed_roundtrip() {
+        let mut store = sample();
+        store.set_title("a", "新标题".into());
+        store.set_collapsed("a", true);
+        let back = NoteStore::from_json(&store.to_json().unwrap()).unwrap();
+        let n = back.get("a").unwrap();
+        assert_eq!(n.title, "新标题");
+        assert!(n.collapsed);
+        // 老文件没有这两个字段时按空标题 / 未折叠处理
+        let old = r#"{"version":1,"items":[{"id":"x","text":"t"}]}"#;
+        let n = NoteStore::from_json(old).unwrap().get("x").cloned().unwrap();
+        assert_eq!(n.title, "");
+        assert!(!n.collapsed);
     }
 }
